@@ -72,7 +72,12 @@ Direct download from masseyratings.com/cb/compare.htm. Provides current-day comp
 
 ### Data Unification
 
-All sources joined on Kaggle's `TeamID` as the canonical key. A fuzzy-matching utility maps between Kaggle team names, cbbd names, and Massey names. The resolved mapping is persisted as a CSV to avoid recomputation.
+All sources joined on Kaggle's `TeamID` as the canonical key. A team name mapping utility resolves names across sources:
+
+- **Algorithm:** `rapidfuzz` (token_sort_ratio) with a configurable confidence threshold (default 85). Matches above threshold are auto-accepted; matches between 70-85 are flagged for manual review; below 70 are left unmatched.
+- **Manual overrides:** A hand-curated `data/team_name_overrides.csv` (checked into git) handles known problem cases (e.g., "UConn" → "Connecticut", "St. Mary's" → "Saint Mary's (CA)"). Overrides take precedence over fuzzy matching.
+- **Validation:** After mapping, a validation step checks for unmapped teams and duplicate mappings. The pipeline halts with a clear error if any tournament team is unmapped.
+- **The resolved mapping is persisted as `data/processed/team_id_mapping.csv`** and reused across runs. Re-matching only runs when new source data is detected.
 
 ## Stage 2: Feature Engineering
 
@@ -92,7 +97,9 @@ For each team-season, compute:
 possessions ≈ FGA - OR + TO + 0.475 * FTA
 ```
 
-**Recency weighting:** Exponential decay over the season so ratings reflect current team strength.
+**Recency weighting:** Exponential decay applied to game-level data before regression. Half-life default of 30 days (configurable in `config.yaml`). Applied as sample weights in the ridge regression — more recent games contribute more to the efficiency estimates.
+
+**Convergence:** Fixed iteration count of 15 (configurable), which empirically matches KenPom's approach. Ratings typically stabilize within 10 iterations; 15 provides margin. A convergence diagnostic (max rating change across all teams) is logged each iteration for verification.
 
 ### Stage 2B: Full Feature Matrix
 
@@ -105,7 +112,7 @@ possessions ≈ FGA - OR + TO + 0.475 * FTA
 | `seed` | Kaggle seeds | Tournament seed (1-16) |
 | `conf_strength` | Derived | Average AdjEM of conference opponents |
 | `massey_composite_rank` | Massey Ordinals | Composite rank from 100+ systems |
-| `top_n_system_ranks` | Massey Ordinals | Ranks from ~5 most predictive systems (selected via feature importance) |
+| `top_n_system_ranks` | Massey Ordinals | Ranks from 5 pre-selected systems: Pomeroy, Sagarin, BPI, T-Rank, RPI |
 | `win_pct_last_10` | Kaggle results | Recent form indicator |
 | `road_win_pct` | Kaggle results | Performance away from home |
 
@@ -144,7 +151,7 @@ Bayesian optimization via Optuna over learning rate, max depth, subsample, colsa
 
 ### Monte Carlo Simulation
 
-- Takes the actual tournament bracket (64/68 teams with seeds and matchups)
+- Takes the actual tournament bracket as a structured CSV (`data/raw/bracket_YYYY.csv`) with columns: `Region, Seed, TeamID, TeamName`. The bracket structure (which seeds play which) is hardcoded per the standard NCAA format (1v16, 8v9, etc.). First Four play-in games are pre-resolved before the main bracket — the winner is slotted into the appropriate seed position.
 - Computes P(Team A beats Team B) for each possible matchup using the trained model
 - Simulates the entire tournament 10,000+ times, sampling each game outcome from win probabilities
 - Tracks advancement frequency per team per round
@@ -157,7 +164,7 @@ Three modes:
 
 2. **Expected value bracket:** Pick the team that maximizes expected points under standard ESPN scoring (1-2-4-8-16-32) per bracket slot. Accounts for the upside of correctly picking upsets in later rounds.
 
-3. **Pool-optimized bracket:** Maximize P(winning the pool) by taking contrarian picks on high-value upsets opponents won't pick. Takes pool size as a parameter to calibrate risk.
+3. **Pool-optimized bracket (stretch goal):** Maximize P(winning the pool) using public pick percentages from ESPN/Yahoo as a proxy for opponent behavior. Uses a greedy slot-by-slot algorithm: for each bracket slot, pick the team that maximizes `P(team reaches slot) * points_for_slot * (1 - public_pick_pct)^(pool_size - 1)`. This is an approximation — full bracket-space optimization is intractable. Marked as stretch goal; chalk and EV brackets are the core deliverables.
 
 ### Output
 
@@ -174,11 +181,26 @@ Three modes:
 4. Input actual bracket matchups (manually or parsed from bracket CSV)
 5. Run simulation, generate bracket(s)
 
+## Data Validation
+
+Each stage validates its inputs before proceeding:
+
+- **Post-ingestion:** Check for expected columns, no null TeamIDs, game counts per season within reasonable bounds (2,000-6,000 D1 games per season). Flag seasons with missing detailed box scores.
+- **Post-feature engineering:** Every tournament team must have a complete feature vector. Log warnings for teams with fewer than 15 games (small sample). Validate efficiency ratings are in reasonable ranges (e.g., AdjEM between -40 and +40).
+- **Pre-simulation:** Every team in the bracket input must exist in the feature matrix. Halt with clear error if not.
+- **cbbd API fallback:** If the API is down or returns incomplete data, log a warning and proceed with Kaggle + Massey data only. The pipeline should never hard-fail due to an optional data source.
+
+## Massey Ordinals Optimization
+
+The `MMasseyOrdinals.csv` file can be hundreds of MB. At load time, filter to only the latest available snapshot per season (last day with data, typically Selection Sunday) rather than loading all daily snapshots. For the current season, use the most recent available date.
+
 ## Technical Decisions
 
 - **Language:** Python 3.11+
-- **Key dependencies:** pandas, numpy, scikit-learn, xgboost, optuna, cbbd, pyyaml
+- **Key dependencies:** pandas, numpy, scikit-learn, xgboost, optuna, rapidfuzz, cbbd, pyyaml
 - **Data format:** Parquet for intermediate storage (fast, typed, compact)
 - **Config-driven:** `config.yaml` for all tunable parameters
 - **No database:** File-based storage is sufficient for this scale
 - **Testing:** pytest, focused on data pipeline correctness and model reproducibility
+- **Logging:** Python `logging` module, structured per-stage logs for debugging data issues
+- **Model versioning:** Saved models include a metadata sidecar JSON with training date, config hash, seasons used, and feature list. Filenames follow `models/xgb_{YYYY}_{config_hash}.pkl` convention.
