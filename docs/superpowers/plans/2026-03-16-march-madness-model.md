@@ -109,6 +109,7 @@ dependencies = [
     "cbbd>=1.20",
     "pyyaml>=6.0",
     "requests>=2.31",
+    "joblib>=1.3",
 ]
 
 [project.optional-dependencies]
@@ -119,7 +120,7 @@ dev = [
 
 [build-system]
 requires = ["setuptools>=68.0"]
-build-backend = "setuptools.backends._legacy:_Backend"
+build-backend = "setuptools.build_meta"
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
@@ -844,7 +845,289 @@ git commit -m "feat: post-ingestion data validation with column and null checks"
 
 ---
 
-### Task 5: Ingestion CLI Entry Point
+### Task 5: cbbd API Loader
+
+**Files:**
+- Create: `src/ingest/cbbd_loader.py`
+- Create: `tests/test_ingest/test_cbbd_loader.py`
+
+- [ ] **Step 1: Write the failing tests**
+
+```python
+"""Tests for cbbd API loader."""
+
+import json
+import time
+from pathlib import Path
+from unittest.mock import patch, MagicMock
+
+import pandas as pd
+import pytest
+
+from src.ingest.cbbd_loader import load_cbbd_data, _get_cache_path, _is_cache_valid
+
+
+@pytest.fixture
+def mock_cbbd_response():
+    """Simulated cbbd API team ratings response."""
+    return [
+        {"team": "Duke", "year": 2026, "barthag": 0.95, "adj_o": 120.5, "adj_d": 90.2, "adj_t": 68.1,
+         "efg_o": 0.55, "efg_d": 0.44, "tov_o": 0.15, "tov_d": 0.20, "orb_o": 0.33, "orb_d": 0.24, "ftr_o": 0.36, "ftr_d": 0.27},
+        {"team": "UNC", "year": 2026, "barthag": 0.88, "adj_o": 115.0, "adj_d": 95.0, "adj_t": 70.0,
+         "efg_o": 0.52, "efg_d": 0.47, "tov_o": 0.17, "tov_d": 0.18, "orb_o": 0.30, "orb_d": 0.27, "ftr_o": 0.33, "ftr_d": 0.30},
+    ]
+
+
+def test_cache_path(tmp_path):
+    path = _get_cache_path(tmp_path, 2026)
+    assert "cbbd_2026" in str(path)
+
+
+def test_cache_validity(tmp_path):
+    cache_file = tmp_path / "test_cache.json"
+    cache_file.write_text("[]")
+    assert _is_cache_valid(cache_file, ttl_hours=24)
+    # File from far in the past would be invalid — tested via mocking
+
+
+def test_load_cbbd_data_returns_dataframe(tmp_path, mock_cbbd_response):
+    with patch("src.ingest.cbbd_loader._fetch_from_api", return_value=mock_cbbd_response):
+        result = load_cbbd_data(season=2026, cache_dir=str(tmp_path))
+    assert isinstance(result, pd.DataFrame)
+    assert len(result) == 2
+    assert "team" in result.columns
+    assert "adj_o" in result.columns
+
+
+def test_load_cbbd_data_uses_cache(tmp_path, mock_cbbd_response):
+    # First call: fetches from API
+    with patch("src.ingest.cbbd_loader._fetch_from_api", return_value=mock_cbbd_response) as mock_fetch:
+        load_cbbd_data(season=2026, cache_dir=str(tmp_path))
+        assert mock_fetch.call_count == 1
+
+    # Second call: should use cache
+    with patch("src.ingest.cbbd_loader._fetch_from_api", return_value=mock_cbbd_response) as mock_fetch:
+        load_cbbd_data(season=2026, cache_dir=str(tmp_path))
+        assert mock_fetch.call_count == 0
+
+
+def test_load_cbbd_data_api_failure_returns_none(tmp_path):
+    with patch("src.ingest.cbbd_loader._fetch_from_api", side_effect=Exception("API down")):
+        result = load_cbbd_data(season=2026, cache_dir=str(tmp_path))
+    assert result is None
+```
+
+- [ ] **Step 2: Run tests to verify they fail**
+
+Run: `pytest tests/test_ingest/test_cbbd_loader.py -v`
+Expected: FAIL
+
+- [ ] **Step 3: Implement cbbd_loader.py**
+
+```python
+"""Load team ratings from CollegeBasketballData.com API (Barttorvik data)."""
+
+import json
+import logging
+import time
+from pathlib import Path
+
+import pandas as pd
+
+logger = logging.getLogger(__name__)
+
+
+def _get_cache_path(cache_dir: str | Path, season: int) -> Path:
+    return Path(cache_dir) / f"cbbd_{season}.json"
+
+
+def _is_cache_valid(cache_path: Path, ttl_hours: int = 24) -> bool:
+    if not cache_path.exists():
+        return False
+    age_hours = (time.time() - cache_path.stat().st_mtime) / 3600
+    return age_hours < ttl_hours
+
+
+def _fetch_from_api(season: int) -> list[dict]:
+    """Fetch team ratings from cbbd API."""
+    try:
+        import cbbd
+        config = cbbd.Configuration()
+        api = cbbd.RatingsApi(cbbd.ApiClient(config))
+        response = api.get_ratings(season=season)
+        return [r.to_dict() for r in response]
+    except ImportError:
+        # Fallback: direct HTTP request to the API
+        import requests
+        resp = requests.get(
+            f"https://api.collegebasketballdata.com/ratings",
+            params={"season": season},
+            timeout=30,
+        )
+        resp.raise_for_status()
+        return resp.json()
+
+
+def load_cbbd_data(season: int, cache_dir: str, ttl_hours: int = 24) -> pd.DataFrame | None:
+    """Load Barttorvik-derived ratings from cbbd API with caching.
+
+    Returns DataFrame with team ratings, or None if API is unavailable.
+    """
+    cache_path = _get_cache_path(cache_dir, season)
+    Path(cache_dir).mkdir(parents=True, exist_ok=True)
+
+    # Check cache
+    if _is_cache_valid(cache_path, ttl_hours):
+        logger.info("Using cached cbbd data: %s", cache_path)
+        with open(cache_path) as f:
+            data = json.load(f)
+        return pd.DataFrame(data)
+
+    # Fetch from API
+    try:
+        logger.info("Fetching cbbd data for season %d", season)
+        data = _fetch_from_api(season)
+        # Cache response
+        with open(cache_path, "w") as f:
+            json.dump(data, f)
+        logger.info("Cached cbbd response: %d teams", len(data))
+        return pd.DataFrame(data)
+    except Exception as e:
+        logger.warning("cbbd API unavailable: %s. Proceeding without.", e)
+        return None
+```
+
+- [ ] **Step 4: Run tests to verify they pass**
+
+Run: `pytest tests/test_ingest/test_cbbd_loader.py -v`
+Expected: 5 tests PASS
+
+- [ ] **Step 5: Commit**
+
+```bash
+git add src/ingest/cbbd_loader.py tests/test_ingest/test_cbbd_loader.py
+git commit -m "feat: cbbd API loader with 24h cache and graceful fallback"
+```
+
+---
+
+### Task 6: Massey Composite Loader
+
+**Files:**
+- Create: `src/ingest/massey_loader.py`
+- Create: `tests/test_ingest/test_massey_loader.py`
+
+- [ ] **Step 1: Write the failing tests**
+
+```python
+"""Tests for Massey Ratings composite loader."""
+
+from unittest.mock import patch
+
+import pandas as pd
+import pytest
+
+from src.ingest.massey_loader import load_massey_composite, parse_massey_csv
+
+
+@pytest.fixture
+def sample_massey_csv():
+    return "Team,1,2,3,Comp\nDuke,1,2,1,1\nUNC,3,4,5,4\n"
+
+
+def test_parse_massey_csv(sample_massey_csv):
+    result = parse_massey_csv(sample_massey_csv)
+    assert isinstance(result, pd.DataFrame)
+    assert len(result) == 2
+    assert "Team" in result.columns
+    assert "Comp" in result.columns
+
+
+def test_load_massey_composite_returns_dataframe(tmp_path, sample_massey_csv):
+    with patch("src.ingest.massey_loader._download_massey_csv", return_value=sample_massey_csv):
+        result = load_massey_composite(cache_dir=str(tmp_path))
+    assert isinstance(result, pd.DataFrame)
+    assert len(result) == 2
+
+
+def test_load_massey_composite_failure_returns_none(tmp_path):
+    with patch("src.ingest.massey_loader._download_massey_csv", side_effect=Exception("Network error")):
+        result = load_massey_composite(cache_dir=str(tmp_path))
+    assert result is None
+```
+
+- [ ] **Step 2: Run tests to verify they fail**
+
+Run: `pytest tests/test_ingest/test_massey_loader.py -v`
+Expected: FAIL
+
+- [ ] **Step 3: Implement massey_loader.py**
+
+```python
+"""Load Massey Ratings composite rankings."""
+
+import logging
+from io import StringIO
+from pathlib import Path
+
+import pandas as pd
+import requests
+
+logger = logging.getLogger(__name__)
+
+_MASSEY_URL = "https://masseyratings.com/cb/compare.csv"
+
+
+def _download_massey_csv() -> str:
+    """Download composite rankings CSV from Massey Ratings."""
+    resp = requests.get(_MASSEY_URL, timeout=30)
+    resp.raise_for_status()
+    return resp.text
+
+
+def parse_massey_csv(csv_text: str) -> pd.DataFrame:
+    """Parse the Massey composite CSV text into a DataFrame."""
+    return pd.read_csv(StringIO(csv_text))
+
+
+def load_massey_composite(cache_dir: str | None = None) -> pd.DataFrame | None:
+    """Load current Massey composite rankings.
+
+    Returns DataFrame with team names and composite rank, or None on failure.
+    """
+    try:
+        csv_text = _download_massey_csv()
+        df = parse_massey_csv(csv_text)
+
+        if cache_dir:
+            cache_path = Path(cache_dir) / "massey_composite.csv"
+            Path(cache_dir).mkdir(parents=True, exist_ok=True)
+            with open(cache_path, "w") as f:
+                f.write(csv_text)
+            logger.info("Cached Massey composite: %s", cache_path)
+
+        logger.info("Loaded Massey composite: %d teams", len(df))
+        return df
+    except Exception as e:
+        logger.warning("Massey Ratings unavailable: %s. Proceeding without.", e)
+        return None
+```
+
+- [ ] **Step 4: Run tests to verify they pass**
+
+Run: `pytest tests/test_ingest/test_massey_loader.py -v`
+Expected: 3 tests PASS
+
+- [ ] **Step 5: Commit**
+
+```bash
+git add src/ingest/massey_loader.py tests/test_ingest/test_massey_loader.py
+git commit -m "feat: Massey composite rankings loader with graceful fallback"
+```
+
+---
+
+### Task 7: Ingestion CLI Entry Point
 
 **Files:**
 - Create: `src/ingest/__main__.py`
@@ -855,11 +1138,13 @@ git commit -m "feat: post-ingestion data validation with column and null checks"
 """CLI entry point: python -m src.ingest"""
 
 import logging
-import sys
 from pathlib import Path
 
 from src.config import load_config
 from src.ingest.kaggle_loader import load_kaggle_data
+from src.ingest.cbbd_loader import load_cbbd_data
+from src.ingest.massey_loader import load_massey_composite
+from src.ingest.team_mapping import build_team_mapping
 from src.ingest.validation import validate_ingested_data
 
 logging.basicConfig(level=logging.INFO, format="%(name)s - %(levelname)s - %(message)s")
@@ -870,13 +1155,36 @@ def main() -> None:
     config = load_config()
     kaggle_dir = config["data"]["kaggle_dir"]
     processed_dir = Path(config["data"]["processed_dir"])
+    cache_dir = config["data"]["cache_dir"]
     processed_dir.mkdir(parents=True, exist_ok=True)
 
+    # Source 1: Kaggle (required)
     logger.info("Loading Kaggle data from %s", kaggle_dir)
     data = load_kaggle_data(kaggle_dir)
 
     logger.info("Validating ingested data")
     validate_ingested_data(data)
+
+    # Source 2: cbbd API (optional)
+    predict_season = config["seasons"]["predict_season"]
+    cbbd_data = load_cbbd_data(season=predict_season, cache_dir=cache_dir)
+    if cbbd_data is not None:
+        data["cbbd"] = cbbd_data
+        # Build team mapping for cbbd names -> Kaggle IDs
+        cbbd_mapping = build_team_mapping(
+            kaggle_teams=data["teams"],
+            external_names=cbbd_data["team"].tolist(),
+            overrides_path=config["data"]["team_overrides"],
+            auto_threshold=config["matching"]["auto_accept_threshold"],
+            review_threshold=config["matching"]["review_threshold"],
+        )
+        cbbd_data["TeamID"] = cbbd_data["team"].map(cbbd_mapping)
+        data["cbbd"] = cbbd_data
+
+    # Source 3: Massey composite (optional)
+    massey_composite = load_massey_composite(cache_dir=cache_dir)
+    if massey_composite is not None:
+        data["massey_composite"] = massey_composite
 
     # Save processed data as parquet
     for name, df in data.items():
@@ -895,14 +1203,14 @@ if __name__ == "__main__":
 
 ```bash
 git add src/ingest/__main__.py
-git commit -m "feat: ingestion CLI entry point with parquet output"
+git commit -m "feat: ingestion CLI wiring Kaggle, cbbd, Massey, and team mapping"
 ```
 
 ---
 
 ## Chunk 2: Feature Engineering
 
-### Task 6: Four Factors Computation
+### Task 8: Four Factors Computation
 
 **Files:**
 - Create: `src/features/__init__.py`
@@ -982,11 +1290,13 @@ def compute_four_factors(detailed_results: pd.DataFrame, season: int) -> pd.Data
         "FGM3": df["WFGM3"], "FTM": df["WFTM"],
         "FTA": df["WFTA"], "OR": df["WOR"],
         "TO": df["WTO"],
+        "opp_DR": df["LDR"],  # opponent defensive rebounds
         # Opponent stats for defense
         "opp_FGM": df["LFGM"], "opp_FGA": df["LFGA"],
         "opp_FGM3": df["LFGM3"], "opp_FTM": df["LFTM"],
         "opp_FTA": df["LFTA"], "opp_OR": df["LOR"],
         "opp_TO": df["LTO"],
+        "DR": df["WDR"],  # own defensive rebounds
     })
 
     # Build per-game stats from loser perspective
@@ -996,10 +1306,12 @@ def compute_four_factors(detailed_results: pd.DataFrame, season: int) -> pd.Data
         "FGM3": df["LFGM3"], "FTM": df["LFTM"],
         "FTA": df["LFTA"], "OR": df["LOR"],
         "TO": df["LTO"],
+        "opp_DR": df["WDR"],
         "opp_FGM": df["WFGM"], "opp_FGA": df["WFGA"],
         "opp_FGM3": df["WFGM3"], "opp_FTM": df["WFTM"],
         "opp_FTA": df["WFTA"], "opp_OR": df["WOR"],
         "opp_TO": df["WTO"],
+        "DR": df["LDR"],
     })
 
     all_games = pd.concat([winner_off, loser_off], ignore_index=True)
@@ -1011,13 +1323,13 @@ def compute_four_factors(detailed_results: pd.DataFrame, season: int) -> pd.Data
     agg["off_efg"] = (agg["FGM"] + 0.5 * agg["FGM3"]) / agg["FGA"]
     agg["off_to_rate"] = agg["TO"] / (agg["FGA"] + 0.475 * agg["FTA"] + agg["TO"])
     total_rebounds = agg["OR"] + agg["opp_OR"]  # approx: team OR + opp DR not available as "opp_OR" here is opponent's OR
-    agg["off_or_rate"] = agg["OR"] / (agg["OR"] + agg["opp_OR"])  # simplified: OR / (OR + opp_DR) but we use available data
+    agg["off_or_rate"] = agg["OR"] / (agg["OR"] + agg["opp_DR"])
     agg["off_ft_rate"] = agg["FTM"] / agg["FGA"]
 
     # Defensive four factors (opponent's offensive stats)
     agg["def_efg"] = (agg["opp_FGM"] + 0.5 * agg["opp_FGM3"]) / agg["opp_FGA"]
     agg["def_to_rate"] = agg["opp_TO"] / (agg["opp_FGA"] + 0.475 * agg["opp_FTA"] + agg["opp_TO"])
-    agg["def_or_rate"] = agg["opp_OR"] / (agg["opp_OR"] + agg["OR"])  # opponent's OR rate
+    agg["def_or_rate"] = agg["opp_OR"] / (agg["opp_OR"] + agg["DR"])
     agg["def_ft_rate"] = agg["opp_FTM"] / agg["opp_FGA"]
 
     result_cols = [
@@ -1045,7 +1357,7 @@ git commit -m "feat: four factors computation from detailed box scores"
 
 ---
 
-### Task 7: Custom Adjusted Efficiency Ratings
+### Task 9: Custom Adjusted Efficiency Ratings
 
 **Files:**
 - Create: `src/features/efficiency.py`
@@ -1115,6 +1427,20 @@ def test_efficiency_ratings_reasonable_range(game_data):
     # AdjEM should be in a reasonable range for college basketball
     assert (result["adj_em"] > -50).all()
     assert (result["adj_em"] < 50).all()
+
+
+def test_strongest_team_ranked_first(game_data):
+    result = compute_adjusted_efficiency(game_data, season=2023, iterations=15, hca=3.5, half_life_days=30, ridge_alpha=1.0)
+    # Team 1 is best (highest scores), team 6 is worst
+    # Best team should have highest AdjEM
+    best_team = result.iloc[0]["TeamID"]  # sorted by adj_em desc
+    assert best_team in [1, 2]  # allow small tolerance for randomness in fixture
+
+
+def test_worst_team_ranked_last(game_data):
+    result = compute_adjusted_efficiency(game_data, season=2023, iterations=15, hca=3.5, half_life_days=30, ridge_alpha=1.0)
+    worst_team = result.iloc[-1]["TeamID"]
+    assert worst_team in [5, 6]
 ```
 
 - [ ] **Step 2: Run tests to verify they fail**
@@ -1210,6 +1536,9 @@ def compute_adjusted_efficiency(
 
         # Adjusted OE = raw OE * (league_avg_de / opp_de_rating)
         # Plus home court advantage adjustment
+        # HCA produces neutral-court equivalents: home teams have inflated raw OE
+        # (subtract to deflate) and deflated raw DE (add to inflate). Away teams
+        # get the opposite adjustment via their own rows in the symmetric records.
         home_adj = games["home"] * hca / 2  # split HCA between off and def
 
         games["adj_oe_game"] = games["oe"] * (league_avg_de / games["opp_de_rating"]) - home_adj
@@ -1267,7 +1596,7 @@ git commit -m "feat: iterative adjusted efficiency ratings with recency weightin
 
 ---
 
-### Task 8: Feature Matrix Assembly
+### Task 10: Feature Matrix Assembly
 
 **Files:**
 - Create: `src/features/feature_matrix.py`
@@ -1453,7 +1782,8 @@ def build_feature_matrix(
     matrix = matrix.merge(season_seeds[["TeamID", "seed"]], on="TeamID", how="left")
 
     # Massey rankings: pivot each system into its own column
-    season_massey = massey[massey["SystemName"].isin(massey_systems)] if "Season" not in massey.columns else massey[(massey["SystemName"].isin(massey_systems))]
+    # Filter by system name; caller is responsible for pre-filtering by season
+    season_massey = massey[massey["SystemName"].isin(massey_systems)]
     for system in massey_systems:
         sys_ranks = season_massey[season_massey["SystemName"] == system][["TeamID", "OrdinalRank"]]
         sys_ranks = sys_ranks.rename(columns={"OrdinalRank": f"massey_{system}"})
@@ -1503,7 +1833,7 @@ git commit -m "feat: feature matrix assembly with seeds, Massey, form, and road 
 
 ---
 
-### Task 9: Features CLI Entry Point
+### Task 11: Features CLI Entry Point
 
 **Files:**
 - Create: `src/features/__main__.py`
@@ -1597,7 +1927,7 @@ git commit -m "feat: features CLI entry point computing all seasons"
 
 ## Chunk 3: Model Training & Evaluation
 
-### Task 10: Matchup Training Data Builder
+### Task 12: Matchup Training Data Builder
 
 **Files:**
 - Create: `src/models/__init__.py`
@@ -1741,7 +2071,7 @@ git commit -m "feat: symmetric matchup training data builder"
 
 ---
 
-### Task 11: Model Training + Platt Calibration
+### Task 13: Model Training + Platt Calibration
 
 **Files:**
 - Create: `src/models/train.py`
@@ -1916,7 +2246,7 @@ git commit -m "feat: XGBoost training with Platt calibration and model persisten
 
 ---
 
-### Task 12: Evaluation + Baselines
+### Task 14: Evaluation + Baselines
 
 **Files:**
 - Create: `src/models/evaluate.py`
@@ -1932,7 +2262,7 @@ import numpy as np
 import pandas as pd
 import pytest
 
-from src.models.evaluate import compute_log_loss, leave_one_season_out_cv
+from src.models.evaluate import compute_log_loss, compute_brier_score, leave_one_season_out_cv
 from src.models.baselines import seed_baseline_prob
 
 
@@ -1948,6 +2278,20 @@ def test_compute_log_loss_random():
     y_prob = np.array([0.5, 0.5, 0.5, 0.5])
     loss = compute_log_loss(y_true, y_prob)
     assert abs(loss - 0.693) < 0.01  # ln(2) ≈ 0.693
+
+
+def test_compute_brier_score_perfect():
+    y_true = pd.Series([1, 0, 1])
+    y_prob = np.array([1.0, 0.0, 1.0])
+    score = compute_brier_score(y_true, y_prob)
+    assert score == 0.0
+
+
+def test_compute_brier_score_random():
+    y_true = pd.Series([1, 0, 1, 0])
+    y_prob = np.array([0.5, 0.5, 0.5, 0.5])
+    score = compute_brier_score(y_true, y_prob)
+    assert abs(score - 0.25) < 0.01
 
 
 def test_seed_baseline_prob():
@@ -2009,11 +2353,17 @@ def compute_log_loss(y_true: pd.Series, y_prob: np.ndarray) -> float:
     return float(sklearn_log_loss(y_true, y_prob))
 
 
+def compute_brier_score(y_true: pd.Series, y_prob: np.ndarray) -> float:
+    """Compute Brier score (mean squared error of probabilities)."""
+    return float(np.mean((y_prob - y_true.values) ** 2))
+
+
 def leave_one_season_out_cv(
     feature_matrix: pd.DataFrame,
     tourney_results: pd.DataFrame,
     feature_cols: list[str],
     random_seed: int = 42,
+    xgb_params: dict | None = None,
 ) -> dict:
     """Run leave-one-season-out cross-validation.
 
@@ -2039,26 +2389,29 @@ def leave_one_season_out_cv(
         if len(X_train) == 0 or len(X_test) == 0:
             continue
 
-        model = train_model(X_train, y_train, random_seed=random_seed)
+        model = train_model(X_train, y_train, random_seed=random_seed, xgb_params=xgb_params)
         y_prob = model.predict_proba(X_test)[:, 1]
 
         season_loss = compute_log_loss(y_test, y_prob)
+        season_brier = compute_brier_score(y_test, y_prob)
         season_acc = float((y_prob.round() == y_test).mean())
         season_auc = float(roc_auc_score(y_test, y_prob))
 
         results.append({
             "season": holdout_season,
             "log_loss": season_loss,
+            "brier_score": season_brier,
             "accuracy": season_acc,
             "auc": season_auc,
             "n_games": len(test_tourney),
         })
-        logger.info("Season %d: log_loss=%.4f, acc=%.3f, auc=%.3f", holdout_season, season_loss, season_acc, season_auc)
+        logger.info("Season %d: log_loss=%.4f, brier=%.4f, acc=%.3f, auc=%.3f", holdout_season, season_loss, season_brier, season_acc, season_auc)
 
     results_df = pd.DataFrame(results)
     return {
         "per_season": results_df,
         "mean_log_loss": float(results_df["log_loss"].mean()),
+        "mean_brier_score": float(results_df["brier_score"].mean()),
         "mean_accuracy": float(results_df["accuracy"].mean()),
         "mean_auc": float(results_df["auc"].mean()),
     }
@@ -2067,18 +2420,148 @@ def leave_one_season_out_cv(
 - [ ] **Step 5: Run tests to verify they pass**
 
 Run: `pytest tests/test_models/test_evaluate.py -v`
-Expected: 3 tests PASS
+Expected: 5 tests PASS
 
 - [ ] **Step 6: Commit**
 
 ```bash
 git add src/models/evaluate.py src/models/baselines.py tests/test_models/test_evaluate.py
-git commit -m "feat: evaluation with LOSO CV, log loss, and seed baseline"
+git commit -m "feat: evaluation with LOSO CV, log loss, Brier score, and seed baseline"
 ```
 
 ---
 
-### Task 13: Models CLI Entry Point
+### Task 15: Hyperparameter Tuning with Optuna
+
+**Files:**
+- Create: `src/models/tuning.py`
+- Create: `tests/test_models/test_tuning.py`
+
+- [ ] **Step 1: Write the failing tests**
+
+```python
+"""Tests for Optuna hyperparameter tuning."""
+
+import numpy as np
+import pandas as pd
+import pytest
+
+from src.models.tuning import tune_hyperparameters
+
+
+@pytest.fixture
+def training_data():
+    np.random.seed(42)
+    n = 200
+    X = pd.DataFrame({
+        "adj_em": np.random.randn(n) * 10,
+        "seed": np.random.randn(n) * 3,
+    })
+    y = pd.Series((X["adj_em"] + np.random.randn(n) * 3 > 0).astype(int), name="win")
+    return X, y
+
+
+def test_tune_returns_params(training_data):
+    X, y = training_data
+    best_params = tune_hyperparameters(X, y, n_trials=5, random_seed=42)
+    assert isinstance(best_params, dict)
+    assert "max_depth" in best_params
+    assert "learning_rate" in best_params
+
+
+def test_tune_params_in_range(training_data):
+    X, y = training_data
+    best_params = tune_hyperparameters(X, y, n_trials=5, random_seed=42)
+    assert 2 <= best_params["max_depth"] <= 8
+    assert 0.01 <= best_params["learning_rate"] <= 0.3
+```
+
+- [ ] **Step 2: Run tests to verify they fail**
+
+Run: `pytest tests/test_models/test_tuning.py -v`
+Expected: FAIL
+
+- [ ] **Step 3: Implement tuning.py**
+
+```python
+"""Bayesian hyperparameter optimization via Optuna."""
+
+import logging
+
+import numpy as np
+import pandas as pd
+import optuna
+import xgboost as xgb
+from sklearn.calibration import CalibratedClassifierCV
+from sklearn.metrics import log_loss
+from sklearn.model_selection import StratifiedKFold
+
+logger = logging.getLogger(__name__)
+
+# Suppress Optuna's verbose logging
+optuna.logging.set_verbosity(optuna.logging.WARNING)
+
+
+def tune_hyperparameters(
+    X: pd.DataFrame,
+    y: pd.Series,
+    n_trials: int = 50,
+    random_seed: int = 42,
+) -> dict:
+    """Find optimal XGBoost hyperparameters using Optuna.
+
+    Uses 5-fold stratified CV with log loss as the objective.
+    Returns dict of best hyperparameters.
+    """
+    def objective(trial: optuna.Trial) -> float:
+        params = {
+            "n_estimators": trial.suggest_int("n_estimators", 100, 500),
+            "max_depth": trial.suggest_int("max_depth", 2, 8),
+            "learning_rate": trial.suggest_float("learning_rate", 0.01, 0.3, log=True),
+            "subsample": trial.suggest_float("subsample", 0.6, 1.0),
+            "colsample_bytree": trial.suggest_float("colsample_bytree", 0.6, 1.0),
+            "random_state": random_seed,
+            "eval_metric": "logloss",
+        }
+
+        model = xgb.XGBClassifier(**params)
+        cv = StratifiedKFold(n_splits=5, shuffle=True, random_state=random_seed)
+
+        losses = []
+        for train_idx, val_idx in cv.split(X, y):
+            X_train, X_val = X.iloc[train_idx], X.iloc[val_idx]
+            y_train, y_val = y.iloc[train_idx], y.iloc[val_idx]
+            model.fit(X_train, y_train)
+            y_prob = model.predict_proba(X_val)[:, 1]
+            losses.append(log_loss(y_val, y_prob))
+
+        return np.mean(losses)
+
+    study = optuna.create_study(
+        direction="minimize",
+        sampler=optuna.samplers.TPESampler(seed=random_seed),
+    )
+    study.optimize(objective, n_trials=n_trials)
+
+    logger.info("Best trial: log_loss=%.4f, params=%s", study.best_value, study.best_params)
+    return study.best_params
+```
+
+- [ ] **Step 4: Run tests to verify they pass**
+
+Run: `pytest tests/test_models/test_tuning.py -v`
+Expected: 2 tests PASS
+
+- [ ] **Step 5: Commit**
+
+```bash
+git add src/models/tuning.py tests/test_models/test_tuning.py
+git commit -m "feat: Optuna hyperparameter tuning for XGBoost"
+```
+
+---
+
+### Task 16: Models CLI Entry Point
 
 **Files:**
 - Create: `src/models/__main__.py`
@@ -2097,6 +2580,7 @@ from src.config import load_config
 from src.models.matchup import build_matchup_data
 from src.models.train import train_model, save_model
 from src.models.evaluate import leave_one_season_out_cv
+from src.models.tuning import tune_hyperparameters
 
 logging.basicConfig(level=logging.INFO, format="%(name)s - %(levelname)s - %(message)s")
 logger = logging.getLogger(__name__)
@@ -2121,11 +2605,20 @@ def main() -> None:
     available_cols = [c for c in FEATURE_COLS if c in feature_matrix.columns]
     logger.info("Using %d features: %s", len(available_cols), available_cols)
 
-    # Evaluate via LOSO CV
+    # Build training data
+    X, y = build_matchup_data(feature_matrix, tourney_results, available_cols)
+
+    # Hyperparameter tuning
+    logger.info("Tuning hyperparameters with Optuna (50 trials)")
+    best_params = tune_hyperparameters(X, y, n_trials=50, random_seed=config["model"]["random_seed"])
+    logger.info("Best params: %s", best_params)
+
+    # Evaluate via LOSO CV with tuned params
     logger.info("Running leave-one-season-out cross-validation")
     cv_results = leave_one_season_out_cv(
         feature_matrix, tourney_results, available_cols,
         random_seed=config["model"]["random_seed"],
+        xgb_params=best_params,
     )
     logger.info(
         "CV Results: log_loss=%.4f, accuracy=%.3f, auc=%.3f",
@@ -2134,10 +2627,9 @@ def main() -> None:
         cv_results["mean_auc"],
     )
 
-    # Train final model on all data
+    # Train final model on all data with tuned params
     logger.info("Training final model on all seasons")
-    X, y = build_matchup_data(feature_matrix, tourney_results, available_cols)
-    model = train_model(X, y, random_seed=config["model"]["random_seed"])
+    model = train_model(X, y, random_seed=config["model"]["random_seed"], xgb_params=best_params)
 
     seasons = sorted(feature_matrix["Season"].unique().tolist())
     save_model(model, "models", config, available_cols, seasons)
@@ -2160,7 +2652,7 @@ git commit -m "feat: models CLI with LOSO CV evaluation and final model training
 
 ## Chunk 4: Bracket Simulation & Output
 
-### Task 14: Monte Carlo Tournament Simulator
+### Task 17: Monte Carlo Tournament Simulator
 
 **Files:**
 - Create: `src/bracket/__init__.py`
@@ -2186,13 +2678,15 @@ from src.bracket.simulator import (
 
 @pytest.fixture
 def bracket_df():
-    """16-team single-region bracket."""
-    return pd.DataFrame({
-        "Region": ["East"] * 16,
-        "Seed": list(range(1, 17)),
-        "TeamID": list(range(101, 117)),
-        "TeamName": [f"Team{i}" for i in range(1, 17)],
-    })
+    """64-team 4-region bracket."""
+    regions = ["East", "West", "South", "Midwest"]
+    rows = []
+    team_id = 101
+    for region in regions:
+        for seed in range(1, 17):
+            rows.append({"Region": region, "Seed": seed, "TeamID": team_id, "TeamName": f"Team{team_id}"})
+            team_id += 1
+    return pd.DataFrame(rows)
 
 
 @pytest.fixture
@@ -2216,9 +2710,9 @@ def test_first_round_matchups():
 
 def test_simulate_tournament_returns_results(bracket_df, mock_predict):
     feature_matrix = pd.DataFrame({
-        "TeamID": list(range(101, 117)),
-        "seed": list(range(1, 17)),
-        "adj_em": [30 - i * 2 for i in range(16)],
+        "TeamID": list(range(101, 165)),
+        "seed": list(range(1, 17)) * 4,
+        "adj_em": [30 - (i % 16) * 2 for i in range(64)],
     })
     results = simulate_tournament(
         bracket=bracket_df,
@@ -2230,9 +2724,11 @@ def test_simulate_tournament_returns_results(bracket_df, mock_predict):
     )
     assert "advancement_counts" in results
     assert "champions" in results
-    # 1-seed should win most often
+    # 1-seeds should collectively dominate championships
+    one_seeds = [101, 117, 133, 149]  # 1-seeds from each region
     champ_counts = results["champions"]
-    assert champ_counts.get(101, 0) > champ_counts.get(116, 0)
+    one_seed_wins = sum(champ_counts.get(t, 0) for t in one_seeds)
+    assert one_seed_wins > 50  # should win majority of 100 sims
 
 
 def test_get_advancement_probabilities():
@@ -2356,7 +2852,7 @@ def simulate_tournament(
     champions = defaultdict(int)
 
     for sim in range(n_simulations):
-        # Simulate each region
+        # Simulate each region (rounds 1-4: R64, R32, S16, E8)
         regional_champs = []
         for region in regions:
             region_teams = bracket[bracket["Region"] == region].copy()
@@ -2364,15 +2860,14 @@ def simulate_tournament(
                 region_teams, feature_matrix, predict_fn, feature_cols, rng, advancement
             )
             regional_champs.append(champ)
-            advancement[champ][5] = advancement[champ].get(5, 0) + 1  # Final Four
+            # Round 5 = reached Final Four (won region)
+            advancement[champ][5] = advancement[champ].get(5, 0) + 1
 
-        # Semifinals: region 0 vs region 1, region 2 vs region 3
+        # Semifinals (round 5 winners → round 6 = won semifinal)
         semi1 = _simulate_game(regional_champs[0], regional_champs[1], feature_matrix, predict_fn, feature_cols, rng)
         semi2 = _simulate_game(regional_champs[2], regional_champs[3], feature_matrix, predict_fn, feature_cols, rng)
-        advancement[semi1][5] = advancement[semi1].get(5, 0) + 1
-        advancement[semi2][5] = advancement[semi2].get(5, 0) + 1
 
-        # Championship
+        # Championship (round 6 = won championship)
         champion = _simulate_game(semi1, semi2, feature_matrix, predict_fn, feature_cols, rng)
         advancement[champion][6] = advancement[champion].get(6, 0) + 1
         champions[champion] += 1
@@ -2416,7 +2911,7 @@ git commit -m "feat: Monte Carlo tournament simulator with region-based bracket 
 
 ---
 
-### Task 15: Bracket Selection Strategies
+### Task 18: Bracket Selection Strategies
 
 **Files:**
 - Create: `src/bracket/strategies.py`
@@ -2535,7 +3030,7 @@ git commit -m "feat: chalk and expected-value bracket selection strategies"
 
 ---
 
-### Task 16: Bracket Output
+### Task 19: Bracket Output
 
 **Files:**
 - Create: `src/bracket/output.py`
@@ -2652,7 +3147,7 @@ git commit -m "feat: bracket output with advancement table and CSV export"
 
 ---
 
-### Task 17: Bracket CLI Entry Point
+### Task 20: Bracket CLI Entry Point
 
 **Files:**
 - Create: `src/bracket/__main__.py`
@@ -2788,7 +3283,7 @@ git commit -m "feat: bracket CLI with simulation, strategies, and output"
 
 ---
 
-### Task 18: Integration Smoke Test
+### Task 21: Integration Smoke Test
 
 **Files:**
 - Create: `tests/test_integration.py`
@@ -2910,7 +3405,9 @@ git commit -m "test: end-to-end integration test with synthetic data"
 
 ---
 
-### Task 19: Run Full Test Suite
+### Task 22: Run Full Test Suite
+
+> **Note:** Pool-optimized bracket strategy (spec stretch goal) is intentionally deferred. Chalk and expected-value brackets are the core deliverables. Pool optimization can be added as a follow-up task.
 
 - [ ] **Step 1: Run all tests**
 
