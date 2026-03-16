@@ -1,0 +1,39 @@
+# March Madness Bracket Model Configuration
+
+data:
+  kaggle_dir: "data/raw/kaggle"
+  cache_dir: "data/cache"
+  processed_dir: "data/processed"
+  team_overrides: "data/team_name_overrides.csv"
+
+seasons:
+  train_start: 2003
+  train_end: 2025
+  predict_season: 2026
+
+efficiency:
+  iterations: 15
+  recency_half_life_days: 30
+  home_court_advantage: 3.5
+  ridge_alpha: 1.0
+
+matching:
+  auto_accept_threshold: 85
+  review_threshold: 70
+  algorithm: "token_sort_ratio"
+
+model:
+  random_seed: 42
+  n_simulations: 10000
+
+massey:
+  systems:
+    - "POM"   # Pomeroy / KenPom
+    - "SAG"   # Sagarin
+    - "BPI"   # ESPN BPI
+    - "TRK"   # T-Rank / Barttorvik
+    - "RPI"   # RPI
+
+bracket:
+  scoring: [1, 2, 4, 8, 16, 32]  # points per round
+  strategies: ["chalk", "expected_value"]
