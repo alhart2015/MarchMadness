@@ -1322,7 +1322,6 @@ def compute_four_factors(detailed_results: pd.DataFrame, season: int) -> pd.Data
     # Offensive four factors
     agg["off_efg"] = (agg["FGM"] + 0.5 * agg["FGM3"]) / agg["FGA"]
     agg["off_to_rate"] = agg["TO"] / (agg["FGA"] + 0.475 * agg["FTA"] + agg["TO"])
-    total_rebounds = agg["OR"] + agg["opp_OR"]  # approx: team OR + opp DR not available as "opp_OR" here is opponent's OR
     agg["off_or_rate"] = agg["OR"] / (agg["OR"] + agg["opp_DR"])
     agg["off_ft_rate"] = agg["FTM"] / agg["FGA"]
 
@@ -2922,36 +2921,71 @@ git commit -m "feat: Monte Carlo tournament simulator with region-based bracket 
 ```python
 """Tests for bracket selection strategies."""
 
+import pandas as pd
 import pytest
 
 from src.bracket.strategies import chalk_bracket, expected_value_bracket
+from src.bracket.simulator import FIRST_ROUND_MATCHUPS
+
+
+@pytest.fixture
+def bracket_df():
+    """Single-region 16-team bracket for strategy testing."""
+    return pd.DataFrame({
+        "Region": ["East"] * 16,
+        "Seed": list(range(1, 17)),
+        "TeamID": list(range(101, 117)),
+        "TeamName": [f"Team{i}" for i in range(1, 17)],
+    })
 
 
 @pytest.fixture
 def advancement_probs():
-    """Advancement probabilities for 4 teams over 3 rounds."""
-    return {
-        101: {1: 0.95, 2: 0.70, 3: 0.40},  # 1-seed
-        116: {1: 0.05, 2: 0.02, 3: 0.005},  # 16-seed
-        108: {1: 0.55, 2: 0.25, 3: 0.10},   # 8-seed
-        109: {1: 0.45, 2: 0.15, 3: 0.05},   # 9-seed
-    }
+    """Advancement probabilities for 16 teams across 4 region rounds."""
+    probs = {}
+    for i in range(16):
+        team_id = 101 + i
+        seed = i + 1
+        # Better seeds get higher advancement probs
+        base = max(0.98 - seed * 0.05, 0.02)
+        probs[team_id] = {
+            1: min(base * 1.2, 0.99),
+            2: base * 0.8,
+            3: base * 0.5,
+            4: base * 0.3,
+        }
+    return probs
 
 
-def test_chalk_bracket_picks_highest_prob(advancement_probs):
-    picks = chalk_bracket(advancement_probs, n_rounds=3)
-    # Round 1: 101 and 108 should advance
+def test_chalk_bracket_structure(bracket_df, advancement_probs):
+    picks = chalk_bracket(bracket_df, advancement_probs)
+    # Round 1: exactly 8 winners from 8 matchups
+    assert len(picks[1]) == 8
+    # Round 2: exactly 4 winners
+    assert len(picks[2]) == 4
+    # All round 2 picks must be in round 1
+    assert all(t in picks[1] for t in picks[2])
+    # Round 4: regional champion
+    assert len(picks[4]) == 1
+    assert picks[4][0] in picks[3]
+
+
+def test_chalk_bracket_picks_favorites(bracket_df, advancement_probs):
+    picks = chalk_bracket(bracket_df, advancement_probs)
+    # 1-seed should beat 16-seed in round 1
     assert 101 in picks[1]
-    assert 108 in picks[1]
-    # Round 3: 101 should be champion
-    assert 101 in picks[3]
+    # 1-seed should be regional champion
+    assert 101 in picks[4]
 
 
-def test_expected_value_bracket(advancement_probs):
-    scoring = [1, 2, 4]
-    picks = expected_value_bracket(advancement_probs, scoring=scoring)
-    # 101 should be picked to win it all (highest EV)
-    assert 101 in picks[3]
+def test_expected_value_bracket_structure(bracket_df, advancement_probs):
+    scoring = [1, 2, 4, 8]
+    picks = expected_value_bracket(bracket_df, advancement_probs, scoring=scoring)
+    # Same structural constraints as chalk
+    assert len(picks[1]) == 8
+    assert len(picks[2]) == 4
+    assert all(t in picks[1] for t in picks[2])
+    assert len(picks[4]) == 1
 ```
 
 - [ ] **Step 2: Run tests to verify they fail**
@@ -2962,58 +2996,143 @@ Expected: FAIL
 - [ ] **Step 3: Implement strategies.py**
 
 ```python
-"""Bracket selection strategies."""
+"""Bracket selection strategies that produce structurally valid brackets.
 
-from collections import defaultdict
+A valid bracket respects the bracket tree: picks in round N+1 must be
+a subset of picks in round N, and each matchup slot has exactly one winner.
+"""
+
+import pandas as pd
+
+from src.bracket.simulator import FIRST_ROUND_MATCHUPS
 
 
-def chalk_bracket(
-    advancement_probs: dict[int, dict[int, float]],
-    n_rounds: int = 6,
-) -> dict[int, list[int]]:
-    """Chalk bracket: for each round, pick the team with highest advancement probability.
+def _pick_slot_winner(
+    team_a: int,
+    team_b: int,
+    probs: dict[int, dict[int, float]],
+    round_num: int,
+    scorer: str = "prob",
+    points: int = 1,
+) -> int:
+    """Pick the winner of a single bracket slot.
 
-    Returns {round_number: [list of team_ids picked to advance]}.
+    scorer="prob": pick higher advancement probability (chalk).
+    scorer="ev": pick higher expected value (prob * points).
     """
+    prob_a = probs.get(team_a, {}).get(round_num, 0.0)
+    prob_b = probs.get(team_b, {}).get(round_num, 0.0)
+    if scorer == "ev":
+        val_a = prob_a * points
+        val_b = prob_b * points
+    else:
+        val_a = prob_a
+        val_b = prob_b
+    return team_a if val_a >= val_b else team_b
+
+
+def _fill_region(
+    region_teams: pd.DataFrame,
+    probs: dict[int, dict[int, float]],
+    scorer: str = "prob",
+    scoring: list[int] | None = None,
+) -> dict[int, list[int]]:
+    """Fill bracket picks for a single region (4 rounds)."""
+    if scoring is None:
+        scoring = [1, 2, 4, 8]
+
+    seed_to_team = dict(zip(region_teams["Seed"], region_teams["TeamID"]))
     picks = {}
-    for rnd in range(1, n_rounds + 1):
-        teams_with_probs = [
-            (team_id, rounds.get(rnd, 0.0))
-            for team_id, rounds in advancement_probs.items()
-            if rounds.get(rnd, 0.0) > 0
-        ]
-        teams_with_probs.sort(key=lambda x: x[1], reverse=True)
-        picks[rnd] = [t[0] for t in teams_with_probs]
+
+    # Round 1: known matchups from bracket structure
+    round1_winners = []
+    for seed_a, seed_b in FIRST_ROUND_MATCHUPS:
+        team_a = seed_to_team[seed_a]
+        team_b = seed_to_team[seed_b]
+        winner = _pick_slot_winner(team_a, team_b, probs, 1, scorer, scoring[0])
+        round1_winners.append(winner)
+    picks[1] = round1_winners
+
+    # Rounds 2-4: winners play each other in bracket order
+    current = round1_winners
+    for rnd in range(2, 5):
+        next_round = []
+        pts = scoring[rnd - 1] if rnd - 1 < len(scoring) else scoring[-1]
+        for i in range(0, len(current), 2):
+            winner = _pick_slot_winner(current[i], current[i + 1], probs, rnd, scorer, pts)
+            next_round.append(winner)
+        picks[rnd] = next_round
+        current = next_round
+
     return picks
 
 
+def chalk_bracket(
+    bracket: pd.DataFrame,
+    advancement_probs: dict[int, dict[int, float]],
+) -> dict[int, list[int]]:
+    """Chalk bracket: pick the higher-probability team in each slot.
+
+    Returns {round_number: [team_ids advancing that round]}.
+    Respects bracket structure — all picks are consistent across rounds.
+    """
+    regions = sorted(bracket["Region"].unique())
+    all_picks = {r: [] for r in range(1, 7)}
+
+    # Fill each region (rounds 1-4)
+    regional_champs = []
+    for region in regions:
+        region_teams = bracket[bracket["Region"] == region]
+        region_picks = _fill_region(region_teams, advancement_probs, scorer="prob")
+        for rnd, teams in region_picks.items():
+            all_picks[rnd].extend(teams)
+        regional_champs.append(region_picks[4][0])
+
+    # Semifinals (round 5)
+    semi1 = _pick_slot_winner(regional_champs[0], regional_champs[1], advancement_probs, 5, "prob")
+    semi2 = _pick_slot_winner(regional_champs[2], regional_champs[3], advancement_probs, 5, "prob")
+    all_picks[5] = [semi1, semi2]
+
+    # Championship (round 6)
+    champ = _pick_slot_winner(semi1, semi2, advancement_probs, 6, "prob")
+    all_picks[6] = [champ]
+
+    return all_picks
+
+
 def expected_value_bracket(
+    bracket: pd.DataFrame,
     advancement_probs: dict[int, dict[int, float]],
     scoring: list[int] | None = None,
 ) -> dict[int, list[int]]:
-    """Expected value bracket: pick teams that maximize expected bracket points.
+    """Expected value bracket: pick teams maximizing expected points per slot.
 
-    For each round, EV = P(team reaches round) * points_for_round.
-    Pick the team with highest EV for each slot.
-
-    scoring: points per round, e.g., [1, 2, 4, 8, 16, 32] for ESPN standard.
+    Returns {round_number: [team_ids advancing that round]}.
     """
     if scoring is None:
         scoring = [1, 2, 4, 8, 16, 32]
 
-    n_rounds = len(scoring)
-    picks = {}
+    regions = sorted(bracket["Region"].unique())
+    all_picks = {r: [] for r in range(1, 7)}
 
-    for rnd in range(1, n_rounds + 1):
-        points = scoring[rnd - 1]
-        teams_with_ev = [
-            (team_id, rounds.get(rnd, 0.0) * points)
-            for team_id, rounds in advancement_probs.items()
-            if rounds.get(rnd, 0.0) > 0
-        ]
-        teams_with_ev.sort(key=lambda x: x[1], reverse=True)
-        picks[rnd] = [t[0] for t in teams_with_ev]
-    return picks
+    regional_champs = []
+    for region in regions:
+        region_teams = bracket[bracket["Region"] == region]
+        region_picks = _fill_region(region_teams, advancement_probs, scorer="ev", scoring=scoring)
+        for rnd, teams in region_picks.items():
+            all_picks[rnd].extend(teams)
+        regional_champs.append(region_picks[4][0])
+
+    # Semifinals
+    semi1 = _pick_slot_winner(regional_champs[0], regional_champs[1], advancement_probs, 5, "ev", scoring[4])
+    semi2 = _pick_slot_winner(regional_champs[2], regional_champs[3], advancement_probs, 5, "ev", scoring[4])
+    all_picks[5] = [semi1, semi2]
+
+    # Championship
+    champ = _pick_slot_winner(semi1, semi2, advancement_probs, 6, "ev", scoring[5])
+    all_picks[6] = [champ]
+
+    return all_picks
 ```
 
 - [ ] **Step 4: Run tests to verify they pass**
@@ -3247,9 +3366,9 @@ def main() -> None:
     scoring = config["bracket"]["scoring"]
     for strategy_name in config["bracket"]["strategies"]:
         if strategy_name == "chalk":
-            picks = chalk_bracket(probs, n_rounds=6)
+            picks = chalk_bracket(bracket, probs)
         elif strategy_name == "expected_value":
-            picks = expected_value_bracket(probs, scoring=scoring)
+            picks = expected_value_bracket(bracket, probs, scoring=scoring)
         else:
             logger.warning("Unknown strategy: %s", strategy_name)
             continue
@@ -3370,13 +3489,19 @@ def test_full_pipeline_synthetic():
     assert len(X) > 0
     model = train_model(X, y, random_seed=42)
 
-    # Simulate bracket for 2023
-    bracket = pd.DataFrame({
-        "Region": ["East"] * 16,
-        "Seed": list(range(1, 17)),
-        "TeamID": list(range(1, 17)),
-        "TeamName": [f"Team{i}" for i in range(1, 17)],
-    })
+    # Simulate bracket for 2023 — need 4 regions, 64 teams
+    # Reuse the 16 teams across 4 regions (same features, different bracket slots)
+    regions = ["East", "West", "South", "Midwest"]
+    bracket_rows = []
+    for region in regions:
+        for seed in range(1, 17):
+            bracket_rows.append({
+                "Region": region,
+                "Seed": seed,
+                "TeamID": seed,  # reuse same team IDs across regions for simplicity
+                "TeamName": f"Team{seed}",
+            })
+    bracket = pd.DataFrame(bracket_rows)
     current = full_matrix[full_matrix["Season"] == 2023]
 
     def predict_fn(a_feats, b_feats):
@@ -3387,8 +3512,10 @@ def test_full_pipeline_synthetic():
 
     assert len(results["champions"]) > 0
     probs = get_advancement_probabilities(results["advancement_counts"], 100)
-    picks = chalk_bracket(probs, n_rounds=4)
+    picks = chalk_bracket(bracket, probs)
     assert len(picks) > 0
+    # Champion should be a single team
+    assert len(picks[6]) == 1
 ```
 
 - [ ] **Step 2: Run the integration test**
