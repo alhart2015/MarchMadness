@@ -1,7 +1,7 @@
 data/raw/
 data/processed/
 data/cache/
-models/
+/models/
 output/
 __pycache__/
 *.pyc
