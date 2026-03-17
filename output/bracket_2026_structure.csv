@@ -1,65 +1,65 @@
 Region,Seed,TeamID,TeamName
 East,1,1207,Duke
-West,1,1213,Arizona
-South,1,1184,Michigan
-Midwest,1,1206,Florida
-Midwest,2,1199,Houston
-South,2,1194,Iowa St.
-West,2,1173,Purdue
-East,2,1208,Connecticut
-East,3,1196,Illinois
-West,3,1183,Michigan St.
-South,3,1203,Gonzaga
-Midwest,3,1150,Virginia
-Midwest,4,1181,Nebraska
-South,4,1212,Arkansas
-West,4,1214,Alabama
+East,16,1168,Siena
+East,8,1176,Ohio St.
+East,9,1164,TCU
+East,5,1165,St. John's
+East,12,1177,Northern Iowa
 East,4,1193,Kansas
-East,5,1153,Vanderbilt
-West,5,1165,St. John's
-South,5,1159,Texas Tech
-Midwest,5,1149,Wisconsin
-Midwest,6,1163,Tennessee
-South,6,1188,Louisville
-West,6,1211,BYU
-East,6,1180,North Carolina
-East,7,1170,Saint Mary's
-West,7,1156,UCLA
-South,7,1191,Kentucky
-Midwest,7,1186,Miami FL
-Midwest,8,1176,Ohio St.
-South,8,1204,Georgia
-West,8,1151,Villanova
-East,8,1209,Clemson
-East,9,1195,Iowa
-West,9,1154,Utah St.
-South,9,1171,Saint Louis
-Midwest,9,1164,TCU
-Midwest,10,1169,Santa Clara
-South,10,1160,Texas A&M
-West,10,1182,Missouri
+East,13,1210,Cal Baptist
+East,6,1188,Louisville
+East,11,1166,South Florida
+East,3,1183,Michigan St.
+East,14,1178,North Dakota St.
+East,7,1156,UCLA
 East,10,1157,UCF
-East,11,1179,North Carolina St.
-West,11,1161,Texas
-South,11,1167,SMU
-Midwest,11,1152,VCU
-Midwest,12,1215,Akron
-South,12,1187,McNeese St.
-West,12,1177,Northern Iowa
-East,12,1201,High Point
-East,13,1200,Hofstra
-West,13,1210,Cal Baptist
-South,13,1202,Hawaii
-Midwest,13,1158,Troy
-Midwest,14,1178,North Dakota St.
-South,14,1148,Wright St.
-West,14,1175,Penn
-East,14,1192,Kennesaw St.
-East,15,1197,Idaho
+East,2,1208,Connecticut
+East,15,1205,Furman
+West,1,1213,Arizona
+West,16,1189,LIU Brooklyn
+West,8,1151,Villanova
+West,9,1154,Utah St.
+West,5,1149,Wisconsin
+West,12,1201,High Point
+West,4,1212,Arkansas
+West,13,1202,Hawaii
+West,6,1211,BYU
+West,11,1179,North Carolina St.
+West,3,1203,Gonzaga
+West,14,1192,Kennesaw St.
+West,7,1186,Miami FL
+West,10,1182,Missouri
+West,2,1173,Purdue
 West,15,1172,Queens
-South,15,1162,Tennessee St.
-Midwest,15,1205,Furman
+South,1,1206,Florida
+South,16,1190,Lehigh
+South,8,1209,Clemson
+South,9,1195,Iowa
+South,5,1153,Vanderbilt
+South,12,1187,McNeese St.
+South,4,1181,Nebraska
+South,13,1158,Troy
+South,6,1180,North Carolina
+South,11,1152,VCU
+South,3,1196,Illinois
+South,14,1175,Penn
+South,7,1170,Saint Mary's
+South,10,1160,Texas A&M
+South,2,1199,Houston
+South,15,1197,Idaho
+Midwest,1,1184,Michigan
 Midwest,16,1155,UMBC
-South,16,1168,Siena
-West,16,1198,Howard
-East,16,1189,LIU Brooklyn
+Midwest,8,1204,Georgia
+Midwest,9,1171,Saint Louis
+Midwest,5,1159,Texas Tech
+Midwest,12,1215,Akron
+Midwest,4,1214,Alabama
+Midwest,13,1200,Hofstra
+Midwest,6,1163,Tennessee
+Midwest,11,1167,SMU
+Midwest,3,1150,Virginia
+Midwest,14,1148,Wright St.
+Midwest,7,1191,Kentucky
+Midwest,10,1169,Santa Clara
+Midwest,2,1194,Iowa St.
+Midwest,15,1162,Tennessee St.
