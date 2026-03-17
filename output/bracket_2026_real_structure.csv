@@ -1,0 +1,65 @@
+Region,Seed,TeamID,TeamName,KenPomID
+East,1,1181,Duke,1207
+East,16,1373,Siena,1168
+East,8,1326,Ohio St.,1176
+East,9,1395,TCU,1164
+East,5,1385,St. John's,1165
+East,12,1320,Northern Iowa,1177
+East,4,1242,Kansas,1193
+East,13,1465,Cal Baptist,1210
+East,6,1257,Louisville,1188
+East,11,1378,South Florida,1166
+East,3,1277,Michigan St.,1183
+East,14,1295,North Dakota St.,1178
+East,7,1417,UCLA,1156
+East,10,1416,UCF,1157
+East,2,1163,Connecticut,1208
+East,15,1202,Furman,1205
+West,1,1112,Arizona,1213
+West,16,1254,LIU Brooklyn,1189
+West,8,1437,Villanova,1151
+West,9,1429,Utah St.,1154
+West,5,1458,Wisconsin,1149
+West,12,1219,High Point,1201
+West,4,1116,Arkansas,1212
+West,13,1218,Hawaii,1202
+West,6,1140,BYU,1211
+West,11,1301,North Carolina St.,1179
+West,3,1211,Gonzaga,1203
+West,14,1244,Kennesaw St.,1192
+West,7,1274,Miami FL,1186
+West,10,1281,Missouri,1182
+West,2,1345,Purdue,1173
+West,15,1474,Queens,1172
+South,1,1196,Florida,1206
+South,16,1250,Lehigh,1190
+South,8,1155,Clemson,1209
+South,9,1234,Iowa,1195
+South,5,1435,Vanderbilt,1153
+South,12,1270,McNeese St.,1187
+South,4,1304,Nebraska,1181
+South,13,1407,Troy,1158
+South,6,1314,North Carolina,1180
+South,11,1433,VCU,1152
+South,3,1228,Illinois,1196
+South,14,1335,Penn,1175
+South,7,1388,Saint Mary's,1170
+South,10,1401,Texas A&M,1160
+South,2,1222,Houston,1199
+South,15,1225,Idaho,1197
+Midwest,1,1276,Michigan,1184
+Midwest,16,1420,UMBC,1155
+Midwest,8,1208,Georgia,1204
+Midwest,9,1387,Saint Louis,1171
+Midwest,5,1403,Texas Tech,1159
+Midwest,12,1103,Akron,1215
+Midwest,4,1104,Alabama,1214
+Midwest,13,1220,Hofstra,1200
+Midwest,6,1397,Tennessee,1163
+Midwest,11,1374,SMU,1167
+Midwest,3,1438,Virginia,1150
+Midwest,14,1460,Wright St.,1148
+Midwest,7,1246,Kentucky,1191
+Midwest,10,1365,Santa Clara,1169
+Midwest,2,1235,Iowa St.,1194
+Midwest,15,1398,Tennessee St.,1162
