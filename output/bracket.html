@@ -238,8 +238,9 @@ function compute(){
     const ot=wt?(w===a?bt:at):null;
     return{key,t1:at,t2:bt,w,wu:isUser(key),upset:wt&&ot?wt.seed>ot.seed:false};
   }
-  const lf4=f4m('f4_left',ew,ww);
-  const rf4=f4m('f4_right',sw,mw);
+  // NCAA pairings: East vs South, West vs Midwest
+  const lf4=f4m('f4_left',ew,sw);
+  const rf4=f4m('f4_right',ww,mw);
   const ncg=(()=>{
     const a=lf4.w, b=rf4.w;
     const w=winner('ncg',a,b);
@@ -374,8 +375,8 @@ function updateSummary(st){
 <div class="sum-card"><div class="sum-lbl">West &mdash; Elite Eight</div><div class="sum-val">${ts(e8.West)}</div></div>
 <div class="sum-card"><div class="sum-lbl">South &mdash; Elite Eight</div><div class="sum-val">${ts(e8.South)}</div></div>
 <div class="sum-card"><div class="sum-lbl">Midwest &mdash; Elite Eight</div><div class="sum-val">${ts(e8.Midwest)}</div></div>
-<div class="sum-card"><div class="sum-lbl">Final Four &mdash; East/West</div><div class="sum-val">${ts(lw)}</div></div>
-<div class="sum-card"><div class="sum-lbl">Final Four &mdash; South/Midwest</div><div class="sum-val">${ts(rw)}</div></div>
+<div class="sum-card"><div class="sum-lbl">Final Four &mdash; East/South</div><div class="sum-val">${ts(lw)}</div></div>
+<div class="sum-card"><div class="sum-lbl">Final Four &mdash; West/Midwest</div><div class="sum-val">${ts(rw)}</div></div>
 <div class="sum-card champ"><div class="sum-lbl">&#127942; National Champion</div><div class="sum-val">${ts(ch)}</div></div>
 `;
 }
@@ -430,8 +431,8 @@ function copyBracket(){
   lines.push('--- FINAL FOUR ---');
   const lwt=st.lf4.w?teamById[st.lf4.w]:null;
   const rwt=st.rf4.w?teamById[st.rf4.w]:null;
-  lines.push(`  East/West:       ${ts(st.lf4.t1)} vs ${ts(st.lf4.t2)}  ->  ${ts(lwt)} ${tag(st.lf4)}`);
-  lines.push(`  South/Midwest:   ${ts(st.rf4.t1)} vs ${ts(st.rf4.t2)}  ->  ${ts(rwt)} ${tag(st.rf4)}`);
+  lines.push(`  East/South:      ${ts(st.lf4.t1)} vs ${ts(st.lf4.t2)}  ->  ${ts(lwt)} ${tag(st.lf4)}`);
+  lines.push(`  West/Midwest:    ${ts(st.rf4.t1)} vs ${ts(st.rf4.t2)}  ->  ${ts(rwt)} ${tag(st.rf4)}`);
   lines.push('');
   lines.push('--- NATIONAL CHAMPIONSHIP ---');
   const ch=st.ncg.w?teamById[st.ncg.w]:null;
