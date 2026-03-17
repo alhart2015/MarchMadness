@@ -103,21 +103,30 @@ def simulate_tournament(
     advancement = defaultdict(lambda: defaultdict(int))
     champions = defaultdict(int)
 
+    # NCAA semifinal pairings: East vs South, West vs Midwest
+    _SEMI_PAIRINGS = [("East", "South"), ("West", "Midwest")]
+
     for sim in range(n_simulations):
         # Simulate each region (rounds 1-4: R64, R32, S16, E8)
-        regional_champs = []
+        regional_champs = {}
         for region in regions:
             region_teams = bracket[bracket["Region"] == region].copy()
             champ = _simulate_region(
                 region_teams, feature_matrix, predict_fn, feature_cols, rng, advancement
             )
-            regional_champs.append(champ)
+            regional_champs[region] = champ
             # Round 5 = reached Final Four (won region)
             advancement[champ][5] = advancement[champ].get(5, 0) + 1
 
-        # Semifinals (round 5 winners → round 6 = won semifinal)
-        semi1 = _simulate_game(regional_champs[0], regional_champs[1], feature_matrix, predict_fn, feature_cols, rng)
-        semi2 = _simulate_game(regional_champs[2], regional_champs[3], feature_matrix, predict_fn, feature_cols, rng)
+        # Semifinals: East vs South, West vs Midwest
+        # Fall back to positional pairing if region names don't match
+        if all(r in regional_champs for pair in _SEMI_PAIRINGS for r in pair):
+            semi1 = _simulate_game(regional_champs["East"], regional_champs["South"], feature_matrix, predict_fn, feature_cols, rng)
+            semi2 = _simulate_game(regional_champs["West"], regional_champs["Midwest"], feature_matrix, predict_fn, feature_cols, rng)
+        else:
+            champ_list = list(regional_champs.values())
+            semi1 = _simulate_game(champ_list[0], champ_list[1], feature_matrix, predict_fn, feature_cols, rng)
+            semi2 = _simulate_game(champ_list[2], champ_list[3], feature_matrix, predict_fn, feature_cols, rng)
 
         # Championship (round 6 = won championship)
         champion = _simulate_game(semi1, semi2, feature_matrix, predict_fn, feature_cols, rng)

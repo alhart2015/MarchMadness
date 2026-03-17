@@ -173,14 +173,12 @@ def simulate_tournament_fast(
             regional_champs.append(champ)
             advancement[champ][5] += 1
 
-        # Final Four: regions play in fixed bracket pairs
-        # Standard: East vs West (or South) and Midwest vs the other
-        # Actual NCAA 2026: East vs West in one semifinal, South vs Midwest in the other
+        # Final Four: NCAA pairs East vs South, West vs Midwest
         # regions list sorted = [East, Midwest, South, West]
         # idx:                    0      1        2      3
-        # East(0) vs West(3), Midwest(1) vs South(2)
-        semi1 = play_game(regional_champs[0], regional_champs[3])  # East vs West
-        semi2 = play_game(regional_champs[1], regional_champs[2])  # Midwest vs South
+        # East(0) vs South(2), West(3) vs Midwest(1)
+        semi1 = play_game(regional_champs[0], regional_champs[2])  # East vs South
+        semi2 = play_game(regional_champs[3], regional_champs[1])  # West vs Midwest
         advancement[semi1][5] += 0   # already counted from regional win
         advancement[semi2][5] += 0
         champion = play_game(semi1, semi2)

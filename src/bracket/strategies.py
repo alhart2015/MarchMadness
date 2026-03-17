@@ -82,23 +82,28 @@ def chalk_bracket(
     all_picks = {r: [] for r in range(1, 7)}
 
     # Fill each region (rounds 1-4)
-    regional_champs = []
+    regional_champs = {}
     for region in regions:
         region_teams = bracket[bracket["Region"] == region]
         region_picks = _fill_region(region_teams, advancement_probs, scorer="prob")
         for rnd, teams in region_picks.items():
             all_picks[rnd].extend(teams)
-        regional_champs.append(region_picks[4][0])
+        regional_champs[region] = region_picks[4][0]
 
-    # Semifinals (round 5) — only if at least 2 regions
-    if len(regional_champs) >= 2:
-        semi1 = _pick_slot_winner(regional_champs[0], regional_champs[1], advancement_probs, 5, "prob")
-        semi2 = _pick_slot_winner(regional_champs[2], regional_champs[3], advancement_probs, 5, "prob") if len(regional_champs) >= 4 else semi1
-        all_picks[5] = [semi1, semi2]
+    # Semifinals (round 5): East vs South, West vs Midwest
+    if len(regional_champs) >= 4 and all(r in regional_champs for r in ["East", "South", "West", "Midwest"]):
+        semi1 = _pick_slot_winner(regional_champs["East"], regional_champs["South"], advancement_probs, 5, "prob")
+        semi2 = _pick_slot_winner(regional_champs["West"], regional_champs["Midwest"], advancement_probs, 5, "prob")
+    elif len(regional_champs) >= 2:
+        champ_list = list(regional_champs.values())
+        semi1 = _pick_slot_winner(champ_list[0], champ_list[1], advancement_probs, 5, "prob")
+        semi2 = _pick_slot_winner(champ_list[2], champ_list[3], advancement_probs, 5, "prob") if len(champ_list) >= 4 else semi1
+    else:
+        return all_picks
 
-        # Championship (round 6)
-        champ = _pick_slot_winner(semi1, semi2, advancement_probs, 6, "prob")
-        all_picks[6] = [champ]
+    all_picks[5] = [semi1, semi2]
+    champ = _pick_slot_winner(semi1, semi2, advancement_probs, 6, "prob")
+    all_picks[6] = [champ]
 
     return all_picks
 
@@ -118,24 +123,29 @@ def expected_value_bracket(
     regions = sorted(bracket["Region"].unique())
     all_picks = {r: [] for r in range(1, 7)}
 
-    regional_champs = []
+    regional_champs = {}
     for region in regions:
         region_teams = bracket[bracket["Region"] == region]
         region_picks = _fill_region(region_teams, advancement_probs, scorer="ev", scoring=scoring)
         for rnd, teams in region_picks.items():
             all_picks[rnd].extend(teams)
-        regional_champs.append(region_picks[4][0])
+        regional_champs[region] = region_picks[4][0]
 
-    # Semifinals — only if at least 2 regions
-    if len(regional_champs) >= 2:
-        pts5 = scoring[4] if len(scoring) > 4 else scoring[-1]
-        pts6 = scoring[5] if len(scoring) > 5 else scoring[-1]
-        semi1 = _pick_slot_winner(regional_champs[0], regional_champs[1], advancement_probs, 5, "ev", pts5)
-        semi2 = _pick_slot_winner(regional_champs[2], regional_champs[3], advancement_probs, 5, "ev", pts5) if len(regional_champs) >= 4 else semi1
-        all_picks[5] = [semi1, semi2]
+    # Semifinals: East vs South, West vs Midwest
+    pts5 = scoring[4] if len(scoring) > 4 else scoring[-1]
+    pts6 = scoring[5] if len(scoring) > 5 else scoring[-1]
+    if len(regional_champs) >= 4 and all(r in regional_champs for r in ["East", "South", "West", "Midwest"]):
+        semi1 = _pick_slot_winner(regional_champs["East"], regional_champs["South"], advancement_probs, 5, "ev", pts5)
+        semi2 = _pick_slot_winner(regional_champs["West"], regional_champs["Midwest"], advancement_probs, 5, "ev", pts5)
+    elif len(regional_champs) >= 2:
+        champ_list = list(regional_champs.values())
+        semi1 = _pick_slot_winner(champ_list[0], champ_list[1], advancement_probs, 5, "ev", pts5)
+        semi2 = _pick_slot_winner(champ_list[2], champ_list[3], advancement_probs, 5, "ev", pts5) if len(champ_list) >= 4 else semi1
+    else:
+        return all_picks
 
-        # Championship
-        champ = _pick_slot_winner(semi1, semi2, advancement_probs, 6, "ev", pts6)
-        all_picks[6] = [champ]
+    all_picks[5] = [semi1, semi2]
+    champ = _pick_slot_winner(semi1, semi2, advancement_probs, 6, "ev", pts6)
+    all_picks[6] = [champ]
 
     return all_picks
