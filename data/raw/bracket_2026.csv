@@ -24,7 +24,7 @@ West,12,1201,High Point
 West,4,1212,Arkansas
 West,13,1202,Hawaii
 West,6,1211,BYU
-West,11,1179,North Carolina St.
+West,11,1161,Texas
 West,3,1203,Gonzaga
 West,14,1192,Kennesaw St.
 West,7,1186,Miami FL
@@ -32,7 +32,7 @@ West,10,1182,Missouri
 West,2,1173,Purdue
 West,15,1172,Queens
 South,1,1206,Florida
-South,16,1190,Lehigh
+South,16,1174,Prairie View A&M
 South,8,1209,Clemson
 South,9,1195,Iowa
 South,5,1153,Vanderbilt
@@ -48,7 +48,7 @@ South,10,1160,Texas A&M
 South,2,1199,Houston
 South,15,1197,Idaho
 Midwest,1,1184,Michigan
-Midwest,16,1155,UMBC
+Midwest,16,1198,Howard
 Midwest,8,1204,Georgia
 Midwest,9,1171,Saint Louis
 Midwest,5,1159,Texas Tech
@@ -56,7 +56,7 @@ Midwest,12,1215,Akron
 Midwest,4,1214,Alabama
 Midwest,13,1200,Hofstra
 Midwest,6,1163,Tennessee
-Midwest,11,1167,SMU
+Midwest,11,1185,Miami OH
 Midwest,3,1150,Virginia
 Midwest,14,1148,Wright St.
 Midwest,7,1191,Kentucky

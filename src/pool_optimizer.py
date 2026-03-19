@@ -65,8 +65,8 @@ def optimize_pool(merged: pd.DataFrame, n_picks: int = 10) -> list[dict]:
 
 
 def main():
-    probs = pd.read_csv("output/bracket_2026.csv")
-    struct = pd.read_csv("output/bracket_2026_structure.csv")
+    probs = pd.read_csv("output/bracket_2026_real.csv")
+    struct = pd.read_csv("output/bracket_2026_real_structure.csv")
     merged = probs.merge(struct[["TeamID", "Seed", "Region"]], on="TeamID")
 
     combo = optimize_pool(merged)
