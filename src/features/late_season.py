@@ -68,3 +68,59 @@ def compute_late_season_metrics(
         })
 
     return pd.DataFrame(rows)
+
+
+def compute_trajectory_features(
+    detailed_results: pd.DataFrame,
+    season: int,
+    trajectory_window_days: int = 45,
+) -> pd.DataFrame:
+    """Compute linear trend slopes of efficiency and margin over late season."""
+    df = detailed_results[detailed_results["Season"] == season].copy()
+    if df.empty:
+        return pd.DataFrame(columns=["TeamID", "Season",
+                                      "efficiency_trend", "margin_trend"])
+
+    max_day = df["DayNum"].max()
+    cutoff = max_day - trajectory_window_days
+    df = df[df["DayNum"] >= cutoff]
+
+    records = []
+    for _, g in df.iterrows():
+        w_poss = estimate_possessions(g["WFGA"], g["WOR"], g["WTO"], g["WFTA"])
+        l_poss = estimate_possessions(g["LFGA"], g["LOR"], g["LTO"], g["LFTA"])
+        poss = (w_poss + l_poss) / 2
+        if poss <= 0:
+            continue
+
+        w_em = 100 * (g["WScore"] - g["LScore"]) / poss
+        l_em = -w_em
+        w_margin = g["WScore"] - g["LScore"]
+        l_margin = -w_margin
+
+        records.append({"TeamID": int(g["WTeamID"]), "DayNum": g["DayNum"],
+                        "em": w_em, "margin": w_margin})
+        records.append({"TeamID": int(g["LTeamID"]), "DayNum": g["DayNum"],
+                        "em": l_em, "margin": l_margin})
+
+    if not records:
+        return pd.DataFrame(columns=["TeamID", "Season",
+                                      "efficiency_trend", "margin_trend"])
+
+    rec_df = pd.DataFrame(records)
+
+    rows = []
+    for tid, grp in rec_df.groupby("TeamID"):
+        if len(grp) < 3:
+            continue
+        days = grp["DayNum"].values.astype(float)
+        em_slope = np.polyfit(days, grp["em"].values, 1)[0]
+        margin_slope = np.polyfit(days, grp["margin"].values, 1)[0]
+        rows.append({
+            "TeamID": int(tid),
+            "Season": season,
+            "efficiency_trend": em_slope,
+            "margin_trend": margin_slope,
+        })
+
+    return pd.DataFrame(rows)
