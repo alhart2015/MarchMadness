@@ -161,3 +161,44 @@ def compute_conf_tourney_features(
         })
 
     return pd.DataFrame(rows)
+
+
+def compute_vegas_trend(
+    vegas_records: pd.DataFrame,
+    season: int,
+    late_days: int = 30,
+) -> pd.DataFrame:
+    """Compute Vegas line trend: late-season spread minus season average.
+
+    Negative delta means the market thinks the team is getting stronger.
+
+    Args:
+        vegas_records: DataFrame with TeamID, Season, date (str MM/DD/YYYY),
+            team_spread (negative = favored).
+        season: Season year.
+        late_days: Number of days before the last game date to define "late."
+    """
+    df = vegas_records[vegas_records["Season"] == season].copy()
+    if df.empty:
+        return pd.DataFrame(columns=["TeamID", "Season", "vegas_late_spread_delta"])
+
+    df["parsed_date"] = pd.to_datetime(df["date"], format="mixed", dayfirst=False)
+    max_date = df["parsed_date"].max()
+    cutoff = max_date - pd.Timedelta(days=late_days)
+
+    rows = []
+    for tid, grp in df.groupby("TeamID"):
+        if len(grp) < 5:
+            continue
+        season_avg = grp["team_spread"].mean()
+        late_games = grp[grp["parsed_date"] >= cutoff]
+        if len(late_games) < 2:
+            continue
+        late_avg = late_games["team_spread"].mean()
+        rows.append({
+            "TeamID": int(tid),
+            "Season": season,
+            "vegas_late_spread_delta": late_avg - season_avg,
+        })
+
+    return pd.DataFrame(rows)

@@ -142,3 +142,31 @@ def test_zero_wins_team_included(sample_conf_tourney):
     team3 = result[result["TeamID"] == 3]
     assert len(team3) == 1
     assert team3.iloc[0]["conf_tourney_wins"] == 0
+
+
+from src.features.late_season import compute_vegas_trend
+
+
+@pytest.fixture
+def sample_vegas_records():
+    """Team with spreads getting better (more favored) late in season."""
+    return pd.DataFrame([
+        {"TeamID": 1, "Season": 2025, "date": "11/15/2025", "team_spread": 3.0},
+        {"TeamID": 1, "Season": 2025, "date": "12/01/2025", "team_spread": 2.0},
+        {"TeamID": 1, "Season": 2025, "date": "12/15/2025", "team_spread": 1.0},
+        {"TeamID": 1, "Season": 2025, "date": "02/15/2026", "team_spread": -3.0},
+        {"TeamID": 1, "Season": 2025, "date": "03/01/2026", "team_spread": -5.0},
+        {"TeamID": 1, "Season": 2025, "date": "03/10/2026", "team_spread": -7.0},
+    ])
+
+
+def test_vegas_trend_returns_expected_columns(sample_vegas_records):
+    result = compute_vegas_trend(sample_vegas_records, 2025)
+    assert set(result.columns) >= {"TeamID", "Season", "vegas_late_spread_delta"}
+
+
+def test_improving_team_has_negative_delta(sample_vegas_records):
+    """More negative spread = more favored = team getting stronger."""
+    result = compute_vegas_trend(sample_vegas_records, 2025)
+    team1 = result[result["TeamID"] == 1].iloc[0]
+    assert team1["vegas_late_spread_delta"] < 0
