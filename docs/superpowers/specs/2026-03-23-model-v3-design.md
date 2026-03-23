@@ -25,11 +25,25 @@ late-season dynamics, and trains on only ~1,400 tournament games.
 ### 1. New Features (+10, total ~62)
 
 **Opponent-adjusted late-season metrics (4 features):**
-- `late_adj_oe` — adjusted offensive efficiency, last 30 days, against
-  tournament-caliber opponents (top-100 KenPom or equivalent)
-- `late_adj_de` — adjusted defensive efficiency, same filter
+- `late_adj_oe` — offensive efficiency, last 30 days, against top-100 opponents
+- `late_adj_de` — defensive efficiency, same filter
 - `late_adj_em` — efficiency margin (oe - de)
 - `late_sos` — average opponent strength in the late-season window
+
+"Top-100" defined as: end-of-season KenPom `KADJ EM RANK` <= 100 from `KenPom
+Barttorvik.csv`. For seasons/teams missing KenPom data, fall back to Massey
+composite rank. Using end-of-season ranking retroactively is fine — the top 100
+is stable enough late-season that contemporary vs final ranking is negligible.
+
+Note: The 30-day window for `late_adj_*` is deliberately shorter than the 45-day
+window for trajectory features (below). Trajectory needs more data points for a
+stable slope; late-season quality is about the most recent stretch.
+
+These features use raw efficiency (points per 100 possessions against the
+filtered opponents), not iterative opponent adjustment — the small sample size
+(3-8 games per team in the window) makes iterative convergence unstable. This
+is distinct from the existing `rolling_oe`/`rolling_de` features which cover
+*all* opponents in the window, not just quality opponents.
 
 These are the highest-priority additions. The v2 model's biggest misses
 (Gonzaga, Virginia, Louisville, Texas Tech) were teams whose season averages
@@ -43,10 +57,14 @@ told a different story.
 
 Captures "peaking vs fading" independent of absolute level.
 
-**Conference tournament performance (3 features):**
+**Conference tournament performance (2-3 features):**
 - `conf_tourney_wins` — number of conference tournament wins (0-4)
 - `conf_tourney_champ` — binary flag
 - `conf_tourney_margin` — average scoring margin in conference tournament games
+  (requires joining `MConferenceTourneyGames.csv` with
+  `MRegularSeasonCompactResults.csv` on Season/DayNum/TeamIDs to get scores;
+  if conf tourney games are not in the results file, drop this feature and
+  keep the other two)
 
 These are exploratory — we add them and let XGBoost's feature importance
 and CV performance determine if they're signal or noise.
@@ -54,6 +72,10 @@ and CV performance determine if they're signal or noise.
 **Vegas line trend (1 feature):**
 - `vegas_late_spread_delta` — average Vegas spread in last 30 days minus
   season average spread. Negative = market sees the team getting stronger.
+
+Note: The v2 Vegas pipeline does not parse game dates (it uses index order for
+recency weighting). This feature requires parsing the `MM/DD/YYYY` date column
+in the Vegas CSVs to split games into "last 30 days" vs "season average."
 
 ### 2. Expanded Training Data
 
@@ -70,10 +92,21 @@ to learn well. Late-season regular season games between strong teams are the
 closest proxy for tournament games. The 0.25 weight ensures they inform the
 model without drowning out actual tournament signal.
 
-XGBoost supports `sample_weight` natively, so implementation is straightforward.
+XGBoost supports `sample_weight` natively. Note: `train_model` in
+`src/models/train.py` currently does not accept `sample_weight` — the function
+signature and `CalibratedClassifierCV.fit()` call need modification to pass
+weights through.
+
+Important: Platt calibration (via `CalibratedClassifierCV`) should be
+restricted to tournament-game rows only. Supplemental games inform the XGBoost
+base model but should not influence the probability calibration step, since
+calibration should reflect tournament dynamics specifically.
 
 LOSO CV continues to evaluate on tournament games only — supplemental games
 are training data only.
+
+Acceptance criterion: If supplemental training data degrades LOSO tournament
+log loss compared to v2 baseline, drop it and use tournament-only training.
 
 ### 3. Recency Weighting (Experimental)
 
@@ -127,7 +160,12 @@ training.
 ## Evaluation
 
 - Compare v3 LOSO CV metrics against v2 baseline (log loss, accuracy, Brier, AUC)
-- Per-season breakdown to check for consistency
-- Feature importance analysis to validate new features contribute
+- Per-season breakdown to check for consistency and variance
+- Feature importance analysis to validate new features contribute; if any of
+  the 10 new features rank in the bottom quartile of importance AND removing
+  them improves CV stability, drop them
 - Retroactively score 2026 bracket to check if v3 would have done better
 - Report recency weighting results (with vs without)
+- Report supplemental training data results (with vs without)
+- Ablation: run v3 with only the new features (no training methodology
+  changes) and vice versa, to attribute improvement to features vs training
