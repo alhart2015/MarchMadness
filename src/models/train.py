@@ -20,8 +20,12 @@ def train_model(
     y: pd.Series,
     random_seed: int = 42,
     xgb_params: dict | None = None,
+    sample_weight: np.ndarray | None = None,
 ) -> CalibratedClassifierCV:
     """Train XGBoost classifier with Platt scaling calibration.
+
+    When sample_weight is provided, the base model is trained on all data
+    with weights, then calibrated on tournament-only rows (weight >= 1.0).
 
     Returns a CalibratedClassifierCV wrapping the XGBoost model.
     """
@@ -39,13 +43,38 @@ def train_model(
 
     base_model = xgb.XGBClassifier(**params)
 
-    # Platt scaling via 5-fold CV
-    calibrated = CalibratedClassifierCV(
-        base_model, method="sigmoid", cv=StratifiedKFold(n_splits=5, shuffle=True, random_state=random_seed)
-    )
-    calibrated.fit(X, y)
+    if sample_weight is not None:
+        # Train base model on all data with sample weights
+        base_model.fit(X, y, sample_weight=sample_weight)
 
-    logger.info("Model trained: %d samples, %d features", len(X), X.shape[1])
+        # Calibrate on tournament-only rows (weight >= 1.0)
+        tourney_mask = sample_weight >= 1.0
+        X_cal = X.loc[tourney_mask].reset_index(drop=True)
+        y_cal = y.loc[tourney_mask].reset_index(drop=True)
+
+        calibrated = CalibratedClassifierCV(
+            base_model,
+            method="sigmoid",
+            cv=StratifiedKFold(n_splits=5, shuffle=True, random_state=random_seed),
+            ensemble=False,
+        )
+        calibrated.fit(X_cal, y_cal)
+
+        logger.info(
+            "Model trained: %d samples (%d tourney for calibration), %d features",
+            len(X), int(tourney_mask.sum()), X.shape[1],
+        )
+    else:
+        # Original behavior: Platt scaling via 5-fold CV
+        calibrated = CalibratedClassifierCV(
+            base_model,
+            method="sigmoid",
+            cv=StratifiedKFold(n_splits=5, shuffle=True, random_state=random_seed),
+        )
+        calibrated.fit(X, y)
+
+        logger.info("Model trained: %d samples, %d features", len(X), X.shape[1])
+
     return calibrated
 
 

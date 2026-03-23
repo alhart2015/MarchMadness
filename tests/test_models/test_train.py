@@ -47,3 +47,11 @@ def test_model_predicts_strong_team_wins(training_data):
     weak = pd.DataFrame({"adj_em": [-25.0], "seed": [5.0]})
     prob = predict_matchup(model, weak)
     assert prob < 0.3
+
+
+def test_train_model_with_sample_weights(training_data):
+    X, y = training_data
+    weights = np.ones(len(y))
+    weights[:len(y)//2] = 0.25  # first half weighted lower
+    model = train_model(X, y, sample_weight=weights)
+    assert hasattr(model, "predict_proba")
