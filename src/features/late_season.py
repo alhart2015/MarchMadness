@@ -124,3 +124,40 @@ def compute_trajectory_features(
         })
 
     return pd.DataFrame(rows)
+
+
+def compute_conf_tourney_features(
+    conf_tourney_games: pd.DataFrame,
+    season: int,
+) -> pd.DataFrame:
+    """Compute conference tournament performance features.
+
+    Only wins and champion flag -- no margin since MConferenceTourneyGames.csv
+    has no score columns.
+    """
+    df = conf_tourney_games[conf_tourney_games["Season"] == season].copy()
+
+    if df.empty:
+        return pd.DataFrame(columns=["TeamID", "Season",
+                                      "conf_tourney_wins", "conf_tourney_champ"])
+
+    win_counts = df.groupby("WTeamID").size().reset_index(name="conf_tourney_wins")
+    win_counts = win_counts.rename(columns={"WTeamID": "TeamID"})
+
+    last_game = df.sort_values("DayNum").groupby("ConfAbbrev").last()
+    champ_ids = set(last_game["WTeamID"].tolist())
+
+    all_teams = set(df["WTeamID"].tolist()) | set(df["LTeamID"].tolist())
+
+    rows = []
+    for tid in all_teams:
+        wins_row = win_counts[win_counts["TeamID"] == tid]
+        wins = int(wins_row["conf_tourney_wins"].iloc[0]) if len(wins_row) > 0 else 0
+        rows.append({
+            "TeamID": int(tid),
+            "Season": season,
+            "conf_tourney_wins": wins,
+            "conf_tourney_champ": 1 if tid in champ_ids else 0,
+        })
+
+    return pd.DataFrame(rows)

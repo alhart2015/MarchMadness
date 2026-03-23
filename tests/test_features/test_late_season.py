@@ -101,3 +101,44 @@ def test_declining_team_has_negative_trend(trending_results):
     result = compute_trajectory_features(trending_results, 2025)
     team2 = result[result["TeamID"] == 2].iloc[0]
     assert team2["margin_trend"] < 0
+
+
+from src.features.late_season import compute_conf_tourney_features
+
+
+@pytest.fixture
+def sample_conf_tourney():
+    """Team 1 wins 3 games (champion), Team 2 wins 1, Team 3 wins 0."""
+    return pd.DataFrame([
+        {"Season": 2025, "ConfAbbrev": "B12", "DayNum": 120, "WTeamID": 1, "LTeamID": 3},
+        {"Season": 2025, "ConfAbbrev": "B12", "DayNum": 121, "WTeamID": 1, "LTeamID": 2},
+        {"Season": 2025, "ConfAbbrev": "B12", "DayNum": 122, "WTeamID": 1, "LTeamID": 5},
+        {"Season": 2025, "ConfAbbrev": "SEC", "DayNum": 120, "WTeamID": 2, "LTeamID": 6},
+        {"Season": 2025, "ConfAbbrev": "SEC", "DayNum": 121, "WTeamID": 7, "LTeamID": 2},
+    ])
+
+
+def test_conf_tourney_returns_expected_columns(sample_conf_tourney):
+    result = compute_conf_tourney_features(sample_conf_tourney, 2025)
+    assert set(result.columns) >= {"TeamID", "Season", "conf_tourney_wins", "conf_tourney_champ"}
+
+
+def test_champion_has_most_wins(sample_conf_tourney):
+    result = compute_conf_tourney_features(sample_conf_tourney, 2025)
+    team1 = result[result["TeamID"] == 1].iloc[0]
+    assert team1["conf_tourney_wins"] == 3
+    assert team1["conf_tourney_champ"] == 1
+
+
+def test_one_win_not_champion(sample_conf_tourney):
+    result = compute_conf_tourney_features(sample_conf_tourney, 2025)
+    team2 = result[result["TeamID"] == 2].iloc[0]
+    assert team2["conf_tourney_wins"] == 1
+    assert team2["conf_tourney_champ"] == 0
+
+
+def test_zero_wins_team_included(sample_conf_tourney):
+    result = compute_conf_tourney_features(sample_conf_tourney, 2025)
+    team3 = result[result["TeamID"] == 3]
+    assert len(team3) == 1
+    assert team3.iloc[0]["conf_tourney_wins"] == 0
