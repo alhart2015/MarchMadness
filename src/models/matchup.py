@@ -50,3 +50,45 @@ def build_matchup_data(
     X = pd.DataFrame(rows, columns=feature_cols)
     y = pd.Series(labels, name="win")
     return X, y
+
+
+def build_weighted_matchup_data(
+    feature_matrix: pd.DataFrame,
+    tourney_results: pd.DataFrame,
+    regular_results: pd.DataFrame,
+    feature_cols: list[str],
+    top_n_team_ids: set[int],
+    supplemental_weight: float = 0.25,
+    feb_cutoff_day: int = 90,
+) -> tuple[pd.DataFrame, pd.Series, np.ndarray]:
+    """Build matchup data with tournament games (weight 1.0) and
+    supplemental late-season regular season games (weight 0.25).
+
+    Regular season games are filtered to:
+    - DayNum >= feb_cutoff_day (~Feb 1)
+    - Both teams in top_n_team_ids
+
+    Returns: (X, y, sample_weights)
+    """
+    # Tournament matchups (weight 1.0)
+    X_t, y_t = build_matchup_data(feature_matrix, tourney_results, feature_cols)
+    w_t = np.ones(len(y_t))
+
+    # Supplemental matchups (weight 0.25)
+    late_reg = regular_results[regular_results["DayNum"] >= feb_cutoff_day].copy()
+    late_reg = late_reg[
+        late_reg["WTeamID"].isin(top_n_team_ids)
+        & late_reg["LTeamID"].isin(top_n_team_ids)
+    ]
+
+    if late_reg.empty:
+        return X_t, y_t, w_t
+
+    X_s, y_s = build_matchup_data(feature_matrix, late_reg, feature_cols)
+    w_s = np.full(len(y_s), supplemental_weight)
+
+    X = pd.concat([X_t, X_s], ignore_index=True)
+    y = pd.concat([y_t, y_s], ignore_index=True)
+    w = np.concatenate([w_t, w_s])
+
+    return X, y, w

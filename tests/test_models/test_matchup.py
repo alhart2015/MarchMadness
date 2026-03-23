@@ -3,7 +3,7 @@
 import pandas as pd
 import pytest
 
-from src.models.matchup import build_matchup_data
+from src.models.matchup import build_matchup_data, build_weighted_matchup_data
 
 FEATURE_COLS = ["adj_em", "adj_oe", "adj_de", "seed"]
 
@@ -49,3 +49,22 @@ def test_build_matchup_data_feature_differences(feature_matrix, tourney_results)
     # adj_em diff should be 20 - (-8) = 28
     first_win_row = X[y == 1].iloc[0]
     assert abs(first_win_row["adj_em"]) > 0  # non-zero difference
+
+
+def test_weighted_matchup_data_has_weights(feature_matrix, tourney_results):
+    """Uses existing fixtures. Creates minimal regular season data."""
+    import numpy as np
+
+    regular_results = tourney_results.copy()
+    regular_results["DayNum"] = 100  # late-season
+    top_ids = set(tourney_results["WTeamID"].tolist() + tourney_results["LTeamID"].tolist())
+
+    X, y, w = build_weighted_matchup_data(
+        feature_matrix, tourney_results,
+        regular_results, FEATURE_COLS,
+        top_n_team_ids=top_ids,
+        supplemental_weight=0.25,
+    )
+    assert np.any(w == 1.0)
+    assert np.any(w == 0.25)
+    assert len(X) == len(y) == len(w)
