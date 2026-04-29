@@ -31,7 +31,7 @@ from sklearn.model_selection import StratifiedKFold
 warnings.filterwarnings("ignore", category=FutureWarning)
 warnings.filterwarnings("ignore", category=UserWarning)
 
-# ── Path setup ───────────────────────────────────────────────────────────────
+# -- Path setup ---------------------------------------------------------------
 _HERE = Path(__file__).resolve().parent          # src/
 _ROOT = _HERE.parent                             # project root
 if str(_ROOT) not in sys.path:
@@ -45,9 +45,9 @@ OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
 MASSEY_SYSTEMS = ["POM", "SAG", "MOR", "WOL", "DOL", "COL", "RPI"]
 
 
-# ═══════════════════════════════════════════════════════════════════════════════
+# ===============================================================================
 # HELPERS
-# ═══════════════════════════════════════════════════════════════════════════════
+# ===============================================================================
 
 def _parse_seed_number(seed_str: str) -> int:
     match = re.search(r"(\d+)", str(seed_str))
@@ -79,9 +79,9 @@ def train_xgb_model(X, y, random_seed=42):
     return calibrated
 
 
-# ═══════════════════════════════════════════════════════════════════════════════
+# ===============================================================================
 # FEATURE COMPUTATION (generic: works for both men's and women's)
-# ═══════════════════════════════════════════════════════════════════════════════
+# ===============================================================================
 
 def compute_adjusted_efficiency_fast(df_season):
     """Compute adjusted efficiency for all teams in a single season's games.
@@ -305,9 +305,9 @@ def compute_conf_strength(conferences_season, eff):
     return result
 
 
-# ═══════════════════════════════════════════════════════════════════════════════
+# ===============================================================================
 # BUILD FEATURE MATRIX FOR ALL D1 TEAMS
-# ═══════════════════════════════════════════════════════════════════════════════
+# ===============================================================================
 
 def build_all_team_features(
     reg_season, seeds, conferences, seasons,
@@ -452,19 +452,19 @@ def build_all_team_features(
     return pd.DataFrame(all_rows)
 
 
-# ═══════════════════════════════════════════════════════════════════════════════
+# ===============================================================================
 # BUILD TRAINING DATA FROM TOURNAMENT RESULTS
-# ═══════════════════════════════════════════════════════════════════════════════
+# ===============================================================================
 
 def build_matchup_training_data(feature_matrix, tourney_results, feature_cols):
     """Build symmetric matchup training data from tournament results.
 
-    For each game: winner_features - loser_features -> label 1
-                   loser_features - winner_features -> label 0
+    Each game produces two rows (winner and loser perspective) of feature
+    differences (A_feat - B_feat).
     """
-    # Build lookup: (TeamID, Season) -> feature vector
-    fm_indexed = feature_matrix.set_index(["TeamID", "Season"])
+    from src.models.matchup import build_matchup_features, expand_feature_cols
 
+    fm_indexed = feature_matrix.set_index(["TeamID", "Season"])
     rows = []
     labels = []
 
@@ -479,15 +479,16 @@ def build_matchup_training_data(feature_matrix, tourney_results, feature_cols):
         except KeyError:
             continue
 
-        rows.append(w_feats - l_feats)
+        rows.append(build_matchup_features(w_feats, l_feats))
         labels.append(1)
-        rows.append(l_feats - w_feats)
+        rows.append(build_matchup_features(l_feats, w_feats))
         labels.append(0)
 
+    expanded = expand_feature_cols(feature_cols)
     if not rows:
-        return pd.DataFrame(columns=feature_cols), pd.Series(dtype=float)
+        return pd.DataFrame(columns=expanded), pd.Series(dtype=float)
 
-    X = pd.DataFrame(rows, columns=feature_cols)
+    X = pd.DataFrame(rows, columns=expanded)
     y = pd.Series(labels, name="win")
     return X, y
 
@@ -500,9 +501,9 @@ def get_feature_cols(fm):
     return numeric_cols
 
 
-# ═══════════════════════════════════════════════════════════════════════════════
+# ===============================================================================
 # PREDICTION
-# ═══════════════════════════════════════════════════════════════════════════════
+# ===============================================================================
 
 def predict_all_pairs(submission_df, feature_matrix, feature_cols, model, gender_filter=None):
     """Fill in predictions for all ID rows matching the gender filter.
@@ -534,9 +535,11 @@ def predict_all_pairs(submission_df, feature_matrix, feature_cols, model, gender
         key = (int(row["TeamID"]), int(row["Season"]))
         fm_indexed[key] = row[feature_cols].values.astype(float)
 
-    # Batch prediction: collect all feature diffs, then predict in one go
+    # Batch prediction: collect all matchup feature rows, then predict in one go
+    from src.models.matchup import build_matchup_features, expand_feature_cols
+
     batch_indices = []
-    batch_diffs = []
+    batch_rows = []
     fallback_indices = []
 
     for idx in indices:
@@ -549,14 +552,14 @@ def predict_all_pairs(submission_df, feature_matrix, feature_cols, model, gender
 
         if a_feats is not None and b_feats is not None:
             batch_indices.append(idx)
-            batch_diffs.append(a_feats - b_feats)
+            batch_rows.append(build_matchup_features(a_feats, b_feats))
         else:
             fallback_indices.append(idx)
 
     # Batch predict
-    if batch_diffs:
-        X_batch = pd.DataFrame(batch_diffs, columns=feature_cols)
-        # Handle NaN: fill with 0 (difference of missing features = no info)
+    if batch_rows:
+        X_batch = pd.DataFrame(batch_rows, columns=expand_feature_cols(feature_cols))
+        # Handle NaN: fill with 0 (no info)
         X_batch = X_batch.fillna(0.0)
         probs = model.predict_proba(X_batch)[:, 1]
         for i, idx in enumerate(batch_indices):
@@ -569,18 +572,18 @@ def predict_all_pairs(submission_df, feature_matrix, feature_cols, model, gender
     return submission_df
 
 
-# ═══════════════════════════════════════════════════════════════════════════════
+# ===============================================================================
 # MAIN
-# ═══════════════════════════════════════════════════════════════════════════════
+# ===============================================================================
 
 def main():
     overall_start = time.time()
 
     print("=" * 70)
-    print("KAGGLE MARCH MACHINE LEARNING MANIA 2026 — SUBMISSION GENERATOR")
+    print("KAGGLE MARCH MACHINE LEARNING MANIA 2026 -- SUBMISSION GENERATOR")
     print("=" * 70)
 
-    # ── Load data ────────────────────────────────────────────────────────────
+    # -- Load data ------------------------------------------------------------
     print("\n[1/8] Loading data...")
 
     # Men's data
@@ -597,7 +600,7 @@ def main():
     w_seeds = pd.read_csv(MANIA_DIR / "WNCAATourneySeeds.csv")
     w_conf = pd.read_csv(MANIA_DIR / "WTeamConferences.csv")
 
-    # Massey ordinals (men only — filter to target systems)
+    # Massey ordinals (men only -- filter to target systems)
     print("  Loading Massey Ordinals...")
     massey_chunks = []
     for chunk in pd.read_csv(MANIA_DIR / "MMasseyOrdinals.csv", chunksize=500_000):
@@ -626,13 +629,13 @@ def main():
     print(f"  Stage 1 rows     : {len(sample_s1):,}")
     print(f"  Stage 2 rows     : {len(sample_s2):,}")
 
-    # ── Build KenPom -> Kaggle mapping ───────────────────────────────────────
+    # -- Build KenPom -> Kaggle mapping ---------------------------------------
     print("\n[2/8] Building KenPom -> Kaggle team ID mapping...")
     from src.enhanced_model import build_kenpom_to_kaggle_map
     kp_to_kaggle = build_kenpom_to_kaggle_map(kenpom, m_teams, m_spellings)
     print(f"  Mapped {len(kp_to_kaggle)} KenPom teams")
 
-    # ── Men's features ───────────────────────────────────────────────────────
+    # -- Men's features -------------------------------------------------------
     # Stage1 needs 2022-2025, Stage2 needs 2026
     # Training needs historical tournament seasons (2003+)
     # Build features for ALL seasons we need for training + submission
@@ -650,7 +653,7 @@ def main():
     )
     print(f"  Men's feature matrix: {len(men_fm):,} rows, {len(men_fm.columns)} cols")
 
-    # ── Women's features ─────────────────────────────────────────────────────
+    # -- Women's features -----------------------------------------------------
     print("\n[4/8] Computing women's features (all D1 teams, 2010-2026)...")
     women_seasons = sorted(s for s in w_reg["Season"].unique() if s >= 2010)
     women_fm = build_all_team_features(
@@ -665,7 +668,7 @@ def main():
     )
     print(f"  Women's feature matrix: {len(women_fm):,} rows, {len(women_fm.columns)} cols")
 
-    # ── Train men's model ────────────────────────────────────────────────────
+    # -- Train men's model ----------------------------------------------------
     print("\n[5/8] Training men's model...")
 
     men_feature_cols = get_feature_cols(men_fm)
@@ -695,7 +698,7 @@ def main():
     men_model = train_xgb_model(X_men, y_men)
     print("  Men's model trained.")
 
-    # ── Train women's model ──────────────────────────────────────────────────
+    # -- Train women's model --------------------------------------------------
     print("\n[6/8] Training women's model...")
 
     women_feature_cols = get_feature_cols(women_fm)
@@ -723,7 +726,7 @@ def main():
     women_model = train_xgb_model(X_women, y_women)
     print("  Women's model trained.")
 
-    # ── Generate predictions ─────────────────────────────────────────────────
+    # -- Generate predictions -------------------------------------------------
     print("\n[7/8] Generating predictions...")
 
     for stage_name, sample_df, out_name in [
@@ -750,7 +753,7 @@ def main():
         sub.to_csv(out_path, index=False)
         print(f"    Written: {out_path}")
 
-    # ── Validation ───────────────────────────────────────────────────────────
+    # -- Validation -----------------------------------------------------------
     print("\n[8/8] Validating submissions...")
 
     for stage_name, sample_path, out_name in [
@@ -791,8 +794,8 @@ def main():
         print(f"    Pred range: [{pred_min:.4f}, {pred_max:.4f}]")
         print(f"    Pred mean: {pred_mean:.4f}, std: {pred_std:.4f}")
         print(f"    Model-based predictions: {n_non_default:,} / {n_actual:,} ({pct_modeled:.1f}%)")
-        print(f"    Men's  — count: {len(men_preds):,}, mean: {men_preds.mean():.4f}, std: {men_preds.std():.4f}")
-        print(f"    Women's — count: {len(women_preds):,}, mean: {women_preds.mean():.4f}, std: {women_preds.std():.4f}")
+        print(f"    Men's  -- count: {len(men_preds):,}, mean: {men_preds.mean():.4f}, std: {men_preds.std():.4f}")
+        print(f"    Women's -- count: {len(women_preds):,}, mean: {women_preds.mean():.4f}, std: {women_preds.std():.4f}")
 
     elapsed = time.time() - overall_start
     print(f"\nTotal elapsed: {elapsed:.0f}s ({elapsed/60:.1f} min)")

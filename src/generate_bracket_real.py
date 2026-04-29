@@ -29,7 +29,7 @@ from typing import Dict
 import numpy as np
 import pandas as pd
 
-# ── Logging / path setup ──────────────────────────────────────────────────────
+# -- Logging / path setup ------------------------------------------------------
 logging.basicConfig(
     level=logging.WARNING,
     format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
@@ -47,7 +47,7 @@ BRACKET_CSV  = _ROOT / "data" / "raw" / "bracket_2026.csv"
 OUTPUT_DIR   = _ROOT / "output"
 OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
 
-# ── Region / bracket constants ────────────────────────────────────────────────
+# -- Region / bracket constants ------------------------------------------------
 REGIONS = ["East", "Midwest", "South", "West"]   # sorted alphabetically for simulation
 
 # Standard NCAA first-round seed pairings within a region
@@ -56,7 +56,7 @@ FIRST_ROUND_PAIRS = [(1, 16), (8, 9), (5, 12), (4, 13), (6, 11), (3, 14), (7, 10
 ROUND_NAMES = {1: "R64", 2: "R32", 3: "S16", 4: "E8", 5: "F4", 6: "Champ"}
 
 
-# ── Bracket loading ───────────────────────────────────────────────────────────
+# -- Bracket loading -----------------------------------------------------------
 
 def load_actual_bracket(bracket_csv: Path) -> pd.DataFrame:
     """Load the actual 2026 bracket from CSV.
@@ -74,7 +74,7 @@ def load_actual_bracket(bracket_csv: Path) -> pd.DataFrame:
     return df.reset_index(drop=True)
 
 
-# ── Pairwise probability lookup ───────────────────────────────────────────────
+# -- Pairwise probability lookup -----------------------------------------------
 
 def precompute_win_probs(
     bracket: pd.DataFrame,
@@ -100,9 +100,10 @@ def precompute_win_probs(
     # Build all ordered pairs (a, b) where a != b
     pairs = [(team_ids[i], team_ids[j]) for i in range(n) for j in range(n) if i != j]
 
-    # Build batch feature matrix: each row is feat(a) - feat(b)
-    rows = [feat_lookup[a] - feat_lookup[b] for a, b in pairs]
-    X_batch = pd.DataFrame(rows, columns=feature_cols)
+    # Build batch feature matrix using the matchup helper (diff + avg).
+    from src.models.matchup import build_matchup_features, expand_feature_cols
+    rows = [build_matchup_features(feat_lookup[a], feat_lookup[b]) for a, b in pairs]
+    X_batch = pd.DataFrame(rows, columns=expand_feature_cols(feature_cols))
     X_batch = X_batch.fillna(0.0)
 
     # Single batch prediction
@@ -115,7 +116,7 @@ def precompute_win_probs(
     return win_prob
 
 
-# ── Fast Monte Carlo simulation ───────────────────────────────────────────────
+# -- Fast Monte Carlo simulation -----------------------------------------------
 
 def simulate_tournament_fast(
     bracket: pd.DataFrame,
@@ -205,7 +206,7 @@ def get_advancement_probabilities(
     }
 
 
-# ── Bracket display helpers ───────────────────────────────────────────────────
+# -- Bracket display helpers ---------------------------------------------------
 
 def print_bracket_picks(
     picks: dict,
@@ -313,13 +314,13 @@ def print_full_bracket_by_region(bracket: pd.DataFrame) -> None:
         print()
 
 
-# ── Main ──────────────────────────────────────────────────────────────────────
+# -- Main ----------------------------------------------------------------------
 
 def main() -> None:
 
-    # ──────────────────────────────────────────────────────────────────────────
+    # --------------------------------------------------------------------------
     print("\n" + "=" * 70)
-    print("STEP 1 — Loading raw data")
+    print("STEP 1 -- Loading raw data")
     print("=" * 70)
 
     from src.ingest.kaggle2026_loader import load_kaggle2026_data
@@ -335,9 +336,9 @@ def main() -> None:
     print(f"  Resume rows  : {len(resumes):,}")
     print(f"  538 rows     : {len(ratings_538):,}")
 
-    # ──────────────────────────────────────────────────────────────────────────
+    # --------------------------------------------------------------------------
     print("\n" + "=" * 70)
-    print("STEP 2 — Building tournament results")
+    print("STEP 2 -- Building tournament results")
     print("=" * 70)
 
     from src.ingest.build_tournament_results import build_tournament_results
@@ -346,9 +347,9 @@ def main() -> None:
     print(f"  Games parsed : {len(tourney_results):,}")
     print(f"  Seasons      : {sorted(tourney_results['Season'].unique())}")
 
-    # ──────────────────────────────────────────────────────────────────────────
+    # --------------------------------------------------------------------------
     print("\n" + "=" * 70)
-    print("STEP 3 — Building feature matrix")
+    print("STEP 3 -- Building feature matrix")
     print("=" * 70)
 
     from src.features.feature_matrix_v2 import build_feature_matrix_v2, get_feature_cols
@@ -359,9 +360,9 @@ def main() -> None:
     print(f"  Feature columns: {len(feature_cols)}")
     print(f"  Seasons        : {int(feature_matrix['Season'].min())}-{int(feature_matrix['Season'].max())}")
 
-    # ──────────────────────────────────────────────────────────────────────────
+    # --------------------------------------------------------------------------
     print("\n" + "=" * 70)
-    print("STEP 4 — Building matchup training data")
+    print("STEP 4 -- Building matchup training data")
     print("=" * 70)
 
     from src.models.matchup import build_matchup_data
@@ -385,18 +386,18 @@ def main() -> None:
     print(f"  Training samples : {len(X_all):,}  (win rate {y_all.mean():.3f})")
     print(f"  Features used    : {len(feature_cols)}")
 
-    # ──────────────────────────────────────────────────────────────────────────
+    # --------------------------------------------------------------------------
     print("\n" + "=" * 70)
-    print("STEP 5 — Training model (default XGBoost params, no Optuna)")
+    print("STEP 5 -- Training model (default XGBoost params, no Optuna)")
     print("=" * 70)
 
     from src.models.train import train_model
     model = train_model(X_all, y_all, random_seed=42)
     print("  Model trained successfully.")
 
-    # ──────────────────────────────────────────────────────────────────────────
+    # --------------------------------------------------------------------------
     print("\n" + "=" * 70)
-    print("STEP 6 — Loading ACTUAL 2026 bracket from CSV")
+    print("STEP 6 -- Loading ACTUAL 2026 bracket from CSV")
     print("=" * 70)
 
     bracket = load_actual_bracket(BRACKET_CSV)
@@ -412,9 +413,9 @@ def main() -> None:
 
     print_full_bracket_by_region(bracket)
 
-    # ──────────────────────────────────────────────────────────────────────────
+    # --------------------------------------------------------------------------
     print("=" * 70)
-    print("STEP 7 — Preparing feature matrix for simulation")
+    print("STEP 7 -- Preparing feature matrix for simulation")
     print("=" * 70)
 
     fm_2026 = feature_matrix[feature_matrix["Season"] == 2026].copy()
@@ -437,18 +438,18 @@ def main() -> None:
     else:
         print("  All 64 bracket teams found in feature matrix.")
 
-    # ──────────────────────────────────────────────────────────────────────────
+    # --------------------------------------------------------------------------
     print("\n" + "=" * 70)
-    print("STEP 8 — Pre-computing pairwise win probabilities")
+    print("STEP 8 -- Pre-computing pairwise win probabilities")
     print("=" * 70)
 
     print(f"  Computing {len(bracket)} x {len(bracket)-1} = {len(bracket)*(len(bracket)-1):,} pair probabilities...")
     win_prob = precompute_win_probs(bracket, fm_2026_tourney, feature_cols, model)
     print(f"  Done. Lookup table has {len(win_prob):,} entries.")
 
-    # ──────────────────────────────────────────────────────────────────────────
+    # --------------------------------------------------------------------------
     print("\n" + "=" * 70)
-    print("STEP 9 — Monte Carlo simulation (10,000 iterations)")
+    print("STEP 9 -- Monte Carlo simulation (10,000 iterations)")
     print("=" * 70)
 
     print("  Running simulation...")
@@ -465,23 +466,23 @@ def main() -> None:
         sim_results["n_simulations"],
     )
 
-    # ──────────────────────────────────────────────────────────────────────────
+    # --------------------------------------------------------------------------
     print("\n" + "=" * 70)
-    print("RESULTS — Championship Probabilities (Top 15)")
+    print("RESULTS -- Championship Probabilities (Top 15)")
     print("=" * 70)
 
     print_champion_probs(advancement_probs, bracket, top_n=15)
 
-    # ──────────────────────────────────────────────────────────────────────────
+    # --------------------------------------------------------------------------
     print("\n" + "=" * 70)
-    print("RESULTS — Advancement Probabilities (Top 30)")
+    print("RESULTS -- Advancement Probabilities (Top 30)")
     print("=" * 70)
 
     print_advancement_table(advancement_probs, bracket, top_n=30)
 
-    # ──────────────────────────────────────────────────────────────────────────
+    # --------------------------------------------------------------------------
     print("\n" + "=" * 70)
-    print("RESULTS — Bracket Picks")
+    print("RESULTS -- Bracket Picks")
     print("=" * 70)
 
     from src.bracket.strategies import chalk_bracket, expected_value_bracket
@@ -492,9 +493,9 @@ def main() -> None:
     print_bracket_picks(chalk_picks, bracket, "CHALK  (highest probability each round)")
     print_bracket_picks(ev_picks,    bracket, "EXPECTED VALUE  (maximize points per slot)")
 
-    # ──────────────────────────────────────────────────────────────────────────
+    # --------------------------------------------------------------------------
     print("=" * 70)
-    print("RESULTS — Champion summary")
+    print("RESULTS -- Champion summary")
     print("=" * 70)
 
     id_to_name = dict(zip(bracket["TeamID"], bracket["TeamName"]))
@@ -511,9 +512,9 @@ def main() -> None:
     print(f"  MC most likely champ: ({id_to_seed[top_mc[0]]:>2}) {id_to_name[top_mc[0]]:<28}"
           f"  {top_mc[1].get(6,0):.2%} championship prob")
 
-    # ──────────────────────────────────────────────────────────────────────────
+    # --------------------------------------------------------------------------
     print("\n" + "=" * 70)
-    print("STEP 10 — Exporting to CSV")
+    print("STEP 10 -- Exporting to CSV")
     print("=" * 70)
 
     from src.bracket.output import export_bracket_csv

@@ -422,7 +422,10 @@ def build_matchup_data_from_kaggle(
     """Build symmetric matchup training data from Kaggle Mania tournament results.
 
     Uses Kaggle TeamIDs directly (from MNCAATourneyDetailedResults.csv).
+    Each game produces two rows of feature differences (A_feat - B_feat).
     """
+    from src.models.matchup import build_matchup_features, expand_feature_cols
+
     rows = []
     labels = []
     seasons_list = []
@@ -445,17 +448,15 @@ def build_matchup_data_from_kaggle(
         w_vals = w_feats.iloc[0][feature_cols].values.astype(float)
         l_vals = l_feats.iloc[0][feature_cols].values.astype(float)
 
-        # Winner perspective
-        rows.append(w_vals - l_vals)
+        rows.append(build_matchup_features(w_vals, l_vals))
         labels.append(1)
         seasons_list.append(season)
 
-        # Loser perspective
-        rows.append(l_vals - w_vals)
+        rows.append(build_matchup_features(l_vals, w_vals))
         labels.append(0)
         seasons_list.append(season)
 
-    X = pd.DataFrame(rows, columns=feature_cols)
+    X = pd.DataFrame(rows, columns=expand_feature_cols(feature_cols))
     y = pd.Series(labels, name="win")
     s = pd.Series(seasons_list, name="season")
     return X, y, s
@@ -508,19 +509,20 @@ def leave_one_season_out_cv(
         from pathlib import Path as _Path
         _pw_out = _os.environ.get("MM_PAIRWISE_OUT")
         if _pw_out:
+            from src.models.matchup import build_matchup_features, expand_feature_cols
             _field = sorted(set(test_tourney["WTeamID"]) | set(test_tourney["LTeamID"]))
             _fm_yr = feature_matrix[feature_matrix["Season"] == holdout].set_index("TeamID")
             _have_feats = [t for t in _field if t in _fm_yr.index]
-            _pair_diffs, _pair_ids = [], []
+            _pair_rows, _pair_ids = [], []
             for _i in range(len(_have_feats)):
                 for _j in range(_i + 1, len(_have_feats)):
                     _a, _b = _have_feats[_i], _have_feats[_j]
                     _av = _fm_yr.loc[_a, feature_cols].values.astype(float)
                     _bv = _fm_yr.loc[_b, feature_cols].values.astype(float)
-                    _pair_diffs.append(_av - _bv)
+                    _pair_rows.append(build_matchup_features(_av, _bv))
                     _pair_ids.append((_a, _b))
-            if _pair_diffs:
-                _pdf = pd.DataFrame(_pair_diffs, columns=feature_cols).fillna(medians)
+            if _pair_rows:
+                _pdf = pd.DataFrame(_pair_rows, columns=expand_feature_cols(feature_cols)).fillna(medians)
                 _pp = model.predict_proba(_pdf)[:, 1]
                 _out = pd.DataFrame({
                     "season": holdout,
@@ -564,6 +566,8 @@ def leave_one_season_out_cv(
 
 def precompute_win_probs(bracket, feature_matrix, feature_cols, model):
     """Pre-compute P(a beats b) for all bracket team pairs."""
+    from src.models.matchup import build_matchup_features, expand_feature_cols
+
     team_ids = bracket["TeamID"].tolist()
     n = len(team_ids)
 
@@ -575,9 +579,9 @@ def precompute_win_probs(bracket, feature_matrix, feature_cols, model):
         feat_lookup[tid] = row.iloc[0][feature_cols].values.astype(float)
 
     pairs = [(team_ids[i], team_ids[j]) for i in range(n) for j in range(n) if i != j]
-    rows_list = [feat_lookup[a] - feat_lookup[b] for a, b in pairs]
+    rows_list = [build_matchup_features(feat_lookup[a], feat_lookup[b]) for a, b in pairs]
 
-    X_batch = pd.DataFrame(rows_list, columns=feature_cols).fillna(0.0)
+    X_batch = pd.DataFrame(rows_list, columns=expand_feature_cols(feature_cols)).fillna(0.0)
     proba_batch = model.predict_proba(X_batch)[:, 1]
 
     return {(a, b): float(p) for (a, b), p in zip(pairs, proba_batch)}
