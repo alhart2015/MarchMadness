@@ -1112,7 +1112,7 @@ def main():
     print("STEP 14 -- Updating bracket.html")
     print("=" * 70)
 
-    html_path = OUTPUT_DIR / "bracket.html"
+    html_path = Path(apply_output_suffix(str(OUTPUT_DIR / "bracket.html"), _output_suffix))
     if html_path.exists():
         html_content = html_path.read_text(encoding="utf-8")
         compact_json_str = json.dumps(compact, separators=(",", ":"))
@@ -1309,7 +1309,7 @@ def _regenerate_kaggle_submission(data, feature_matrix, feature_cols, fm_filled,
 
         sub["Pred"] = sub["Pred"].clip(0.01, 0.99)
 
-        out_path = OUTPUT_DIR / out_name
+        out_path = Path(apply_output_suffix(str(OUTPUT_DIR / out_name), _output_suffix))
         sub.to_csv(out_path, index=False)
         print(f"    Written: {out_path}")
 
