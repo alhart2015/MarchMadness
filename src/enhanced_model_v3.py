@@ -865,8 +865,9 @@ def main():
         xgb_params=best_params, random_seed=42,
         supplemental_weight=0.25,
     )
-    cv_tuned["per_season"].to_csv(apply_output_suffix("output/cv_per_season_v3.csv", _output_suffix), index=False)
-    print("  Saved: output/cv_per_season_v3.csv")
+    cv_path = apply_output_suffix("output/cv_per_season_v3.csv", _output_suffix)
+    cv_tuned["per_season"].to_csv(cv_path, index=False)
+    print(f"  Saved: {cv_path}")
 
     per_season = cv_tuned["per_season"]
     print(f"\n{'Season':>8}  {'LogLoss':>9}  {'Brier':>7}  {'Accuracy':>9}  {'AUC':>7}  {'#Games':>7}")
