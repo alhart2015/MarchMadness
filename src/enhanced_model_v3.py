@@ -853,6 +853,14 @@ def main():
         from src.models.tuning import tune_hyperparameters
         best_params = tune_hyperparameters(X_all, y_all, n_trials=30, random_seed=42)
         print(f"  Best params: {best_params}")
+        # Persist tuned params so downstream tools (ablation driver, etc.)
+        # can reuse them via MM_TUNED_PARAMS_V3 without re-running Optuna.
+        # Not suffixed: shared input across ablations, not a per-run output.
+        import json as _json
+        _params_path = "output/v4_tuned_params.json"
+        with open(_params_path, "w") as _f:
+            _json.dump(best_params, _f, indent=2)
+        print(f"  Saved tuned params to {_params_path}")
 
     # -- Step 8: Re-evaluate with tuned params (weighted) ------------------
     print("\n" + "=" * 70)
