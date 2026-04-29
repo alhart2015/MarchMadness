@@ -95,6 +95,19 @@ def apply_feature_drop(feature_cols, drop_env):
     return filtered, missing
 
 
+def apply_output_suffix(path, suffix):
+    """Insert `suffix` before the final extension of `path`. Empty suffix = no-op.
+
+    Uses os.path.splitext so only the trailing extension is split, even if
+    intermediate directory names contain dots.
+    """
+    if not suffix:
+        return path
+    import os
+    root, ext = os.path.splitext(path)
+    return f"{root}{suffix}{ext}"
+
+
 # =============================================================================
 # VEGAS LINE PROCESSING
 # =============================================================================
@@ -577,6 +590,11 @@ def leave_one_season_out_cv_weighted(
 def main():
     overall_start = time.time()
 
+    import os as _os
+    _output_suffix = _os.environ.get("MM_OUTPUT_SUFFIX", "")
+    if _output_suffix:
+        print(f"  ABLATION: output suffix = '{_output_suffix}'")
+
     print("\n" + "=" * 70)
     print("ENHANCED MODEL v3 -- Late-Season Features, Weighted Training, Line Blending")
     print("=" * 70)
@@ -847,7 +865,7 @@ def main():
         xgb_params=best_params, random_seed=42,
         supplemental_weight=0.25,
     )
-    cv_tuned["per_season"].to_csv("output/cv_per_season_v3.csv", index=False)
+    cv_tuned["per_season"].to_csv(apply_output_suffix("output/cv_per_season_v3.csv", _output_suffix), index=False)
     print("  Saved: output/cv_per_season_v3.csv")
 
     per_season = cv_tuned["per_season"]
@@ -1041,12 +1059,12 @@ def main():
 
     # Export advancement probabilities CSV
     from src.bracket.output import export_bracket_csv
-    csv_path = str(OUTPUT_DIR / "bracket_2026_real.csv")
+    csv_path = apply_output_suffix(str(OUTPUT_DIR / "bracket_2026_real.csv"), _output_suffix)
     export_bracket_csv(advancement_probs, bracket_kaggle, csv_path)
     print(f"  Saved: {csv_path}")
 
     # Export bracket structure
-    bracket_csv_path = str(OUTPUT_DIR / "bracket_2026_real_structure.csv")
+    bracket_csv_path = apply_output_suffix(str(OUTPUT_DIR / "bracket_2026_real_structure.csv"), _output_suffix)
     bracket_kaggle.to_csv(bracket_csv_path, index=False)
     print(f"  Saved: {bracket_csv_path}")
 
@@ -1058,7 +1076,7 @@ def main():
         if key not in pairwise_json:
             pairwise_json[key] = round(p if a < b else 1 - p, 4)
 
-    pairwise_path = str(OUTPUT_DIR / "pairwise_probs.json")
+    pairwise_path = apply_output_suffix(str(OUTPUT_DIR / "pairwise_probs.json"), _output_suffix)
     with open(pairwise_path, "w") as f:
         json.dump(pairwise_json, f)
     print(f"  Saved: {pairwise_path}")
@@ -1077,14 +1095,14 @@ def main():
                 for r, p in probs.items()
             },
         }
-    bracket_data_path = str(OUTPUT_DIR / "bracket_data.json")
+    bracket_data_path = apply_output_suffix(str(OUTPUT_DIR / "bracket_data.json"), _output_suffix)
     with open(bracket_data_path, "w") as f:
         json.dump(bracket_data, f, indent=2)
     print(f"  Saved: {bracket_data_path}")
 
     # Export compact JSON for bracket.html
     compact = build_bracket_compact_json(bracket_kaggle, advancement_probs, win_prob)
-    compact_path = str(OUTPUT_DIR / "bracket_compact.json")
+    compact_path = apply_output_suffix(str(OUTPUT_DIR / "bracket_compact.json"), _output_suffix)
     with open(compact_path, "w") as f:
         json.dump(compact, f, separators=(",", ":"))
     print(f"  Saved: {compact_path}")

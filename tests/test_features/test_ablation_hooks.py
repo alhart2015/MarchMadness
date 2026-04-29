@@ -5,8 +5,7 @@ so we test them as standalone helpers extracted into the same module
 namespace. Drop logic: take a feature_cols list and an env var string,
 return the filtered list plus the set of names that were unknown.
 """
-import os
-from src.enhanced_model_v3 import apply_feature_drop
+from src.enhanced_model_v3 import apply_feature_drop, apply_output_suffix
 
 
 def test_drop_env_empty_returns_unchanged():
@@ -41,3 +40,25 @@ def test_drop_env_preserves_order():
     cols = ["d", "c", "b", "a"]
     result, _ = apply_feature_drop(cols, "c")
     assert result == ["d", "b", "a"]
+
+
+def test_suffix_empty_returns_unchanged():
+    assert apply_output_suffix("output/foo.csv", "") == "output/foo.csv"
+
+
+def test_suffix_inserts_before_extension():
+    assert apply_output_suffix("output/foo.csv", "_drop_coach") == "output/foo_drop_coach.csv"
+
+
+def test_suffix_handles_json():
+    assert apply_output_suffix("output/bracket_data.json", "_x") == "output/bracket_data_x.json"
+
+
+def test_suffix_no_extension():
+    # Edge case: path without extension. Just append.
+    assert apply_output_suffix("output/foo", "_x") == "output/foo_x"
+
+
+def test_suffix_handles_path_with_dot_in_directory():
+    # e.g., output/v.4/foo.csv -- only the final ext should be split.
+    assert apply_output_suffix("output/v.4/foo.csv", "_x") == "output/v.4/foo_x.csv"
