@@ -21,11 +21,11 @@ from typing import Dict
 import numpy as np
 import pandas as pd
 
-# ── Suppress noisy warnings ─────────────────────────────────────────────────
+# -- Suppress noisy warnings -------------------------------------------------
 warnings.filterwarnings("ignore", category=FutureWarning)
 warnings.filterwarnings("ignore", category=UserWarning)
 
-# ── Logging setup ────────────────────────────────────────────────────────────
+# -- Logging setup ------------------------------------------------------------
 logging.basicConfig(
     level=logging.WARNING,
     format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
@@ -33,7 +33,7 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-# ── Path setup ───────────────────────────────────────────────────────────────
+# -- Path setup ---------------------------------------------------------------
 _HERE = Path(__file__).resolve().parent          # src/
 _ROOT = _HERE.parent                             # project root
 if str(_ROOT) not in sys.path:
@@ -45,25 +45,25 @@ BRACKET_CSV = _ROOT / "data" / "raw" / "bracket_2026.csv"
 OUTPUT_DIR  = _ROOT / "output"
 OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
 
-# ── Constants ────────────────────────────────────────────────────────────────
+# -- Constants ----------------------------------------------------------------
 MASSEY_SYSTEMS = ["POM", "SAG", "MOR", "WOL", "DOL", "COL", "RPI"]
 FIRST_ROUND_PAIRS = [(1, 16), (8, 9), (5, 12), (4, 13), (6, 11), (3, 14), (7, 10), (2, 15)]
 ROUND_NAMES = {1: "R64", 2: "R32", 3: "S16", 4: "E8", 5: "F4", 6: "Champ"}
 
 
-# ═════════════════════════════════════════════════════════════════════════════
+# =============================================================================
 # STEP 1: LOAD ALL DATA
-# ═════════════════════════════════════════════════════════════════════════════
+# =============================================================================
 
 def load_all_data() -> dict:
     """Load all datasets from both Kaggle Mania and KenPom/Barttorvik sources."""
     print("\n" + "=" * 70)
-    print("STEP 1 — Loading all data sources")
+    print("STEP 1 -- Loading all data sources")
     print("=" * 70)
 
     data = {}
 
-    # ── Kaggle March Mania dataset ───────────────────────────────────────
+    # -- Kaggle March Mania dataset ---------------------------------------
     data["reg_season"] = pd.read_csv(MANIA_DIR / "MRegularSeasonDetailedResults.csv")
     data["tourney"] = pd.read_csv(MANIA_DIR / "MNCAATourneyDetailedResults.csv")
     data["seeds"] = pd.read_csv(MANIA_DIR / "MNCAATourneySeeds.csv")
@@ -73,7 +73,7 @@ def load_all_data() -> dict:
         MANIA_DIR / "MTeamSpellings.csv", encoding="latin-1"
     )
 
-    # ── Massey Ordinals (load only needed systems + latest day per season) ─
+    # -- Massey Ordinals (load only needed systems + latest day per season) -
     print("  Loading Massey Ordinals (filtering to target systems)...")
     massey_chunks = []
     for chunk in pd.read_csv(MANIA_DIR / "MMasseyOrdinals.csv", chunksize=500_000):
@@ -89,7 +89,7 @@ def load_all_data() -> dict:
         columns=["MaxDay"]
     )
 
-    # ── KenPom/Barttorvik ────────────────────────────────────────────────
+    # -- KenPom/Barttorvik ------------------------------------------------
     data["kenpom"] = pd.read_csv(KAGGLE_DIR / "KenPom Barttorvik.csv")
 
     print(f"  Regular season games : {len(data['reg_season']):,}")
@@ -102,9 +102,9 @@ def load_all_data() -> dict:
     return data
 
 
-# ═════════════════════════════════════════════════════════════════════════════
+# =============================================================================
 # STEP 2: TEAM ID MAPPING
-# ═════════════════════════════════════════════════════════════════════════════
+# =============================================================================
 
 def build_kenpom_to_kaggle_map(
     kenpom: pd.DataFrame,
@@ -164,9 +164,9 @@ def build_kenpom_to_kaggle_map(
     return mapping
 
 
-# ═════════════════════════════════════════════════════════════════════════════
+# =============================================================================
 # STEP 2: COMPUTE GAME-LEVEL FEATURES
-# ═════════════════════════════════════════════════════════════════════════════
+# =============================================================================
 
 def _parse_seed_number(seed_str: str) -> int:
     """Extract numeric seed from strings like 'W01', 'X16a'."""
@@ -181,7 +181,7 @@ def compute_all_features(data: dict) -> pd.DataFrame:
     KenPom/Barttorvik stats.
     """
     print("\n" + "=" * 70)
-    print("STEP 2 — Computing game-level features")
+    print("STEP 2 -- Computing game-level features")
     print("=" * 70)
 
     reg = data["reg_season"]
@@ -197,7 +197,7 @@ def compute_all_features(data: dict) -> pd.DataFrame:
     # Only process seasons where we have detailed results (2003+)
     seasons = [s for s in seasons if s >= 2003]
 
-    # ── Build KenPom -> Kaggle ID mapping ────────────────────────────────
+    # -- Build KenPom -> Kaggle ID mapping --------------------------------
     print("  Building team ID mapping (KenPom -> Kaggle)...")
     kp_to_kaggle = build_kenpom_to_kaggle_map(kenpom, teams, spellings)
     print(f"  Mapped {len(kp_to_kaggle)} KenPom teams to Kaggle IDs")
@@ -209,7 +209,7 @@ def compute_all_features(data: dict) -> pd.DataFrame:
         if len(season_reg) == 0:
             continue
 
-        # ── 2a: Adjusted efficiency (full season) ───────────────────────
+        # -- 2a: Adjusted efficiency (full season) -----------------------
         from src.features.efficiency import compute_adjusted_efficiency
         try:
             eff = compute_adjusted_efficiency(reg, season, iterations=10)
@@ -217,7 +217,7 @@ def compute_all_features(data: dict) -> pd.DataFrame:
             logger.warning("Efficiency computation failed for %d: %s", season, e)
             eff = pd.DataFrame(columns=["TeamID", "adj_oe", "adj_de", "adj_em", "adj_tempo"])
 
-        # ── 2b: Four factors ─────────────────────────────────────────────
+        # -- 2b: Four factors ---------------------------------------------
         from src.features.four_factors import compute_four_factors, estimate_possessions
         try:
             ff = compute_four_factors(reg, season)
@@ -225,7 +225,7 @@ def compute_all_features(data: dict) -> pd.DataFrame:
             logger.warning("Four factors failed for %d: %s", season, e)
             ff = pd.DataFrame(columns=["TeamID"])
 
-        # ── 2c: Rolling efficiency (last 30 days) ───────────────────────
+        # -- 2c: Rolling efficiency (last 30 days) -----------------------
         max_day = season_reg["DayNum"].max()
         recent_games = season_reg[season_reg["DayNum"] > max_day - 30]
 
@@ -257,7 +257,7 @@ def compute_all_features(data: dict) -> pd.DataFrame:
                     "win_pct_30d": grp["win"].mean(),
                 }
 
-        # ── 2d: Recent form features ────────────────────────────────────
+        # -- 2d: Recent form features ------------------------------------
         # All games for the season
         w_games = season_reg[["WTeamID", "WScore", "LScore", "DayNum"]].rename(
             columns={"WTeamID": "TeamID", "WScore": "pts", "LScore": "pts_allowed"}
@@ -280,7 +280,7 @@ def compute_all_features(data: dict) -> pd.DataFrame:
                 "season_avg_mov": (grp["pts"] - grp["pts_allowed"]).mean(),
             }
 
-        # ── 2e: Massey ordinals ──────────────────────────────────────────
+        # -- 2e: Massey ordinals ------------------------------------------
         season_massey = massey[massey["Season"] == season]
         massey_features = {}
         if not season_massey.empty:
@@ -298,7 +298,7 @@ def compute_all_features(data: dict) -> pd.DataFrame:
                 if ranks:
                     massey_features[tid]["massey_composite"] = np.mean(ranks)
 
-        # ── 2f: Conference strength ──────────────────────────────────────
+        # -- 2f: Conference strength --------------------------------------
         season_conf = conferences[conferences["Season"] == season]
         conf_strength = {}
         if not season_conf.empty and not eff.empty:
@@ -309,7 +309,7 @@ def compute_all_features(data: dict) -> pd.DataFrame:
                 if conf_abbrev in conf_avg.index:
                     conf_strength[tid] = conf_avg[conf_abbrev]
 
-        # ── 2g: KenPom/Barttorvik season aggregates ─────────────────────
+        # -- 2g: KenPom/Barttorvik season aggregates ---------------------
         kp_season = kenpom[kenpom["YEAR"] == season]
         kp_features = {}
         kp_cols = [
@@ -328,13 +328,13 @@ def compute_all_features(data: dict) -> pd.DataFrame:
                     feats[f"kp_{col}"] = row[col]
             kp_features[kaggle_id] = feats
 
-        # ── 2h: Seed features ───────────────────────────────────────────
+        # -- 2h: Seed features -------------------------------------------
         season_seeds = seeds[seeds["Season"] == season]
         seed_map = {}
         for _, row in season_seeds.iterrows():
             seed_map[int(row["TeamID"])] = _parse_seed_number(row["Seed"])
 
-        # ── Assemble features for each team in this season ───────────────
+        # -- Assemble features for each team in this season ---------------
         all_team_ids = set()
         all_team_ids.update(eff["TeamID"].values if not eff.empty else [])
         all_team_ids.update(seed_map.keys())
@@ -388,7 +388,7 @@ def compute_all_features(data: dict) -> pd.DataFrame:
 
     feature_matrix = pd.DataFrame(all_rows)
 
-    # ── Filter to tournament teams only (have a seed) ────────────────────
+    # -- Filter to tournament teams only (have a seed) --------------------
     tourney_fm = feature_matrix[feature_matrix["seed"].notna()].copy()
     print(f"\n  Full feature matrix : {len(feature_matrix):,} rows")
     print(f"  Tournament teams    : {len(tourney_fm):,} rows")
@@ -398,9 +398,9 @@ def compute_all_features(data: dict) -> pd.DataFrame:
     return tourney_fm
 
 
-# ═════════════════════════════════════════════════════════════════════════════
+# =============================================================================
 # STEP 3: GET FEATURE COLUMNS
-# ═════════════════════════════════════════════════════════════════════════════
+# =============================================================================
 
 def get_feature_cols(fm: pd.DataFrame) -> list:
     """Return list of numeric feature column names."""
@@ -410,9 +410,9 @@ def get_feature_cols(fm: pd.DataFrame) -> list:
     return numeric_cols
 
 
-# ═════════════════════════════════════════════════════════════════════════════
+# =============================================================================
 # STEP 4: BUILD MATCHUP DATA & TRAIN/EVALUATE
-# ═════════════════════════════════════════════════════════════════════════════
+# =============================================================================
 
 def build_matchup_data_from_kaggle(
     feature_matrix: pd.DataFrame,
@@ -503,6 +503,34 @@ def leave_one_season_out_cv(
         model = train_model(X_train, y_train, random_seed=random_seed, xgb_params=xgb_params)
         y_prob = model.predict_proba(X_test)[:, 1]
 
+        # Optional: save full pairwise probs for the year's field (backtest).
+        import os as _os
+        from pathlib import Path as _Path
+        _pw_out = _os.environ.get("MM_PAIRWISE_OUT")
+        if _pw_out:
+            _field = sorted(set(test_tourney["WTeamID"]) | set(test_tourney["LTeamID"]))
+            _fm_yr = feature_matrix[feature_matrix["Season"] == holdout].set_index("TeamID")
+            _have_feats = [t for t in _field if t in _fm_yr.index]
+            _pair_diffs, _pair_ids = [], []
+            for _i in range(len(_have_feats)):
+                for _j in range(_i + 1, len(_have_feats)):
+                    _a, _b = _have_feats[_i], _have_feats[_j]
+                    _av = _fm_yr.loc[_a, feature_cols].values.astype(float)
+                    _bv = _fm_yr.loc[_b, feature_cols].values.astype(float)
+                    _pair_diffs.append(_av - _bv)
+                    _pair_ids.append((_a, _b))
+            if _pair_diffs:
+                _pdf = pd.DataFrame(_pair_diffs, columns=feature_cols).fillna(medians)
+                _pp = model.predict_proba(_pdf)[:, 1]
+                _out = pd.DataFrame({
+                    "season": holdout,
+                    "team_a": [a for a, _ in _pair_ids],
+                    "team_b": [b for _, b in _pair_ids],
+                    "p_a_wins": _pp,
+                })
+                _out.to_csv(_pw_out, mode="a", index=False,
+                            header=not _Path(_pw_out).exists())
+
         season_loss = float(sklearn_log_loss(y_test, y_prob))
         season_brier = float(np.mean((y_prob - y_test.values) ** 2))
         season_acc = float((y_prob.round() == y_test).mean())
@@ -530,9 +558,9 @@ def leave_one_season_out_cv(
     }
 
 
-# ═════════════════════════════════════════════════════════════════════════════
+# =============================================================================
 # STEP 5: BRACKET SIMULATION
-# ═════════════════════════════════════════════════════════════════════════════
+# =============================================================================
 
 def precompute_win_probs(bracket, feature_matrix, feature_cols, model):
     """Pre-compute P(a beats b) for all bracket team pairs."""
@@ -620,9 +648,9 @@ def get_advancement_probabilities(counts, n_sim):
     }
 
 
-# ═════════════════════════════════════════════════════════════════════════════
+# =============================================================================
 # STEP 6: BRACKET OUTPUT
-# ═════════════════════════════════════════════════════════════════════════════
+# =============================================================================
 
 def build_bracket_compact_json(bracket, advancement_probs, win_prob):
     """Build the compact JSON structure needed by bracket.html."""
@@ -731,15 +759,15 @@ def print_advancement_table(advancement_probs, bracket, top_n=30):
         )
 
 
-# ═════════════════════════════════════════════════════════════════════════════
+# =============================================================================
 # MAIN
-# ═════════════════════════════════════════════════════════════════════════════
+# =============================================================================
 
 def main():
-    # ── Step 1: Load all data ────────────────────────────────────────────
+    # -- Step 1: Load all data --------------------------------------------
     data = load_all_data()
 
-    # ── Step 2: Compute features ─────────────────────────────────────────
+    # -- Step 2: Compute features -----------------------------------------
     feature_matrix = compute_all_features(data)
 
     feature_cols = get_feature_cols(feature_matrix)
@@ -747,9 +775,9 @@ def main():
     for i in range(0, len(feature_cols), 6):
         print(f"    {', '.join(feature_cols[i:i+6])}")
 
-    # ── Step 3: Build matchup training data ──────────────────────────────
+    # -- Step 3: Build matchup training data ------------------------------
     print("\n" + "=" * 70)
-    print("STEP 3 — Building matchup training data")
+    print("STEP 3 -- Building matchup training data")
     print("=" * 70)
 
     tourney = data["tourney"]
@@ -777,9 +805,9 @@ def main():
     print(f"  Training samples : {len(X_all):,}  (win rate {y_all.mean():.3f})")
     print(f"  Features used    : {len(feature_cols)}")
 
-    # ── Step 4: Leave-one-season-out CV (default params) ─────────────────
+    # -- Step 4: Leave-one-season-out CV (default params) -----------------
     print("\n" + "=" * 70)
-    print("STEP 4 — Leave-one-season-out CV (default XGBoost params)")
+    print("STEP 4 -- Leave-one-season-out CV (default XGBoost params)")
     print("=" * 70)
 
     # Fill NaN in feature matrix for CV
@@ -798,24 +826,32 @@ def main():
     print(f"  Mean Accuracy  : {cv_default['mean_accuracy']:.3f}")
     print(f"  Mean AUC       : {cv_default['mean_auc']:.4f}")
 
-    # ── Step 5: Optuna hyperparameter tuning ─────────────────────────────
+    # -- Step 5: Optuna hyperparameter tuning -----------------------------
     print("\n" + "=" * 70)
-    print("STEP 5 — Optuna hyperparameter tuning (30 trials)")
+    print("STEP 5 -- Optuna hyperparameter tuning (30 trials)")
     print("=" * 70)
 
-    from src.models.tuning import tune_hyperparameters
-    best_params = tune_hyperparameters(X_all, y_all, n_trials=30, random_seed=42)
-    print(f"  Best params: {best_params}")
+    import os
+    if os.environ.get("MM_TUNED_PARAMS_V1"):
+        import json as _json
+        best_params = _json.loads(os.environ["MM_TUNED_PARAMS_V1"])
+        print(f"  Using cached tuned params from env (skipping Optuna): {best_params}")
+    else:
+        from src.models.tuning import tune_hyperparameters
+        best_params = tune_hyperparameters(X_all, y_all, n_trials=30, random_seed=42)
+        print(f"  Best params: {best_params}")
 
-    # ── Step 6: Re-evaluate with tuned params ────────────────────────────
+    # -- Step 6: Re-evaluate with tuned params ----------------------------
     print("\n" + "=" * 70)
-    print("STEP 6 — Leave-one-season-out CV (tuned params)")
+    print("STEP 6 -- Leave-one-season-out CV (tuned params)")
     print("=" * 70)
 
     cv_tuned = leave_one_season_out_cv(
         fm_filled, tourney_filtered, feature_cols,
         xgb_params=best_params, random_seed=42,
     )
+    cv_tuned["per_season"].to_csv("output/cv_per_season_v1.csv", index=False)
+    print("  Saved: output/cv_per_season_v1.csv")
 
     per_season = cv_tuned["per_season"]
     print(f"\n{'Season':>8}  {'LogLoss':>9}  {'Brier':>7}  {'Accuracy':>9}  {'AUC':>7}  {'#Games':>7}")
@@ -833,7 +869,7 @@ def main():
         f"{cv_tuned['mean_auc']:>7.4f}"
     )
 
-    # ── Comparison with baseline ─────────────────────────────────────────
+    # -- Comparison with baseline -----------------------------------------
     print("\n" + "=" * 70)
     print("MODEL COMPARISON")
     print("=" * 70)
@@ -855,18 +891,18 @@ def main():
     else:
         print(f"\n  Note: Log loss did not improve (baseline {baseline_ll:.4f} vs {new_ll:.4f})")
 
-    # ── Step 7: Train final model on all data ────────────────────────────
+    # -- Step 7: Train final model on all data ----------------------------
     print("\n" + "=" * 70)
-    print("STEP 7 — Training final model on all historical data")
+    print("STEP 7 -- Training final model on all historical data")
     print("=" * 70)
 
     from src.models.train import train_model
     final_model = train_model(X_all, y_all, random_seed=42, xgb_params=best_params)
     print("  Final model trained successfully.")
 
-    # ── Step 8: Generate 2026 predictions ────────────────────────────────
+    # -- Step 8: Generate 2026 predictions --------------------------------
     print("\n" + "=" * 70)
-    print("STEP 8 — Loading 2026 bracket and preparing predictions")
+    print("STEP 8 -- Loading 2026 bracket and preparing predictions")
     print("=" * 70)
 
     # Load actual bracket
@@ -921,9 +957,9 @@ def main():
     else:
         print(f"  All {len(bracket_team_ids)} bracket teams found in feature matrix.")
 
-    # ── Step 9: Monte Carlo simulation ───────────────────────────────────
+    # -- Step 9: Monte Carlo simulation -----------------------------------
     print("\n" + "=" * 70)
-    print("STEP 9 — Pre-computing pairwise win probabilities")
+    print("STEP 9 -- Pre-computing pairwise win probabilities")
     print("=" * 70)
 
     n_teams = len(bracket_kaggle)
@@ -932,7 +968,7 @@ def main():
     print(f"  Done. Lookup table has {len(win_prob):,} entries.")
 
     print("\n" + "=" * 70)
-    print("STEP 10 — Monte Carlo simulation (10,000 iterations)")
+    print("STEP 10 -- Monte Carlo simulation (10,000 iterations)")
     print("=" * 70)
 
     print("  Running simulation...")
@@ -949,20 +985,20 @@ def main():
         sim_results["n_simulations"],
     )
 
-    # ── Results ──────────────────────────────────────────────────────────
+    # -- Results ----------------------------------------------------------
     print("\n" + "=" * 70)
-    print("RESULTS — Championship Probabilities (Top 15)")
+    print("RESULTS -- Championship Probabilities (Top 15)")
     print("=" * 70)
     print_champion_probs(advancement_probs, bracket_kaggle, top_n=15)
 
     print("\n" + "=" * 70)
-    print("RESULTS — Advancement Probabilities (Top 30)")
+    print("RESULTS -- Advancement Probabilities (Top 30)")
     print("=" * 70)
     print_advancement_table(advancement_probs, bracket_kaggle, top_n=30)
 
-    # ── Bracket picks ────────────────────────────────────────────────────
+    # -- Bracket picks ----------------------------------------------------
     print("\n" + "=" * 70)
-    print("RESULTS — Bracket Picks")
+    print("RESULTS -- Bracket Picks")
     print("=" * 70)
 
     from src.bracket.strategies import chalk_bracket, expected_value_bracket
@@ -994,9 +1030,9 @@ def main():
             seed = id_to_seed.get(tid, "?")
             print(f"    ({seed:>2}) {name}")
 
-    # ── Step 11: Export results ──────────────────────────────────────────
+    # -- Step 11: Export results ------------------------------------------
     print("\n" + "=" * 70)
-    print("STEP 11 — Exporting results")
+    print("STEP 11 -- Exporting results")
     print("=" * 70)
 
     # Export advancement probabilities CSV
@@ -1049,9 +1085,9 @@ def main():
         json.dump(compact, f, separators=(",", ":"))
     print(f"  Saved: {compact_path}")
 
-    # ── Step 12: Update bracket.html ─────────────────────────────────────
+    # -- Step 12: Update bracket.html -------------------------------------
     print("\n" + "=" * 70)
-    print("STEP 12 — Updating bracket.html")
+    print("STEP 12 -- Updating bracket.html")
     print("=" * 70)
 
     html_path = OUTPUT_DIR / "bracket.html"
@@ -1081,7 +1117,7 @@ def main():
     else:
         print(f"  WARNING: bracket.html not found at {html_path}")
 
-    # ── Final summary ────────────────────────────────────────────────────
+    # -- Final summary ----------------------------------------------------
     print("\n" + "=" * 70)
     print("FINAL SUMMARY")
     print("=" * 70)
