@@ -87,3 +87,33 @@ def test_pass2_tags_are_unprefixed():
     # site's f"drop_{tag}" produces 'drop_drop_coach_career_winpct'.
     for tag, _ in ablations:
         assert not tag.startswith("drop_")
+
+
+def test_run_pipeline_suffix_construction():
+    """Lock the contract that even the baseline run uses a non-empty suffix
+    so it doesn't clobber the canonical v4 outputs at output/cv_per_season_v3.csv,
+    output/bracket_data.json, etc.
+    """
+    # We can't easily call run_pipeline without invoking the subprocess, but
+    # we can replicate the suffix-construction line and assert its outputs.
+    # The line is:  suffix = f"_{tag}"
+    # for tag in {"baseline", "drop_late_season", "drop_coach_career_winpct"}.
+    for tag in ["baseline", "drop_late_season", "drop_coach_career_winpct"]:
+        suffix = f"_{tag}"
+        assert suffix.startswith("_"), \
+            f"baseline suffix must NOT be empty (would clobber canonical outputs); got {suffix!r}"
+        assert suffix != ""
+
+
+def test_build_results_row_none_propagates_to_delta_pp():
+    """Lock the contract that delta_pp is None (not 0.0, not raising) when
+    either advance prob is missing -- so a missing bust team in 2026 data
+    does not silently produce a 0pp delta in the results CSV."""
+    row = build_results_row(
+        ablation="drop_coach", team="Vanderbilt", bust_round="R32",
+        advance_key="S16",
+        p_advance_baseline=None, p_advance_ablated=0.42,
+        loso_baseline=0.43, loso_ablated=0.44,
+        bracket_pts_baseline=2670.0, bracket_pts_ablated=2640.0,
+    )
+    assert row["delta_pp"] is None

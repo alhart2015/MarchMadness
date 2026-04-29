@@ -88,11 +88,10 @@ def run_pipeline(tag, drop_features, tuned_params_json):
     """Invoke enhanced_model_v3.py as a subprocess with the env-var hooks set.
     Returns paths to the suffixed artifacts.
     """
-    suffix = "" if tag == "baseline" else f"_{tag}"
+    suffix = f"_{tag}"
     pairwise_csv = ABLATION_DIR / f"pairwise{suffix}.csv"
     pairwise_csv.parent.mkdir(parents=True, exist_ok=True)
-    if pairwise_csv.exists():
-        pairwise_csv.unlink()  # MM_PAIRWISE_OUT appends; start clean.
+    pairwise_csv.unlink(missing_ok=True)  # MM_PAIRWISE_OUT appends; start clean.
 
     env = os.environ.copy()
     env["MM_FEATURE_DROP"] = ",".join(drop_features)
@@ -137,12 +136,20 @@ def parse_args():
                    help="Path to JSON with v4's Optuna best_params (passed to MM_TUNED_PARAMS_V3)")
     p.add_argument("--baseline-only", action="store_true",
                    help="Run only the no-drop baseline, skip ablations")
+    p.add_argument("--fresh", action="store_true",
+                   help="Delete RESULTS_CSV before running. Use to discard prior results.")
     return p.parse_args()
 
 
 def main():
     args = parse_args()
     tuned_params_json = Path(args.tuned_params).read_text().strip()
+
+    if args.fresh and RESULTS_CSV.exists():
+        RESULTS_CSV.unlink()
+        print(f"  --fresh: deleted prior {RESULTS_CSV}")
+    elif RESULTS_CSV.exists():
+        print(f"  WARNING: {RESULTS_CSV} exists; new rows will be appended. Pass --fresh to start over.")
 
     # Always run baseline first.
     results = []
