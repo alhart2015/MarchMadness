@@ -162,7 +162,7 @@ def main():
     else:
         if not args.features:
             sys.exit("Pass 2 requires --features f1 f2 ...")
-        ablations = [(f"drop_{f}", [f]) for f in args.features]
+        ablations = [(f, [f]) for f in args.features]
 
     for tag, features in ablations:
         artifacts = run_pipeline(f"drop_{tag}", features, tuned_params_json)

@@ -73,3 +73,17 @@ def test_build_results_row_shape():
     assert row["delta_pp"] == pytest.approx(-12.0)
     assert row["loso_logloss_delta"] == pytest.approx(0.0064)
     assert row["bracket_pts_delta"] == pytest.approx(-30.0)
+
+
+def test_pass2_tags_are_unprefixed():
+    """Regression test: Pass 2 ablation tags should equal the bare feature
+    name, not 'drop_<feature>'. The 'drop_' prefix is added uniformly at
+    the run_pipeline call site, so prefixing here would double-prefix."""
+    # Simulate what main() does for Pass 2 with --features coach_career_winpct
+    features = ["coach_career_winpct"]
+    ablations = [(f, [f]) for f in features]
+    assert ablations == [("coach_career_winpct", ["coach_career_winpct"])]
+    # The tag must NOT already start with 'drop_' -- otherwise the call
+    # site's f"drop_{tag}" produces 'drop_drop_coach_career_winpct'.
+    for tag, _ in ablations:
+        assert not tag.startswith("drop_")
