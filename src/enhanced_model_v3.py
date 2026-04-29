@@ -76,6 +76,26 @@ from src.models.matchup import build_weighted_matchup_data
 
 
 # =============================================================================
+# ABLATION HELPERS
+# =============================================================================
+
+def apply_feature_drop(feature_cols, drop_env):
+    """Filter feature_cols by names listed in MM_FEATURE_DROP env-var string.
+
+    Returns (filtered_cols, missing_names_set). Unknown names are returned in
+    `missing` for the caller to log -- not raised, so a typo does not abort
+    a multi-hour LOSO retrain.
+    """
+    if not drop_env:
+        return list(feature_cols), set()
+    drop = {c.strip() for c in drop_env.split(",") if c.strip()}
+    present = drop & set(feature_cols)
+    missing = drop - set(feature_cols)
+    filtered = [c for c in feature_cols if c not in present]
+    return filtered, missing
+
+
+# =============================================================================
 # VEGAS LINE PROCESSING
 # =============================================================================
 
@@ -718,6 +738,16 @@ def main():
     print(f"\n  Total feature columns ({len(feature_cols)}):")
     for i in range(0, len(feature_cols), 6):
         print(f"    {', '.join(feature_cols[i:i+6])}")
+
+    # ABLATION HOOK: drop features named in MM_FEATURE_DROP env var.
+    import os as _os
+    _drop_env = _os.environ.get("MM_FEATURE_DROP", "")
+    if _drop_env:
+        _before = len(feature_cols)
+        feature_cols, _missing = apply_feature_drop(feature_cols, _drop_env)
+        if _missing:
+            print(f"  ABLATION WARNING: MM_FEATURE_DROP names not in feature_cols: {sorted(_missing)}")
+        print(f"  ABLATION: dropped {_before - len(feature_cols)} features (drop list: {_drop_env}); remaining: {len(feature_cols)}")
 
     # -- Step 5: Build weighted matchup training data ----------------------
     print("\n" + "=" * 70)
