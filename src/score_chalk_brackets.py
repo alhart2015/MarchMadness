@@ -188,6 +188,8 @@ def main():
         "v3": load_pairwise("output/pairwise_v3.csv"),
         "v4": load_pairwise("output/pairwise_v4.csv"),
         "v5": load_pairwise("output/pairwise_v5.csv"),
+        "v6": load_pairwise("output/pairwise_v6.csv"),
+        "v7": load_pairwise("output/pairwise_v7.csv"),
     }
     pw = {v: d for v, d in pw.items() if d}
     if not pw:

@@ -1,5 +1,24 @@
 # Future Work
 
+## Active queue (in order)
+
+1. **Matchup-interaction features (v5).** The symmetric-pair architecture
+   feeds the model only `feat_A - feat_B` differences, so it loses the
+   *sum* / average information ("are both teams fast?", "are both elite?").
+   Add `(feat_A + feat_B) / 2` average features for each existing feature
+   in the matchup builder. Symmetry note: avg features are the same in both
+   rows of a symmetric pair (winner-perspective and loser-perspective), so
+   they don't break symmetric training.
+2. **Round-as-a-feature (v6).** Add the round of the game as a feature in
+   training. Allows the model to learn round-conditional interactions
+   (e.g., "coach career F4 apps matters more in S16+ than R64"). Cheap
+   change to the matchup builder + 2026 prediction code (which currently
+   doesn't know rounds).
+3. **External rankings as features (v7).** 538 / ESPN BPI / Bart Torvik
+   tournament-day rankings as features. We have Massey ordinals already;
+   these would add other public-model methodologies as direct signal.
+   Needs data sourcing.
+
 ## Feature ablation on 2026 high-confidence misses
 After the bracket-points backtest, run targeted feature ablation on v3 to
 identify which v3-specific feature pushed Vanderbilt (R32 bust at 79%

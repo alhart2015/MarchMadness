@@ -1,7 +1,63 @@
-"""Build symmetric matchup training data from tournament results."""
+"""Build symmetric matchup training data from tournament results.
 
-import pandas as pd
+Each game (team A vs team B) is represented by ONE feature row of diff
+columns (A_feat - B_feat). The diff swaps sign in the loser-perspective
+row of the symmetric pair so the model learns directional advantage.
+
+History:
+  v6 attempt: added (A+B)/2 avg columns (matchup-interaction features).
+    22-season backtest delta: +7 pts vs v4 (within season-to-season
+    noise). Reverted in favor of diff-only.
+  v7 attempt: added a `round` column (1..6 for R64..Champ, 0 for
+    supplemental regular-season). 22-season delta: -10 pts vs v4. CV log
+    loss flat (0.4384 -> 0.4387). The model could not extract round-
+    conditional signal from the existing features. Reverted.
+
+The day_to_round helper is kept here for any future iteration that wants
+to do per-round prediction infrastructure (rather than per-round training
+features).
+"""
+
 import numpy as np
+import pandas as pd
+
+
+def day_to_round(day_num) -> int:
+    """Map Kaggle DayNum to the tournament round number.
+
+    1 = R64, 2 = R32, 3 = S16, 4 = E8, 5 = F4, 6 = Champ.
+    Returns 0 for play-ins / regular-season / unknown days.
+    """
+    try:
+        d = int(day_num)
+    except (TypeError, ValueError):
+        return 0
+    if 136 <= d <= 137:
+        return 1
+    if 138 <= d <= 139:
+        return 2
+    if 143 <= d <= 144:
+        return 3
+    if 145 <= d <= 146:
+        return 4
+    if d == 152:
+        return 5
+    if d == 154:
+        return 6
+    return 0
+
+
+def expand_feature_cols(feature_cols: list[str]) -> list[str]:
+    """Matchup-row column names: <feat>_diff for each raw feature."""
+    return [f"{c}_diff" for c in feature_cols]
+
+
+def build_matchup_features(a_vals: np.ndarray, b_vals: np.ndarray) -> np.ndarray:
+    """Build a single matchup feature row from team A's and B's raw features.
+
+    Returns: flat array of length len(a_vals), the element-wise diff (A - B).
+    """
+    return a_vals - b_vals
 
 
 def build_matchup_data(
@@ -11,12 +67,8 @@ def build_matchup_data(
 ) -> tuple[pd.DataFrame, pd.Series]:
     """Build training data for matchup prediction.
 
-    Each tournament game produces two rows (A vs B and B vs A).
-    Features are the difference: team_A_features - team_B_features.
-    Target is 1 if team A won, 0 otherwise.
-
-    Returns (X, y) where X is the feature difference DataFrame
-    and y is the binary target Series.
+    Each game produces two rows (winner perspective, loser perspective);
+    each row has len(feature_cols) columns (diff cols).
     """
     rows = []
     labels = []
@@ -39,15 +91,12 @@ def build_matchup_data(
         w_vals = w_features.iloc[0].values
         l_vals = l_features.iloc[0].values
 
-        # Winner perspective: W - L, label = 1
-        rows.append(w_vals - l_vals)
+        rows.append(build_matchup_features(w_vals, l_vals))
         labels.append(1)
-
-        # Loser perspective: L - W, label = 0
-        rows.append(l_vals - w_vals)
+        rows.append(build_matchup_features(l_vals, w_vals))
         labels.append(0)
 
-    X = pd.DataFrame(rows, columns=feature_cols)
+    X = pd.DataFrame(rows, columns=expand_feature_cols(feature_cols))
     y = pd.Series(labels, name="win")
     return X, y
 

@@ -499,19 +499,20 @@ def leave_one_season_out_cv_weighted(
         from pathlib import Path as _Path
         _pw_out = _os.environ.get("MM_PAIRWISE_OUT")
         if _pw_out:
+            from src.models.matchup import build_matchup_features, expand_feature_cols
             _field = sorted(set(test_tourney["WTeamID"]) | set(test_tourney["LTeamID"]))
             _fm_yr = feature_matrix[feature_matrix["Season"] == holdout].set_index("TeamID")
             _have_feats = [t for t in _field if t in _fm_yr.index]
-            _pair_diffs, _pair_ids = [], []
+            _pair_rows, _pair_ids = [], []
             for _i in range(len(_have_feats)):
                 for _j in range(_i + 1, len(_have_feats)):
                     _a, _b = _have_feats[_i], _have_feats[_j]
                     _av = _fm_yr.loc[_a, feature_cols].values.astype(float)
                     _bv = _fm_yr.loc[_b, feature_cols].values.astype(float)
-                    _pair_diffs.append(_av - _bv)
+                    _pair_rows.append(build_matchup_features(_av, _bv))
                     _pair_ids.append((_a, _b))
-            if _pair_diffs:
-                _pdf = pd.DataFrame(_pair_diffs, columns=feature_cols).fillna(medians)
+            if _pair_rows:
+                _pdf = pd.DataFrame(_pair_rows, columns=expand_feature_cols(feature_cols)).fillna(medians)
                 _pp = model.predict_proba(_pdf)[:, 1]
                 _out = pd.DataFrame({
                     "season": holdout,
@@ -743,14 +744,19 @@ def main():
         supplemental_weight=0.25,
     )
 
-    # Drop columns with > 30% NaN
+    # Drop columns with > 30% NaN. X_all has expanded matchup columns
+    # (<feat>_diff and <feat>_avg); we drop the raw feature if either of
+    # its expanded forms is too sparse, then rebuild the expanded list.
     if not X_all.empty:
+        from src.models.matchup import expand_feature_cols as _expand
         null_fracs = X_all.isna().mean()
-        drop_cols = null_fracs[null_fracs > 0.30].index.tolist()
-        if drop_cols:
-            print(f"  Dropping {len(drop_cols)} high-NaN columns: {drop_cols}")
-            feature_cols = [c for c in feature_cols if c not in drop_cols]
-            X_all = X_all[feature_cols]
+        drop_expanded = null_fracs[null_fracs > 0.30].index.tolist()
+        drop_raw = {c.removesuffix("_diff") for c in drop_expanded
+                    if c.endswith("_diff")}
+        if drop_raw:
+            print(f"  Dropping {len(drop_raw)} high-NaN raw features: {sorted(drop_raw)}")
+            feature_cols = [c for c in feature_cols if c not in drop_raw]
+            X_all = X_all[_expand(feature_cols)]
 
     # Fill remaining NaN with median
     medians = X_all.median()
@@ -1182,14 +1188,20 @@ def _regenerate_kaggle_submission(data, feature_matrix, feature_cols, fm_filled,
 
     X_men, y_men = build_matchup_training_data(men_fm, m_tourney_filtered, men_feature_cols)
 
-    # Drop columns with >30% NaN
+    # Drop columns with >30% NaN. X_men columns are expanded (<feat>_diff,
+    # <feat>_avg); we drop the raw feature if either of its expanded forms
+    # is too sparse, then rebuild the expanded column list.
     if not X_men.empty:
+        from src.models.matchup import expand_feature_cols as _expand
         null_fracs = X_men.isna().mean()
-        drop_cols = null_fracs[null_fracs > 0.30].index.tolist()
-        if drop_cols:
-            print(f"  Dropping {len(drop_cols)} high-NaN columns: {drop_cols[:10]}...")
-            men_feature_cols = [c for c in men_feature_cols if c not in drop_cols]
-            X_men = X_men[men_feature_cols]
+        drop_expanded = null_fracs[null_fracs > 0.30].index.tolist()
+        drop_raw = {c.removesuffix("_diff") for c in drop_expanded
+                    if c.endswith("_diff")}
+        if drop_raw:
+            print(f"  Dropping {len(drop_raw)} high-NaN raw features: "
+                  f"{sorted(drop_raw)[:10]}...")
+            men_feature_cols = [c for c in men_feature_cols if c not in drop_raw]
+            X_men = X_men[_expand(men_feature_cols)]
 
     men_medians = X_men.median()
     X_men = X_men.fillna(men_medians)
@@ -1218,11 +1230,14 @@ def _regenerate_kaggle_submission(data, feature_matrix, feature_cols, fm_filled,
     X_women, y_women = build_matchup_training_data(women_fm, w_tourney_filtered, women_feature_cols)
 
     if not X_women.empty:
+        from src.models.matchup import expand_feature_cols as _expand
         null_fracs = X_women.isna().mean()
-        drop_cols = null_fracs[null_fracs > 0.30].index.tolist()
-        if drop_cols:
-            women_feature_cols = [c for c in women_feature_cols if c not in drop_cols]
-            X_women = X_women[women_feature_cols]
+        drop_expanded = null_fracs[null_fracs > 0.30].index.tolist()
+        drop_raw = {c.removesuffix("_diff") for c in drop_expanded
+                    if c.endswith("_diff")}
+        if drop_raw:
+            women_feature_cols = [c for c in women_feature_cols if c not in drop_raw]
+            X_women = X_women[_expand(women_feature_cols)]
 
     women_medians = X_women.median()
     X_women = X_women.fillna(women_medians)
