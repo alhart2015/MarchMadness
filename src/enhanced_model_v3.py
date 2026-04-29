@@ -1139,7 +1139,8 @@ def main():
     print("=" * 70)
 
     _regenerate_kaggle_submission(
-        data, feature_matrix, feature_cols, fm_filled, best_params
+        data, feature_matrix, feature_cols, fm_filled, best_params,
+        output_suffix=_output_suffix,
     )
 
     # -- Final summary ----------------------------------------------------
@@ -1169,7 +1170,7 @@ def main():
     print("=" * 70 + "\n")
 
 
-def _regenerate_kaggle_submission(data, feature_matrix, feature_cols, fm_filled, best_params):
+def _regenerate_kaggle_submission(data, feature_matrix, feature_cols, fm_filled, best_params, output_suffix=""):
     """Regenerate Kaggle submission files using the v3 model.
 
     This rebuilds the men's model with all v3 features and produces updated
@@ -1309,7 +1310,7 @@ def _regenerate_kaggle_submission(data, feature_matrix, feature_cols, fm_filled,
 
         sub["Pred"] = sub["Pred"].clip(0.01, 0.99)
 
-        out_path = Path(apply_output_suffix(str(OUTPUT_DIR / out_name), _output_suffix))
+        out_path = Path(apply_output_suffix(str(OUTPUT_DIR / out_name), output_suffix))
         sub.to_csv(out_path, index=False)
         print(f"    Written: {out_path}")
 
