@@ -1,4 +1,4 @@
-"""Enhanced March Madness prediction model v3 — late-season features, weighted training, line blending.
+"""Enhanced March Madness prediction model v3 -- late-season features, weighted training, line blending.
 
 Extends v2 by adding:
   - Late-season efficiency metrics (vs top-100 opponents)
@@ -26,11 +26,11 @@ from typing import Dict
 import numpy as np
 import pandas as pd
 
-# ── Suppress noisy warnings ─────────────────────────────────────────────────
+# -- Suppress noisy warnings -------------------------------------------------
 warnings.filterwarnings("ignore", category=FutureWarning)
 warnings.filterwarnings("ignore", category=UserWarning)
 
-# ── Logging setup ────────────────────────────────────────────────────────────
+# -- Logging setup ------------------------------------------------------------
 logging.basicConfig(
     level=logging.WARNING,
     format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
@@ -38,7 +38,7 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-# ── Path setup ───────────────────────────────────────────────────────────────
+# -- Path setup ---------------------------------------------------------------
 _HERE = Path(__file__).resolve().parent          # src/
 _ROOT = _HERE.parent                             # project root
 if str(_ROOT) not in sys.path:
@@ -51,15 +51,15 @@ BRACKET_CSV = _ROOT / "data" / "raw" / "bracket_2026.csv"
 OUTPUT_DIR  = _ROOT / "output"
 OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
 
-# ── Constants ────────────────────────────────────────────────────────────────
+# -- Constants ----------------------------------------------------------------
 MASSEY_SYSTEMS = ["POM", "SAG", "MOR", "WOL", "DOL", "COL", "RPI"]
 FIRST_ROUND_PAIRS = [(1, 16), (8, 9), (5, 12), (4, 13), (6, 11), (3, 14), (7, 10), (2, 15)]
 ROUND_NAMES = {1: "R64", 2: "R32", 3: "S16", 4: "E8", 5: "F4", 6: "Champ"}
 
 
-# ═════════════════════════════════════════════════════════════════════════════
+# =============================================================================
 # NEW v3 IMPORTS
-# ═════════════════════════════════════════════════════════════════════════════
+# =============================================================================
 
 from src.features.late_season import (
     compute_late_season_metrics,
@@ -67,13 +67,17 @@ from src.features.late_season import (
     compute_conf_tourney_features,
     compute_vegas_trend,
 )
+from src.features.coach import compute_coach_features
+# quality_wins (src/features/quality_wins.py) was tested in a backtest
+# (22 seasons): added 0 R64/R32 signal, dropped F4 accuracy by 9pp. Dropped
+# from the pipeline. Kept as a module for reference / future variants.
 from src.bracket.line_blending import blend_r64_probs
 from src.models.matchup import build_weighted_matchup_data
 
 
-# ═════════════════════════════════════════════════════════════════════════════
+# =============================================================================
 # VEGAS LINE PROCESSING
-# ═════════════════════════════════════════════════════════════════════════════
+# =============================================================================
 
 def _build_vegas_name_to_kaggle_map(
     teams: pd.DataFrame,
@@ -182,7 +186,7 @@ def load_vegas_lines() -> pd.DataFrame:
         # Check required columns exist
         missing = [c for c in ["date", "home", "road", "line"] if c not in df.columns]
         if missing:
-            logger.warning("Skipping %s — missing columns: %s", fpath.name, missing)
+            logger.warning("Skipping %s -- missing columns: %s", fpath.name, missing)
             continue
 
         df = df[[c for c in keep if c in df.columns]].copy()
@@ -335,9 +339,9 @@ def compute_vegas_features(
     return result, name_resolution
 
 
-# ═════════════════════════════════════════════════════════════════════════════
+# =============================================================================
 # v3 HELPER FUNCTIONS
-# ═════════════════════════════════════════════════════════════════════════════
+# =============================================================================
 
 def _build_vegas_team_records_with_dates(vegas_df, name_resolution):
     """Build per-team game records with dates from raw Vegas data.
@@ -407,9 +411,9 @@ def _get_top_n_team_ids(kenpom, kp_to_kaggle, massey, season, n=100):
     return set()
 
 
-# ═════════════════════════════════════════════════════════════════════════════
+# =============================================================================
 # REUSE EXISTING MODEL INFRASTRUCTURE
-# ═════════════════════════════════════════════════════════════════════════════
+# =============================================================================
 
 # Import functions from the original enhanced model
 from src.enhanced_model import (
@@ -428,9 +432,9 @@ from src.enhanced_model import (
 )
 
 
-# ═════════════════════════════════════════════════════════════════════════════
+# =============================================================================
 # WEIGHTED LOSO CV
-# ═════════════════════════════════════════════════════════════════════════════
+# =============================================================================
 
 def leave_one_season_out_cv_weighted(
     feature_matrix: pd.DataFrame,
@@ -490,6 +494,34 @@ def leave_one_season_out_cv_weighted(
         )
         y_prob = model.predict_proba(X_test)[:, 1]
 
+        # Optional: save full pairwise probs for the year's field (backtest).
+        import os as _os
+        from pathlib import Path as _Path
+        _pw_out = _os.environ.get("MM_PAIRWISE_OUT")
+        if _pw_out:
+            _field = sorted(set(test_tourney["WTeamID"]) | set(test_tourney["LTeamID"]))
+            _fm_yr = feature_matrix[feature_matrix["Season"] == holdout].set_index("TeamID")
+            _have_feats = [t for t in _field if t in _fm_yr.index]
+            _pair_diffs, _pair_ids = [], []
+            for _i in range(len(_have_feats)):
+                for _j in range(_i + 1, len(_have_feats)):
+                    _a, _b = _have_feats[_i], _have_feats[_j]
+                    _av = _fm_yr.loc[_a, feature_cols].values.astype(float)
+                    _bv = _fm_yr.loc[_b, feature_cols].values.astype(float)
+                    _pair_diffs.append(_av - _bv)
+                    _pair_ids.append((_a, _b))
+            if _pair_diffs:
+                _pdf = pd.DataFrame(_pair_diffs, columns=feature_cols).fillna(medians)
+                _pp = model.predict_proba(_pdf)[:, 1]
+                _out = pd.DataFrame({
+                    "season": holdout,
+                    "team_a": [a for a, _ in _pair_ids],
+                    "team_b": [b for _, b in _pair_ids],
+                    "p_a_wins": _pp,
+                })
+                _out.to_csv(_pw_out, mode="a", index=False,
+                            header=not _Path(_pw_out).exists())
+
         season_loss = float(sklearn_log_loss(y_test, y_prob))
         season_brier = float(np.mean((y_prob - y_test.values) ** 2))
         season_acc = float((y_prob.round() == y_test).mean())
@@ -517,18 +549,18 @@ def leave_one_season_out_cv_weighted(
     }
 
 
-# ═════════════════════════════════════════════════════════════════════════════
+# =============================================================================
 # MAIN
-# ═════════════════════════════════════════════════════════════════════════════
+# =============================================================================
 
 def main():
     overall_start = time.time()
 
     print("\n" + "=" * 70)
-    print("ENHANCED MODEL v3 — Late-Season Features, Weighted Training, Line Blending")
+    print("ENHANCED MODEL v3 -- Late-Season Features, Weighted Training, Line Blending")
     print("=" * 70)
 
-    # ── Step 1: Load all base data ────────────────────────────────────────
+    # -- Step 1: Load all base data ----------------------------------------
     data = load_all_data()
 
     # Load conference tournament data (new in v3)
@@ -537,18 +569,22 @@ def main():
     )
     print(f"  Conference tourney   : {len(data['conf_tourney']):,}")
 
-    # ── Build KenPom -> Kaggle map early (needed for top-N filtering) ─────
+    # Load team-coach mapping (for v4 coach features)
+    data["team_coaches"] = pd.read_csv(MANIA_DIR / "MTeamCoaches.csv")
+    print(f"  Team-coach rows      : {len(data['team_coaches']):,}")
+
+    # -- Build KenPom -> Kaggle map early (needed for top-N filtering) -----
     kp_to_kaggle = build_kenpom_to_kaggle_map(
         data["kenpom"], data["teams"], data["spellings"]
     )
     print(f"  KenPom->Kaggle map   : {len(kp_to_kaggle)} teams mapped")
 
-    # ── Step 2: Compute base features (same as enhanced_model.py) ─────────
+    # -- Step 2: Compute base features (same as enhanced_model.py) ---------
     feature_matrix = compute_all_features(data)
 
-    # ── Step 3: Load and compute Vegas features ───────────────────────────
+    # -- Step 3: Load and compute Vegas features ---------------------------
     print("\n" + "=" * 70)
-    print("STEP 3 — Loading and computing Vegas line features")
+    print("STEP 3 -- Loading and computing Vegas line features")
     print("=" * 70)
 
     vegas_df = load_vegas_lines()
@@ -558,9 +594,9 @@ def main():
         vegas_df, data["teams"], data["spellings"]
     )
 
-    # ── Step 3a: Merge Vegas features into feature matrix ─────────────────
+    # -- Step 3a: Merge Vegas features into feature matrix -----------------
     print("\n" + "=" * 70)
-    print("STEP 3a — Merging Vegas features into feature matrix")
+    print("STEP 3a -- Merging Vegas features into feature matrix")
     print("=" * 70)
 
     pre_merge_cols = len(feature_matrix.columns)
@@ -579,9 +615,9 @@ def main():
     print(f"  Teams with Vegas data: {n_with_vegas} / {n_total} ({100*n_with_vegas/n_total:.1f}%)")
     print(f"  Vegas feature columns: {vegas_cols}")
 
-    # ── Step 3b: Compute new v3 features ──────────────────────────────────
+    # -- Step 3b: Compute new v3 features ----------------------------------
     print("\n" + "=" * 70)
-    print("STEP 3b — Computing late-season, trajectory, conf tourney, and Vegas trend features")
+    print("STEP 3b -- Computing late-season, trajectory, conf tourney, and Vegas trend features")
     print("=" * 70)
 
     # Build Vegas team records with dates for the trend computation
@@ -658,17 +694,33 @@ def main():
         new_feature_names.extend(["vegas_late_spread_delta"])
         print(f"  Vegas trend features: {len(vegas_trend_df):,} team-seasons")
 
+    # Coach tournament-history features (cross-season cumulative).
+    coach_df = compute_coach_features(data["tourney"], data["team_coaches"])
+    if not coach_df.empty:
+        feature_matrix = feature_matrix.merge(
+            coach_df, on=["TeamID", "Season"], how="left"
+        )
+        coach_feat_names = ["coach_career_games", "coach_career_wins",
+                             "coach_career_winpct", "coach_career_f4_apps",
+                             "coach_career_champs", "coach_career_seasons"]
+        new_feature_names.extend(coach_feat_names)
+        print(f"  Coach features: {len(coach_df):,} team-seasons")
+
+    # quality_wins block removed: 22-season backtest showed -93 bracket pts vs
+    # the v3+coach baseline, with F4 accuracy dropping 9pp. Signal already
+    # captured by KenPom/SOS features.
+
     print(f"  New v3 feature columns: {new_feature_names}")
 
-    # ── Step 4: Get feature columns and prepare data ──────────────────────
+    # -- Step 4: Get feature columns and prepare data ----------------------
     feature_cols = get_feature_cols(feature_matrix)
     print(f"\n  Total feature columns ({len(feature_cols)}):")
     for i in range(0, len(feature_cols), 6):
         print(f"    {', '.join(feature_cols[i:i+6])}")
 
-    # ── Step 5: Build weighted matchup training data ──────────────────────
+    # -- Step 5: Build weighted matchup training data ----------------------
     print("\n" + "=" * 70)
-    print("STEP 5 — Building weighted matchup training data")
+    print("STEP 5 -- Building weighted matchup training data")
     print("=" * 70)
 
     tourney = data["tourney"]
@@ -709,9 +761,9 @@ def main():
     print(f"  Training samples : {len(X_all):,}  (tourney: {n_tourney}, supplemental: {n_supplemental})")
     print(f"  Features used    : {len(feature_cols)}")
 
-    # ── Step 6: LOSO CV with default params (weighted) ────────────────────
+    # -- Step 6: LOSO CV with default params (weighted) --------------------
     print("\n" + "=" * 70)
-    print("STEP 6 — Leave-one-season-out CV (default params, weighted)")
+    print("STEP 6 -- Leave-one-season-out CV (default params, weighted)")
     print("=" * 70)
 
     # Fill NaN in feature matrix for CV
@@ -733,18 +785,24 @@ def main():
     print(f"  Mean Accuracy  : {cv_default['mean_accuracy']:.3f}")
     print(f"  Mean AUC       : {cv_default['mean_auc']:.4f}")
 
-    # ── Step 7: Optuna hyperparameter tuning ──────────────────────────────
+    # -- Step 7: Optuna hyperparameter tuning ------------------------------
     print("\n" + "=" * 70)
-    print("STEP 7 — Optuna hyperparameter tuning (30 trials)")
+    print("STEP 7 -- Optuna hyperparameter tuning (30 trials)")
     print("=" * 70)
 
-    from src.models.tuning import tune_hyperparameters
-    best_params = tune_hyperparameters(X_all, y_all, n_trials=30, random_seed=42)
-    print(f"  Best params: {best_params}")
+    import os
+    if os.environ.get("MM_TUNED_PARAMS_V3"):
+        import json as _json
+        best_params = _json.loads(os.environ["MM_TUNED_PARAMS_V3"])
+        print(f"  Using cached tuned params from env (skipping Optuna): {best_params}")
+    else:
+        from src.models.tuning import tune_hyperparameters
+        best_params = tune_hyperparameters(X_all, y_all, n_trials=30, random_seed=42)
+        print(f"  Best params: {best_params}")
 
-    # ── Step 8: Re-evaluate with tuned params (weighted) ──────────────────
+    # -- Step 8: Re-evaluate with tuned params (weighted) ------------------
     print("\n" + "=" * 70)
-    print("STEP 8 — Leave-one-season-out CV (tuned params, weighted)")
+    print("STEP 8 -- Leave-one-season-out CV (tuned params, weighted)")
     print("=" * 70)
 
     cv_tuned = leave_one_season_out_cv_weighted(
@@ -753,6 +811,8 @@ def main():
         xgb_params=best_params, random_seed=42,
         supplemental_weight=0.25,
     )
+    cv_tuned["per_season"].to_csv("output/cv_per_season_v3.csv", index=False)
+    print("  Saved: output/cv_per_season_v3.csv")
 
     per_season = cv_tuned["per_season"]
     print(f"\n{'Season':>8}  {'LogLoss':>9}  {'Brier':>7}  {'Accuracy':>9}  {'AUC':>7}  {'#Games':>7}")
@@ -770,7 +830,7 @@ def main():
         f"{cv_tuned['mean_auc']:>7.4f}"
     )
 
-    # ── Model comparison ──────────────────────────────────────────────────
+    # -- Model comparison --------------------------------------------------
     print("\n" + "=" * 70)
     print("MODEL COMPARISON: v2 (enhanced + Vegas) vs v3 (+ late-season, weighted)")
     print("=" * 70)
@@ -794,9 +854,9 @@ def main():
     else:
         print(f"\n  Note: Log loss did not improve (v2 {baseline_v2_ll:.4f} vs v3 {new_ll:.4f})")
 
-    # ── Step 9: Train final model (with weights) ─────────────────────────
+    # -- Step 9: Train final model (with weights) -------------------------
     print("\n" + "=" * 70)
-    print("STEP 9 — Training final model on all historical data (weighted)")
+    print("STEP 9 -- Training final model on all historical data (weighted)")
     print("=" * 70)
 
     from src.models.train import train_model
@@ -806,9 +866,9 @@ def main():
     )
     print("  Final model trained successfully (with sample weights).")
 
-    # ── Step 10: Generate 2026 predictions ────────────────────────────────
+    # -- Step 10: Generate 2026 predictions --------------------------------
     print("\n" + "=" * 70)
-    print("STEP 10 — Loading 2026 bracket and preparing predictions")
+    print("STEP 10 -- Loading 2026 bracket and preparing predictions")
     print("=" * 70)
 
     # Load actual bracket
@@ -858,9 +918,9 @@ def main():
     else:
         print(f"  All {len(bracket_team_ids)} bracket teams found in feature matrix.")
 
-    # ── Step 11: Monte Carlo simulation ───────────────────────────────────
+    # -- Step 11: Monte Carlo simulation -----------------------------------
     print("\n" + "=" * 70)
-    print("STEP 11 — Pre-computing pairwise win probabilities")
+    print("STEP 11 -- Pre-computing pairwise win probabilities")
     print("=" * 70)
 
     n_teams = len(bracket_kaggle)
@@ -868,7 +928,7 @@ def main():
     win_prob = precompute_win_probs(bracket_kaggle, fm_2026_tourney, feature_cols, final_model)
     print(f"  Done. Lookup table has {len(win_prob):,} entries.")
 
-    # ── Step 11b: R64 line blending ───────────────────────────────────────
+    # -- Step 11b: R64 line blending ---------------------------------------
     r64_lines = _build_r64_lines(vegas_df, name_resolution, bracket_kaggle)
     if r64_lines:
         print(f"  Blending {len(r64_lines)} R64 game-specific Vegas lines (weight=0.35)...")
@@ -878,7 +938,7 @@ def main():
         print(f"  No R64 lines found for blending.")
 
     print("\n" + "=" * 70)
-    print("STEP 12 — Monte Carlo simulation (10,000 iterations)")
+    print("STEP 12 -- Monte Carlo simulation (10,000 iterations)")
     print("=" * 70)
 
     print("  Running simulation...")
@@ -895,20 +955,20 @@ def main():
         sim_results["n_simulations"],
     )
 
-    # ── Results ──────────────────────────────────────────────────────────
+    # -- Results ----------------------------------------------------------
     print("\n" + "=" * 70)
-    print("RESULTS — Championship Probabilities (Top 15)")
+    print("RESULTS -- Championship Probabilities (Top 15)")
     print("=" * 70)
     print_champion_probs(advancement_probs, bracket_kaggle, top_n=15)
 
     print("\n" + "=" * 70)
-    print("RESULTS — Advancement Probabilities (Top 30)")
+    print("RESULTS -- Advancement Probabilities (Top 30)")
     print("=" * 70)
     print_advancement_table(advancement_probs, bracket_kaggle, top_n=30)
 
-    # ── Bracket picks ────────────────────────────────────────────────────
+    # -- Bracket picks ----------------------------------------------------
     print("\n" + "=" * 70)
-    print("RESULTS — Bracket Picks")
+    print("RESULTS -- Bracket Picks")
     print("=" * 70)
 
     from src.bracket.strategies import chalk_bracket, expected_value_bracket
@@ -938,9 +998,9 @@ def main():
             seed = id_to_seed.get(tid, "?")
             print(f"    ({seed:>2}) {name}")
 
-    # ── Step 13: Export results ───────────────────────────────────────────
+    # -- Step 13: Export results -------------------------------------------
     print("\n" + "=" * 70)
-    print("STEP 13 — Exporting results")
+    print("STEP 13 -- Exporting results")
     print("=" * 70)
 
     # Export advancement probabilities CSV
@@ -993,9 +1053,9 @@ def main():
         json.dump(compact, f, separators=(",", ":"))
     print(f"  Saved: {compact_path}")
 
-    # ── Step 14: Update bracket.html ─────────────────────────────────────
+    # -- Step 14: Update bracket.html -------------------------------------
     print("\n" + "=" * 70)
-    print("STEP 14 — Updating bracket.html")
+    print("STEP 14 -- Updating bracket.html")
     print("=" * 70)
 
     html_path = OUTPUT_DIR / "bracket.html"
@@ -1019,16 +1079,16 @@ def main():
     else:
         print(f"  WARNING: bracket.html not found at {html_path}")
 
-    # ── Step 15: Regenerate Kaggle submission ─────────────────────────────
+    # -- Step 15: Regenerate Kaggle submission -----------------------------
     print("\n" + "=" * 70)
-    print("STEP 15 — Regenerating Kaggle submission files")
+    print("STEP 15 -- Regenerating Kaggle submission files")
     print("=" * 70)
 
     _regenerate_kaggle_submission(
         data, feature_matrix, feature_cols, fm_filled, best_params
     )
 
-    # ── Final summary ────────────────────────────────────────────────────
+    # -- Final summary ----------------------------------------------------
     elapsed = time.time() - overall_start
     print("\n" + "=" * 70)
     print("FINAL SUMMARY")
@@ -1073,7 +1133,7 @@ def _regenerate_kaggle_submission(data, feature_matrix, feature_cols, fm_filled,
         compute_conf_strength,
     )
 
-    # ── Load women's data (reuse from kaggle_submission) ──────────────────
+    # -- Load women's data (reuse from kaggle_submission) ------------------
     w_reg = pd.read_csv(MANIA_DIR / "WRegularSeasonDetailedResults.csv")
     w_tourney = pd.read_csv(MANIA_DIR / "WNCAATourneyDetailedResults.csv")
     w_seeds = pd.read_csv(MANIA_DIR / "WNCAATourneySeeds.csv")
@@ -1083,7 +1143,7 @@ def _regenerate_kaggle_submission(data, feature_matrix, feature_cols, fm_filled,
     sample_s1 = pd.read_csv(MANIA_DIR / "SampleSubmissionStage1.csv")
     sample_s2 = pd.read_csv(MANIA_DIR / "SampleSubmissionStage2.csv")
 
-    # ── Men's model: use existing v3 feature matrix ───────────────────────
+    # -- Men's model: use existing v3 feature matrix -----------------------
     print("  Building men's feature matrix for Kaggle submission...")
 
     # Build full men's feature matrix (all D1 teams) using kaggle_submission infrastructure
@@ -1137,7 +1197,7 @@ def _regenerate_kaggle_submission(data, feature_matrix, feature_cols, fm_filled,
     men_model = train_xgb_model(X_men, y_men)
     print(f"  Men's model trained ({len(X_men)} samples, {len(men_feature_cols)} features)")
 
-    # ── Women's model (unchanged) ────────────────────────────────────────
+    # -- Women's model (unchanged) ----------------------------------------
     print("  Building women's feature matrix...")
     women_seasons = sorted(s for s in w_reg["Season"].unique() if s >= 2010)
     women_fm = build_all_team_features(
@@ -1170,7 +1230,7 @@ def _regenerate_kaggle_submission(data, feature_matrix, feature_cols, fm_filled,
     women_model = train_xgb_model(X_women, y_women)
     print(f"  Women's model trained ({len(X_women)} samples, {len(women_feature_cols)} features)")
 
-    # ── Generate predictions ──────────────────────────────────────────────
+    # -- Generate predictions ----------------------------------------------
     print("  Generating predictions...")
 
     for stage_name, sample_df, out_name in [

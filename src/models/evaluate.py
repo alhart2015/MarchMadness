@@ -56,6 +56,34 @@ def leave_one_season_out_cv(
         model = train_model(X_train, y_train, random_seed=random_seed, xgb_params=xgb_params)
         y_prob = model.predict_proba(X_test)[:, 1]
 
+        # Optional: save full pairwise probs for the year's field (backtest).
+        import os as _os
+        from pathlib import Path as _Path
+        _pw_out = _os.environ.get("MM_PAIRWISE_OUT")
+        if _pw_out:
+            _field = sorted(set(test_tourney["WTeamID"]) | set(test_tourney["LTeamID"]))
+            _fm_yr = feature_matrix[feature_matrix["Season"] == holdout_season].set_index("TeamID")
+            _have_feats = [t for t in _field if t in _fm_yr.index]
+            _pair_diffs, _pair_ids = [], []
+            for _i in range(len(_have_feats)):
+                for _j in range(_i + 1, len(_have_feats)):
+                    _a, _b = _have_feats[_i], _have_feats[_j]
+                    _av = _fm_yr.loc[_a, feature_cols].values.astype(float)
+                    _bv = _fm_yr.loc[_b, feature_cols].values.astype(float)
+                    _pair_diffs.append(_av - _bv)
+                    _pair_ids.append((_a, _b))
+            if _pair_diffs:
+                _pdf = pd.DataFrame(_pair_diffs, columns=feature_cols)
+                _pp = model.predict_proba(_pdf)[:, 1]
+                _out = pd.DataFrame({
+                    "season": holdout_season,
+                    "team_a": [a for a, _ in _pair_ids],
+                    "team_b": [b for _, b in _pair_ids],
+                    "p_a_wins": _pp,
+                })
+                _out.to_csv(_pw_out, mode="a", index=False,
+                            header=not _Path(_pw_out).exists())
+
         season_loss = compute_log_loss(y_test, y_prob)
         season_brier = compute_brier_score(y_test, y_prob)
         season_acc = float((y_prob.round() == y_test).mean())
