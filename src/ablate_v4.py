@@ -17,6 +17,13 @@ from typing import Optional
 
 import pandas as pd
 
+# Path setup: allow `python src/ablate_v4.py ...` invocation by ensuring the
+# project root is on sys.path before importing from `src.*`. Matches the
+# pattern used in src/enhanced_model_v3.py.
+_ROOT = Path(__file__).resolve().parent.parent
+if str(_ROOT) not in sys.path:
+    sys.path.insert(0, str(_ROOT))
+
 from src.score_chalk_brackets import score_pairwise_path
 
 
