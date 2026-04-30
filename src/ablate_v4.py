@@ -37,11 +37,20 @@ GROUP_ABLATIONS = {
               "coach_career_champs", "coach_career_seasons"],
 }
 
+# Bust teams from 2026 v4 high-confidence misses. Each was eliminated in
+# `bust_round`; the `advance_key` is the round whose advancement-dict entry
+# stores P(team won that round's game) -- i.e. P(advance past bust round).
+# Naming: must exactly match the 'name' field in output/bracket_data.json.
+# (Iowa St. has the period; using "Iowa State" silently returns None.)
+# Semantics: per src/bracket/simulator.py:71-80, advancement[team][round] is
+# incremented when the team WINS round-N's game, so advancement["R32"] is
+# P(won R32 game) = P(advance past R32). The advance_key therefore equals
+# the bust_round, NOT the round after.
 BUST_TEAMS = [
-    {"name": "Vanderbilt", "bust_round": "R32", "advance_key": "S16"},
-    {"name": "Iowa State", "bust_round": "S16", "advance_key": "E8"},
-    {"name": "Texas Tech", "bust_round": "R32", "advance_key": "S16"},
-    {"name": "Duke",       "bust_round": "E8",  "advance_key": "F4"},
+    {"name": "Vanderbilt", "bust_round": "R32", "advance_key": "R32"},
+    {"name": "Iowa St.",   "bust_round": "S16", "advance_key": "S16"},
+    {"name": "Texas Tech", "bust_round": "R32", "advance_key": "R32"},
+    {"name": "Duke",       "bust_round": "E8",  "advance_key": "E8"},
 ]
 
 OUTPUT_DIR = Path("output")

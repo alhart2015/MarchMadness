@@ -30,14 +30,20 @@ def test_coach_group_features():
 
 
 def test_bust_teams_metric_keys():
-    # Each bust must declare bust_round + advance_key (= round AFTER bust).
+    # Each bust must declare bust_round + advance_key.
+    # advance_key == bust_round because advancement[team][R] in the simulator
+    # counts wins of round-R games (= advance past round R). Names must match
+    # bracket_data.json exactly: Iowa St. has the period, not "Iowa State".
     assert {b["name"] for b in BUST_TEAMS} == {
-        "Vanderbilt", "Iowa State", "Texas Tech", "Duke",
+        "Vanderbilt", "Iowa St.", "Texas Tech", "Duke",
     }
-    expected = {"Vanderbilt": "S16", "Iowa State": "E8",
-                "Texas Tech": "S16", "Duke": "F4"}
+    expected = {"Vanderbilt": "R32", "Iowa St.": "S16",
+                "Texas Tech": "R32", "Duke": "E8"}
     for b in BUST_TEAMS:
         assert b["advance_key"] == expected[b["name"]]
+        assert b["advance_key"] == b["bust_round"], (
+            "advance_key must equal bust_round (advancement[R] = P(won R game))"
+        )
 
 
 def test_parse_advance_probs_extracts_named_team(tmp_path):
