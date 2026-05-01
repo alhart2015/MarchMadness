@@ -7,7 +7,7 @@ import pytest
 from src.features.efficiency import compute_adjusted_efficiency
 from src.features.four_factors import compute_four_factors
 from src.features.feature_matrix import build_feature_matrix
-from src.models.matchup import build_matchup_data
+from src.models.matchup import build_matchup_data, expand_feature_cols
 from src.models.train import train_model, predict_matchup
 from src.bracket.simulator import simulate_tournament, get_advancement_probabilities
 from src.bracket.strategies import chalk_bracket
@@ -92,8 +92,10 @@ def test_full_pipeline_synthetic():
     bracket = pd.DataFrame(bracket_rows)
     current = full_matrix[full_matrix["Season"] == 2023]
 
+    diff_cols = expand_feature_cols(feature_cols)
+
     def predict_fn(a_feats, b_feats):
-        diff = {c: a_feats[c] - b_feats[c] for c in feature_cols}
+        diff = {dc: a_feats[c] - b_feats[c] for c, dc in zip(feature_cols, diff_cols)}
         return predict_matchup(model, pd.DataFrame([diff]))
 
     results = simulate_tournament(bracket, current, predict_fn, feature_cols, n_simulations=100, random_seed=42)
