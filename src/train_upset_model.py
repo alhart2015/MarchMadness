@@ -179,3 +179,52 @@ def fit_upset_model(
     )
     model.fit(X, y, sample_weight=sample_weight)
     return model
+
+
+def double_loso_eval(per_game: pd.DataFrame) -> pd.DataFrame:
+    """For each test season, train v9 on all-other-seasons and evaluate on it.
+
+    Mirrors src/train_stage2.py:double_loso_eval. Differences:
+    - Uses upset_features / fit_upset_model / compute_sample_weights.
+    - Reports v8-style metrics (log loss, accuracy) but for v9.
+
+    Returns DataFrame with per-season metrics:
+        season, n_games, ll_v9, acc_v9.
+
+    Per-row stage-1 (v4) predictions remain available in per_game; the
+    caller is responsible for joining v4 / v8 numbers if it wants the
+    full head-to-head table.
+    """
+    seasons = sorted(per_game["season"].unique())
+    results = []
+
+    for test_season in seasons:
+        train = per_game[per_game.season != test_season]
+        test = per_game[per_game.season == test_season]
+        if len(train) == 0 or len(test) == 0:
+            continue
+
+        X_train = upset_features(train)
+        y_train = train["label"].values
+        w_train = compute_sample_weights(train)
+        X_test = upset_features(test)
+        y_test = test["label"].values
+
+        model = fit_upset_model(X_train, y_train, w_train)
+        p_v9 = model.predict_proba(X_test)[:, 1]
+
+        # Keep only one row per game (winner perspective) for clean reporting,
+        # matching v8's convention.
+        is_winner = test["label"].values == 1
+        if is_winner.sum() == 0:
+            continue
+        ll_v9 = sklearn_log_loss(y_test[is_winner], p_v9[is_winner], labels=[0, 1])
+        acc_v9 = float((p_v9[is_winner] > 0.5).mean())
+
+        results.append({
+            "season": test_season,
+            "n_games": int(is_winner.sum()),
+            "ll_v9": ll_v9, "acc_v9": acc_v9,
+        })
+
+    return pd.DataFrame(results).sort_values("season").reset_index(drop=True)

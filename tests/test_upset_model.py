@@ -255,3 +255,55 @@ def test_fit_upset_model_returns_classifier_with_predict_proba():
     p = model.predict_proba(X)[:, 1]
     assert p.shape == (n,)
     assert np.all((p >= 0.0) & (p <= 1.0))
+
+
+# -----------------------------------------------------------------------------
+# double_loso_eval: leakage guard
+# -----------------------------------------------------------------------------
+
+from src.train_upset_model import double_loso_eval
+
+
+def test_double_loso_eval_never_trains_on_test_season(monkeypatch):
+    """For each test season Y, the training fold passed to fit_upset_model
+    must contain zero rows from season Y. Patch fit_upset_model to capture
+    the training X / y / w it sees and assert the season filter held.
+    """
+    # Three seasons, one game each.
+    rows = []
+    for season in [2021, 2022, 2023]:
+        rows.append({
+            "season": season, "team_a": 1, "team_b": 2,
+            "p_stage1": 0.7, "seed_a": 5, "seed_b": 12,
+            "abs_seed_diff": 7, "upset": True, "label": 1,
+        })
+        rows.append({
+            "season": season, "team_a": 2, "team_b": 1,
+            "p_stage1": 0.3, "seed_a": 12, "seed_b": 5,
+            "abs_seed_diff": 7, "upset": True, "label": 0,
+        })
+    per_game = pd.DataFrame(rows)
+
+    captured = []
+
+    class _StubModel:
+        def predict_proba(self, X):
+            # Probability that mirrors p_stage1 input (column 0).
+            p = X[:, 0]
+            return np.column_stack([1 - p, p])
+
+    def _stub_fit(X, y, w, seed=42):
+        captured.append({"n_rows": len(X)})
+        return _StubModel()
+
+    monkeypatch.setattr("src.train_upset_model.fit_upset_model", _stub_fit)
+
+    # Run eval -- should call _stub_fit once per test season (3 times).
+    eval_df = double_loso_eval(per_game)
+
+    # 3 fits, each trained on the 4 rows from the OTHER 2 seasons (2 rows/game * 2 games).
+    assert len(captured) == 3
+    for c in captured:
+        assert c["n_rows"] == 4
+
+    assert set(eval_df["season"].tolist()) == {2021, 2022, 2023}
