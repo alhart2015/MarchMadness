@@ -207,12 +207,19 @@ def fit_upset_model(
     return model
 
 
-def double_loso_eval(per_game: pd.DataFrame) -> pd.DataFrame:
+def double_loso_eval(
+    per_game: pd.DataFrame,
+    w_upset: float = W_UPSET,
+    w_miss: float = W_MISS,
+) -> pd.DataFrame:
     """For each test season, train v9 on all-other-seasons and evaluate on it.
 
     Mirrors src/train_stage2.py:double_loso_eval. Differences:
     - Uses upset_features / fit_upset_model / compute_sample_weights.
     - Reports v8-style metrics (log loss, accuracy) but for v9.
+
+    Weights are forwarded to compute_sample_weights; defaults preserve
+    canonical 3.0 / 4.0 behavior.
 
     Returns DataFrame with per-season metrics:
         season, n_games, ll_v9, acc_v9.
@@ -232,7 +239,7 @@ def double_loso_eval(per_game: pd.DataFrame) -> pd.DataFrame:
 
         X_train = upset_features(train)
         y_train = train["label"].values
-        w_train = compute_sample_weights(train)
+        w_train = compute_sample_weights(train, w_upset=w_upset, w_miss=w_miss)
         X_test = upset_features(test)
         y_test = test["label"].values
 

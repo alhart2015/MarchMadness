@@ -366,3 +366,90 @@ def test_build_v9_pairwise_writes_expected_schema(tmp_path):
     assert set(out["season"].tolist()) == {2022, 2023}
     # Probabilities in [0, 1].
     assert ((out["p_a_wins"] >= 0.0) & (out["p_a_wins"] <= 1.0)).all()
+
+
+# -----------------------------------------------------------------------------
+# double_loso_eval / build_v9_pairwise: weight threading
+# -----------------------------------------------------------------------------
+
+
+def test_double_loso_eval_threads_weights_to_sample_weight(monkeypatch):
+    """When called with w_upset=1.0, w_miss=0.0, the sample_weight array
+    passed to fit_upset_model is uniform (all ones). This is the
+    sanity-check anchor for the v9 weight sweep.
+    """
+    rows = []
+    for season in [2021, 2022, 2023]:
+        # One upset + one non-upset per season.
+        rows.extend([
+            {"season": season, "team_a": 1, "team_b": 2,
+             "p_stage1": 0.7, "seed_a": 5, "seed_b": 12,
+             "abs_seed_diff": 7, "upset": True, "round": 1, "label": 1},
+            {"season": season, "team_a": 2, "team_b": 1,
+             "p_stage1": 0.3, "seed_a": 12, "seed_b": 5,
+             "abs_seed_diff": 7, "upset": True, "round": 1, "label": 0},
+            {"season": season, "team_a": 3, "team_b": 4,
+             "p_stage1": 0.9, "seed_a": 1, "seed_b": 16,
+             "abs_seed_diff": 15, "upset": False, "round": 1, "label": 1},
+            {"season": season, "team_a": 4, "team_b": 3,
+             "p_stage1": 0.1, "seed_a": 16, "seed_b": 1,
+             "abs_seed_diff": 15, "upset": False, "round": 1, "label": 0},
+        ])
+    per_game = pd.DataFrame(rows)
+
+    captured_weights = []
+
+    class _StubModel:
+        def predict_proba(self, X):
+            p = X[:, 0]
+            return np.column_stack([1 - p, p])
+
+    def _stub_fit(X, y, w, seed=42):
+        captured_weights.append(np.array(w, copy=True))
+        return _StubModel()
+
+    monkeypatch.setattr("src.train_upset_model.fit_upset_model", _stub_fit)
+
+    double_loso_eval(per_game, w_upset=1.0, w_miss=0.0)
+
+    assert len(captured_weights) == 3
+    for w in captured_weights:
+        assert np.allclose(w, 1.0), f"expected uniform weights, got {w}"
+
+
+def test_double_loso_eval_default_weights_match_module_globals(monkeypatch):
+    """Default call (no w_upset/w_miss) preserves the existing 3.0/4.0
+    behavior: the captured sample weights match
+    compute_sample_weights(train, w_upset=3.0, w_miss=4.0).
+    """
+    rows = []
+    for season in [2021, 2022]:
+        rows.extend([
+            {"season": season, "team_a": 1, "team_b": 2,
+             "p_stage1": 0.7, "seed_a": 5, "seed_b": 12,
+             "abs_seed_diff": 7, "upset": True, "round": 1, "label": 1},
+            {"season": season, "team_a": 2, "team_b": 1,
+             "p_stage1": 0.3, "seed_a": 12, "seed_b": 5,
+             "abs_seed_diff": 7, "upset": True, "round": 1, "label": 0},
+        ])
+    per_game = pd.DataFrame(rows)
+
+    captured_weights = []
+
+    class _StubModel:
+        def predict_proba(self, X):
+            return np.column_stack([1 - X[:, 0], X[:, 0]])
+
+    def _stub_fit(X, y, w, seed=42):
+        captured_weights.append(np.array(w, copy=True))
+        return _StubModel()
+
+    monkeypatch.setattr("src.train_upset_model.fit_upset_model", _stub_fit)
+    double_loso_eval(per_game)  # default args
+
+    # Re-derive expected weights from compute_sample_weights with the
+    # canonical defaults.
+    for capt, season in zip(captured_weights, sorted(per_game.season.unique())):
+        train = per_game[per_game.season != season]
+        expected = compute_sample_weights(train, w_upset=3.0, w_miss=4.0)
+        assert np.allclose(capt, expected)
