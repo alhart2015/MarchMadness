@@ -48,7 +48,7 @@ def test_build_matchup_data_feature_differences(feature_matrix, tourney_results)
     # First row: team 1 vs team 4 (winner perspective)
     # adj_em diff should be 20 - (-8) = 28
     first_win_row = X[y == 1].iloc[0]
-    assert abs(first_win_row["adj_em"]) > 0  # non-zero difference
+    assert abs(first_win_row["adj_em_diff"]) > 0  # non-zero difference
 
 
 def test_weighted_matchup_data_has_weights(feature_matrix, tourney_results):
