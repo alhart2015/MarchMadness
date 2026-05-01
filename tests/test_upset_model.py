@@ -710,3 +710,56 @@ def test_build_v9_pairwise_uses_real_round_at_apply(tmp_path, monkeypatch):
     # Both rows of the symmetric pair should be R1 = 1.0.
     assert np.allclose(rounds, 1.0), \
         f"expected round=1 at apply time, got {rounds}"
+
+
+# ---------------------------------------------------------------------------
+# upset_features feature_set parameterization
+# ---------------------------------------------------------------------------
+
+def _per_game_fixture():
+    """Minimal per-game DataFrame with the columns upset_features reads."""
+    return pd.DataFrame({
+        "p_stage1": [0.7, 0.3, 0.55, 0.45],
+        "seed_a":   [1.0, 16.0, 5.0, 12.0],
+        "seed_b":   [16.0, 1.0, 12.0, 5.0],
+        "abs_seed_diff": [15.0, 15.0, 7.0, 7.0],
+        "round": [1.0, 1.0, 2.0, 2.0],
+    })
+
+
+def test_upset_features_default_is_v9b():
+    """Default (no feature_set kwarg) returns the 7-feature v9-B matrix."""
+    X = upset_features(_per_game_fixture())
+    assert X.shape == (4, 7)
+
+
+def test_upset_features_v9b_explicit_matches_default():
+    """Passing feature_set='v9b' is bit-identical to the default."""
+    df = _per_game_fixture()
+    X_default = upset_features(df)
+    X_v9b = upset_features(df, feature_set="v9b")
+    assert np.array_equal(X_default, X_v9b)
+
+
+def test_upset_features_v9c_shape_5():
+    """feature_set='v9c' returns shape (n, 5): drops v4_confidence and
+    is_a_higher_seed."""
+    X = upset_features(_per_game_fixture(), feature_set="v9c")
+    assert X.shape == (4, 5)
+
+
+def test_upset_features_v9c_columns_match_v9b_subset():
+    """v9-C columns 0..4 must equal v9-B columns 0..4 elementwise.
+    The first 5 columns (p_stage1, seed_a, seed_b, abs_seed_diff, round)
+    are identical between variants; v9-B just appends 2 more.
+    """
+    df = _per_game_fixture()
+    X_v9b = upset_features(df, feature_set="v9b")
+    X_v9c = upset_features(df, feature_set="v9c")
+    assert np.array_equal(X_v9c, X_v9b[:, :5])
+
+
+def test_upset_features_invalid_feature_set_raises():
+    """Unknown feature_set values raise ValueError -- typos must fail fast."""
+    with pytest.raises(ValueError, match="feature_set"):
+        upset_features(_per_game_fixture(), feature_set="v9a")

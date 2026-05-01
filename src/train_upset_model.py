@@ -254,24 +254,31 @@ def compute_sample_weights(
     return base * upset_factor * miss_factor
 
 
-def upset_features(df: pd.DataFrame) -> np.ndarray:
-    """Pull the v9-B input matrix from a per-game DataFrame.
+def upset_features(df: pd.DataFrame, feature_set: str = "v9b") -> np.ndarray:
+    """Pull the v9 input matrix from a per-game DataFrame.
 
-    7 features:
-      p_stage1, seed_a, seed_b, abs_seed_diff,
-      round (1..6 for R64..Champ; 0 if unknown DayNum -- always 0 at
-        apply time because pairwise_v4.csv has no DayNum),
-      v4_confidence (|p_stage1 - 0.5|),
-      is_a_higher_seed (1.0 if seed_a < seed_b else 0.0).
+    feature_set:
+      "v9b" (default, 7 features): p_stage1, seed_a, seed_b, abs_seed_diff,
+        round (1..6 for R64..Champ; 0 if unknown DayNum / not in lookup),
+        v4_confidence (|p_stage1 - 0.5|),
+        is_a_higher_seed (1.0 if seed_a < seed_b else 0.0).
+      "v9c" (5 features): drops v4_confidence and is_a_higher_seed; keeps
+        the other five.
     """
+    if feature_set not in ("v9b", "v9c"):
+        raise ValueError(
+            f"unknown feature_set {feature_set!r}; must be 'v9b' or 'v9c'"
+        )
     p = df["p_stage1"].values.astype(float)
     sa = df["seed_a"].values.astype(float)
     sb = df["seed_b"].values.astype(float)
     diff = df["abs_seed_diff"].values.astype(float)
     rnd = df["round"].values.astype(float)
-    conf = np.abs(p - 0.5)
-    higher = (sa < sb).astype(float)
-    return np.column_stack([p, sa, sb, diff, rnd, conf, higher])
+    if feature_set == "v9b":
+        conf = np.abs(p - 0.5)
+        higher = (sa < sb).astype(float)
+        return np.column_stack([p, sa, sb, diff, rnd, conf, higher])
+    return np.column_stack([p, sa, sb, diff, rnd])
 
 
 def fit_upset_model(
