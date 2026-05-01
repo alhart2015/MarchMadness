@@ -67,6 +67,7 @@ def run_single_cell(
     results_csv: str,
     seeds_csv: str,
     out_dir: str,
+    slots_csv: str,
 ) -> dict:
     """Run one (w_upset, w_miss) cell of the sweep.
 
@@ -88,6 +89,7 @@ def run_single_cell(
 
     build_v9_pairwise(
         per_game, pairwise_v4_csv, seeds_csv, pairwise_csv_out,
+        slots_csv=slots_csv,
         w_upset=w_upset, w_miss=w_miss,
     )
 
@@ -137,6 +139,7 @@ def run_sweep(
     seeds_csv: str,
     out_dir: str,
     results_csv_path: str,
+    slots_csv: str,
 ) -> pd.DataFrame:
     """Run the full grid; write per-cell pairwise CSVs to out_dir and
     aggregate results to results_csv_path. Returns the results DataFrame
@@ -157,6 +160,7 @@ def run_sweep(
             results_csv=results_csv,
             seeds_csv=seeds_csv,
             out_dir=out_dir,
+            slots_csv=slots_csv,
         )
         print(f"  total_brkt_pts={m['total_brkt_pts']:.1f}, "
               f"ll={m['ll_loso_weighted_mean']:.4f}, "
@@ -189,6 +193,7 @@ def main():
     pairwise_v8 = "output/pairwise_v8.csv"
     seeds_csv = "data/raw/march-machine-learning-2026/MNCAATourneySeeds.csv"
     results_csv = "data/raw/march-machine-learning-2026/MNCAATourneyCompactResults.csv"
+    slots_csv = "data/raw/march-machine-learning-2026/MNCAATourneySlots.csv"
     out_dir = "output/v9_sweep"
     results_csv_path = "output/v9_sweep_results.csv"
 
@@ -199,6 +204,7 @@ def main():
         seeds_csv=seeds_csv,
         out_dir=out_dir,
         results_csv_path=results_csv_path,
+        slots_csv=slots_csv,
     )
 
     # Summary table.
