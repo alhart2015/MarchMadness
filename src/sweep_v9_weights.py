@@ -68,6 +68,7 @@ def run_single_cell(
     seeds_csv: str,
     out_dir: str,
     slots_csv: str,
+    feature_set: str = "v9b",
 ) -> dict:
     """Run one (w_upset, w_miss) cell of the sweep.
 
@@ -91,10 +92,11 @@ def run_single_cell(
         per_game, pairwise_v4_csv, seeds_csv, pairwise_csv_out,
         slots_csv=slots_csv,
         w_upset=w_upset, w_miss=w_miss,
+        feature_set=feature_set,
     )
 
     eval_df = double_loso_eval(
-        per_game, w_upset=w_upset, w_miss=w_miss
+        per_game, w_upset=w_upset, w_miss=w_miss, feature_set=feature_set
     )
     if len(eval_df) > 0 and "n_games" in eval_df.columns:
         n_total = float(eval_df["n_games"].sum())
@@ -140,6 +142,7 @@ def run_sweep(
     out_dir: str,
     results_csv_path: str,
     slots_csv: str,
+    feature_set: str = "v9b",
 ) -> pd.DataFrame:
     """Run the full grid; write per-cell pairwise CSVs to out_dir and
     aggregate results to results_csv_path. Returns the results DataFrame
@@ -161,6 +164,7 @@ def run_sweep(
             seeds_csv=seeds_csv,
             out_dir=out_dir,
             slots_csv=slots_csv,
+            feature_set=feature_set,
         )
         print(f"  total_brkt_pts={m['total_brkt_pts']:.1f}, "
               f"ll={m['ll_loso_weighted_mean']:.4f}, "
