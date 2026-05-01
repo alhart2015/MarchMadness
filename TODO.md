@@ -12,19 +12,26 @@
 
 ## Active queue
 
-1. **Ensemble of model classes.** XGBoost + logistic regression +
+1. **Production swap to v9-C.** Findings clear the spec's swap-in
+   bar (+43 vs v8, F4/E8 lens distinctly better). Separate follow-up
+   commit on `feat/v9-b-followup`: flip defaults to v9-C (W_UPSET=1.25,
+   W_MISS=0.0, 5-feature set), regenerate `output/pairwise_v9c.csv`,
+   point bracket pipeline at it, regenerate the 2026 chalk bracket and
+   spot-check the picks that flip. Findings:
+   `docs/notes/2026-05-01-v9c-feature-stripped.md`.
+2. **Ensemble of model classes.** XGBoost + logistic regression +
    small neural net averaged (or stacked). The TODO already had this
    under Tier C. The hypothesis: different model classes capture
    partially-uncorrelated error patterns. Risk: if all three see the
    same features and reach the same ~80% R64 / ~50-60% deep-round
    ceiling, the errors are highly correlated and ensembling won't help
-   much. Promoted to position #1 after upset-detection v9 LOSE.
-2. **External rankings (538, KenPom-public, BPI as features).** Note:
+   much. Position #2 after the v9-C swap lands.
+3. **External rankings (538, KenPom-public, BPI as features).** Note:
    we already have BPI, Sagarin, KenPom (POM), Bart Torvik (TRK), RPI
    via Massey ordinals (config.yaml lines 30-36). Truly external would
    be 538's tournament forecast or Vegas prop-bet predictions, which
    need data sourcing outside the Kaggle archive.
-3. **Roster-level returning-experience.** Player-level data is not in
+4. **Roster-level returning-experience.** Player-level data is not in
    the Kaggle Mania archive; would need an external roster CSV per
    season. Different signal from coach experience.
 
@@ -79,6 +86,19 @@
   Recommendation: candidate-only, not swap-in -- still within +20 of
   v8 (spec's "marginal" band: 10 < d <= 25). v8 stays in production.
   Findings: docs/notes/2026-05-01-v9-round-fix.md.
+- **v9-C feature-stripped variant -- SWAP CANDIDATE (2026-05-01).**
+  Parameterized `train_upset_model.py` with a `feature_set` arg;
+  v9-C drops `v4_confidence` and `is_a_higher_seed` (5 features:
+  v9-A's 4 + apply-time-correct round). Re-ran PR 8's identical
+  15-cell sweep on v9-C. WINNER: (W_UPSET=1.25, W_MISS=0.0) at
+  2713 brkt pts -- **+43 vs v8, +23 vs v9-B at the same cell**.
+  Anchor reproduces v8 exactly (delta 0). F4/E8 chalk accuracy
+  distinctly better than both v8 and v9-B (E8 58.6% vs 55.2%; F4
+  62.8% vs 60.5%). Profile durable: 6W-3L-13T over 22 seasons;
+  +27 even with the largest single-season win removed. Both
+  clauses of the spec's swap-in path are satisfied. Production
+  swap is a separate follow-up commit (Active queue #1).
+  Findings: docs/notes/2026-05-01-v9c-feature-stripped.md.
 
 
 
