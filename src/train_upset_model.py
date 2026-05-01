@@ -146,3 +146,36 @@ def compute_sample_weights(
     residual = df["label"].values.astype(float) - df["p_stage1"].values.astype(float)
     miss_factor = 1.0 + w_miss * (residual ** 2)
     return base * upset_factor * miss_factor
+
+
+def upset_features(df: pd.DataFrame) -> np.ndarray:
+    """Pull the v9 input matrix from a per-game DataFrame.
+
+    Same 4 features as v8 (src/train_stage2.py:stage2_features). The
+    differentiator from v8 is the sample weight, not the feature set.
+    """
+    return df[["p_stage1", "seed_a", "seed_b", "abs_seed_diff"]].values
+
+
+def fit_upset_model(
+    X: np.ndarray, y: np.ndarray, sample_weight: np.ndarray, seed: int = 42
+) -> xgb.XGBClassifier:
+    """Small XGBoost trained with upset-aware sample weights.
+
+    Same shape as v8's fit_stage2 (src/train_stage2.py): n_estimators=100,
+    max_depth=3, lr=0.05. Adds sample_weight at fit time. Capacity stays
+    low (~3000 training rows in the full backtest).
+    """
+    model = xgb.XGBClassifier(
+        n_estimators=100,
+        max_depth=3,
+        learning_rate=0.05,
+        subsample=0.9,
+        colsample_bytree=1.0,
+        reg_alpha=0.1,
+        reg_lambda=1.0,
+        random_state=seed,
+        eval_metric="logloss",
+    )
+    model.fit(X, y, sample_weight=sample_weight)
+    return model

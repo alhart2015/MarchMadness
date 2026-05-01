@@ -213,3 +213,45 @@ def test_weights_uses_correct_residual_for_loser_perspective():
     ])
     w = compute_sample_weights(df, w_upset=3.0, w_miss=4.0)
     assert w[0] == pytest.approx(w[1])
+
+
+# -----------------------------------------------------------------------------
+# upset_features + fit_upset_model
+# -----------------------------------------------------------------------------
+
+from src.train_upset_model import fit_upset_model, upset_features
+
+
+def test_upset_features_extracts_four_columns():
+    df = pd.DataFrame([
+        _make_row(p_stage1=0.7, label=1, upset=True),
+        _make_row(p_stage1=0.3, label=0, upset=True),
+    ])
+    X = upset_features(df)
+    assert X.shape == (2, 4)
+    # Expected column order: p_stage1, seed_a, seed_b, abs_seed_diff
+    assert X[0, 0] == pytest.approx(0.7)
+
+
+def test_fit_upset_model_returns_classifier_with_predict_proba():
+    """Smoke test: 100-row synthetic dataset, model trains and predicts."""
+    np.random.seed(42)
+    n = 100
+    p_stage1 = np.random.uniform(0.05, 0.95, n)
+    label = (p_stage1 > 0.5).astype(int)
+    seed_a = np.random.randint(1, 17, n)
+    seed_b = np.random.randint(1, 17, n)
+    df = pd.DataFrame({
+        "p_stage1": p_stage1, "label": label,
+        "seed_a": seed_a, "seed_b": seed_b,
+        "abs_seed_diff": np.abs(seed_a - seed_b),
+        "upset": np.random.choice([True, False], n),
+    })
+    X = upset_features(df)
+    y = df["label"].values
+    w = compute_sample_weights(df)
+    model = fit_upset_model(X, y, w, seed=42)
+    assert hasattr(model, "predict_proba")
+    p = model.predict_proba(X)[:, 1]
+    assert p.shape == (n,)
+    assert np.all((p >= 0.0) & (p <= 1.0))
