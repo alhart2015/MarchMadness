@@ -57,6 +57,17 @@
   weighting-magnitude. Code retained in src/train_upset_model.py
   for future low-weight sweeps; v8 stays in production. Findings:
   docs/notes/2026-04-30-upset-detection-v9.md.
+- **v9 weight-sweep -- MARGINAL / closes the open question (2026-05-01).**
+  15-cell sweep of W_UPSET in {1.0, 1.25, 1.5, 1.75, 2.0} x W_MISS in
+  {0, 0.5, 1.0} on v9-B against the bracket-points objective. Best
+  cell: (W_UPSET=1.0, W_MISS=0.5) at 2688 pts (+18 vs v8). Clears the
+  spec's +10 bar but is fragile -- 17/22 seasons identical to v8,
+  +12 of +18 from 2024 alone. Active ingredient is W_MISS (residual
+  weighting), NOT W_UPSET (every cell with W_UPSET > 1 lost). The
+  literal "milder upset weighting" hypothesis is unsupported. v8
+  stays in production. Documented as a candidate, not a swap-in;
+  v9-B's round-asymmetry bug is a prerequisite to any future
+  production swap. Findings: docs/notes/2026-05-01-v9-weight-sweep.md.
 
 
 
