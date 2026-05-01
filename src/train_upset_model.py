@@ -268,6 +268,8 @@ def build_v9_pairwise(
     pairwise_v4_csv: str,
     seeds_csv: str,
     out_path: str,
+    w_upset: float = W_UPSET,
+    w_miss: float = W_MISS,
 ) -> None:
     """For each LOSO season, train v9 on other-seasons' per-game rows and
     apply to every pair in that season's pairwise_v4.csv. Writes a CSV in
@@ -276,6 +278,9 @@ def build_v9_pairwise(
 
     Mirrors src/train_stage2.py:build_v8_pairwise. Differences: feeds
     sample weights to fit_upset_model, no other functional change.
+
+    Weights are forwarded to compute_sample_weights; defaults preserve
+    canonical 3.0 / 4.0 behavior.
     """
     pw = pd.read_csv(pairwise_v4_csv).drop_duplicates(
         ["season", "team_a", "team_b"], keep="last"
@@ -298,7 +303,7 @@ def build_v9_pairwise(
         if len(train) > 0 and valid_mask.any():
             X_train = upset_features(train)
             y_train = train["label"].values
-            w_train = compute_sample_weights(train)
+            w_train = compute_sample_weights(train, w_upset=w_upset, w_miss=w_miss)
             model = fit_upset_model(X_train, y_train, w_train)
 
             apply_df = season_pw[valid_mask].copy()

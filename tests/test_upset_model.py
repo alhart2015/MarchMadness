@@ -453,3 +453,63 @@ def test_double_loso_eval_default_weights_match_module_globals(monkeypatch):
         train = per_game[per_game.season != season]
         expected = compute_sample_weights(train, w_upset=3.0, w_miss=4.0)
         assert np.allclose(capt, expected)
+
+
+def test_build_v9_pairwise_threads_weights_to_sample_weight(
+    tmp_path, monkeypatch
+):
+    """build_v9_pairwise(..., w_upset=1.0, w_miss=0.0) -> uniform weights."""
+    pw_v4 = pd.DataFrame({
+        "season": [2022, 2022, 2023, 2023],
+        "team_a": [1, 1, 1, 2],
+        "team_b": [2, 3, 3, 3],
+        "p_a_wins": [0.7, 0.6, 0.55, 0.45],
+    })
+    pw_path = tmp_path / "pairwise_v4.csv"
+    pw_v4.to_csv(pw_path, index=False)
+
+    seeds = pd.DataFrame({
+        "Season": [2022, 2022, 2022, 2023, 2023, 2023],
+        "Seed":   ["W01", "W08", "W16", "W01", "W08", "W16"],
+        "TeamID": [1, 2, 3, 1, 2, 3],
+    })
+    seeds_path = tmp_path / "seeds.csv"
+    seeds.to_csv(seeds_path, index=False)
+
+    per_game = pd.DataFrame([
+        {"season": 2022, "team_a": 1, "team_b": 2, "p_stage1": 0.7,
+         "seed_a": 1, "seed_b": 8, "abs_seed_diff": 7,
+         "upset": False, "round": 1, "label": 1},
+        {"season": 2022, "team_a": 2, "team_b": 1, "p_stage1": 0.3,
+         "seed_a": 8, "seed_b": 1, "abs_seed_diff": 7,
+         "upset": False, "round": 1, "label": 0},
+        {"season": 2023, "team_a": 2, "team_b": 3, "p_stage1": 0.45,
+         "seed_a": 8, "seed_b": 16, "abs_seed_diff": 8,
+         "upset": True, "round": 1, "label": 1},
+        {"season": 2023, "team_a": 3, "team_b": 2, "p_stage1": 0.55,
+         "seed_a": 16, "seed_b": 8, "abs_seed_diff": 8,
+         "upset": True, "round": 1, "label": 0},
+    ])
+
+    captured_weights = []
+
+    class _StubModel:
+        def predict_proba(self, X):
+            return np.column_stack([1 - X[:, 0], X[:, 0]])
+
+    def _stub_fit(X, y, w, seed=42):
+        captured_weights.append(np.array(w, copy=True))
+        return _StubModel()
+
+    monkeypatch.setattr("src.train_upset_model.fit_upset_model", _stub_fit)
+
+    out_path = tmp_path / "pairwise_v9.csv"
+    build_v9_pairwise(
+        per_game, str(pw_path), str(seeds_path), str(out_path),
+        w_upset=1.0, w_miss=0.0,
+    )
+
+    # 2 LOSO fits (one per season in pw_v4), both must be uniform.
+    assert len(captured_weights) == 2
+    for w in captured_weights:
+        assert np.allclose(w, 1.0), f"expected uniform weights, got {w}"
