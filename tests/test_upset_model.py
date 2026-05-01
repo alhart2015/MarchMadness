@@ -307,3 +307,60 @@ def test_double_loso_eval_never_trains_on_test_season(monkeypatch):
         assert c["n_rows"] == 4
 
     assert set(eval_df["season"].tolist()) == {2021, 2022, 2023}
+
+
+# -----------------------------------------------------------------------------
+# build_v9_pairwise: writes output/pairwise_v9.csv with v9-adjusted probs
+# -----------------------------------------------------------------------------
+
+from src.train_upset_model import build_v9_pairwise
+
+
+def test_build_v9_pairwise_writes_expected_schema(tmp_path):
+    """build_v9_pairwise emits a CSV with columns season, team_a, team_b,
+    p_a_wins, with team_a < team_b (v8-compatible schema)."""
+    # Two seasons, two pairs each.
+    pw_v4 = pd.DataFrame({
+        "season": [2022, 2022, 2023, 2023],
+        "team_a": [1, 1, 1, 2],
+        "team_b": [2, 3, 3, 3],
+        "p_a_wins": [0.7, 0.6, 0.55, 0.45],
+    })
+    pw_path = tmp_path / "pairwise_v4.csv"
+    pw_v4.to_csv(pw_path, index=False)
+
+    seeds = pd.DataFrame({
+        "Season": [2022, 2022, 2022, 2023, 2023, 2023],
+        "Seed":   ["W01", "W08", "W16", "W01", "W08", "W16"],
+        "TeamID": [1, 2, 3, 1, 2, 3],
+    })
+    seeds_path = tmp_path / "seeds.csv"
+    seeds.to_csv(seeds_path, index=False)
+
+    # Per-game training rows mirroring two seasons (drives both LOSO folds).
+    per_game = pd.DataFrame([
+        {"season": 2022, "team_a": 1, "team_b": 2, "p_stage1": 0.7,
+         "seed_a": 1, "seed_b": 8, "abs_seed_diff": 7,
+         "upset": False, "label": 1},
+        {"season": 2022, "team_a": 2, "team_b": 1, "p_stage1": 0.3,
+         "seed_a": 8, "seed_b": 1, "abs_seed_diff": 7,
+         "upset": False, "label": 0},
+        {"season": 2023, "team_a": 2, "team_b": 3, "p_stage1": 0.45,
+         "seed_a": 8, "seed_b": 16, "abs_seed_diff": 8,
+         "upset": True, "label": 1},
+        {"season": 2023, "team_a": 3, "team_b": 2, "p_stage1": 0.55,
+         "seed_a": 16, "seed_b": 8, "abs_seed_diff": 8,
+         "upset": True, "label": 0},
+    ])
+
+    out_path = tmp_path / "pairwise_v9.csv"
+    build_v9_pairwise(per_game, str(pw_path), str(seeds_path), str(out_path))
+
+    out = pd.read_csv(out_path)
+    assert list(out.columns) == ["season", "team_a", "team_b", "p_a_wins"]
+    # team_a < team_b on every row.
+    assert (out["team_a"] < out["team_b"]).all()
+    # All seasons from input represented.
+    assert set(out["season"].tolist()) == {2022, 2023}
+    # Probabilities in [0, 1].
+    assert ((out["p_a_wins"] >= 0.0) & (out["p_a_wins"] <= 1.0)).all()

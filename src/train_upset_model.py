@@ -228,3 +228,81 @@ def double_loso_eval(per_game: pd.DataFrame) -> pd.DataFrame:
         })
 
     return pd.DataFrame(results).sort_values("season").reset_index(drop=True)
+
+
+def build_v9_pairwise(
+    per_game: pd.DataFrame,
+    pairwise_v4_csv: str,
+    seeds_csv: str,
+    out_path: str,
+) -> None:
+    """For each LOSO season, train v9 on other-seasons' per-game rows and
+    apply to every pair in that season's pairwise_v4.csv. Writes a CSV in
+    v8-compatible schema (season, team_a, team_b, p_a_wins) with team_a <
+    team_b on every row.
+
+    Mirrors src/train_stage2.py:build_v8_pairwise. Differences: feeds
+    sample weights to fit_upset_model, no other functional change.
+    """
+    pw = pd.read_csv(pairwise_v4_csv).drop_duplicates(
+        ["season", "team_a", "team_b"], keep="last"
+    )
+    seeds = pd.read_csv(seeds_csv)
+    seeds["seed_int"] = seeds["Seed"].apply(parse_seed)
+    seed_lookup = {(int(r["Season"]), int(r["TeamID"])): r["seed_int"]
+                   for _, r in seeds.iterrows() if r["seed_int"] is not None}
+
+    out_rows = []
+    for season in sorted(pw.season.unique()):
+        train = per_game[per_game.season != season]
+        if len(train) == 0:
+            # Pass-through stage-1 if we have no other-season training data.
+            for _, r in pw[pw.season == season].iterrows():
+                out_rows.append({
+                    "season": int(season), "team_a": int(r.team_a),
+                    "team_b": int(r.team_b), "p_a_wins": float(r.p_a_wins),
+                })
+            continue
+
+        X_train = upset_features(train)
+        y_train = train["label"].values
+        w_train = compute_sample_weights(train)
+        model = fit_upset_model(X_train, y_train, w_train)
+
+        season_pw = pw[pw.season == season].copy()
+        feat_rows = []
+        keep = []
+        for _, r in season_pw.iterrows():
+            seed_a = seed_lookup.get((int(r["season"]), int(r["team_a"])))
+            seed_b = seed_lookup.get((int(r["season"]), int(r["team_b"])))
+            if seed_a is None or seed_b is None:
+                keep.append(False)
+                continue
+            feat_rows.append([float(r["p_a_wins"]), seed_a, seed_b,
+                              abs(seed_a - seed_b)])
+            keep.append(True)
+
+        if not feat_rows:
+            for _, r in season_pw.iterrows():
+                out_rows.append({
+                    "season": int(season), "team_a": int(r.team_a),
+                    "team_b": int(r.team_b), "p_a_wins": float(r.p_a_wins),
+                })
+            continue
+
+        X = np.array(feat_rows)
+        p_v9 = model.predict_proba(X)[:, 1]
+
+        i = 0
+        for (_, r), keep_row in zip(season_pw.iterrows(), keep):
+            if keep_row:
+                p = float(p_v9[i])
+                i += 1
+            else:
+                p = float(r["p_a_wins"])
+            out_rows.append({
+                "season": int(season), "team_a": int(r.team_a),
+                "team_b": int(r.team_b), "p_a_wins": p,
+            })
+
+    pd.DataFrame(out_rows).to_csv(out_path, index=False)
