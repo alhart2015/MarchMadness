@@ -12,26 +12,19 @@
 
 ## Active queue
 
-1. **Production swap to v9-C.** Findings clear the spec's swap-in
-   bar (+43 vs v8, F4/E8 lens distinctly better). Separate follow-up
-   commit on `feat/v9-b-followup`: flip defaults to v9-C (W_UPSET=1.25,
-   W_MISS=0.0, 5-feature set), regenerate `output/pairwise_v9c.csv`,
-   point bracket pipeline at it, regenerate the 2026 chalk bracket and
-   spot-check the picks that flip. Findings:
-   `docs/notes/2026-05-01-v9c-feature-stripped.md`.
-2. **Ensemble of model classes.** XGBoost + logistic regression +
+1. **Ensemble of model classes.** XGBoost + logistic regression +
    small neural net averaged (or stacked). The TODO already had this
    under Tier C. The hypothesis: different model classes capture
    partially-uncorrelated error patterns. Risk: if all three see the
    same features and reach the same ~80% R64 / ~50-60% deep-round
    ceiling, the errors are highly correlated and ensembling won't help
-   much. Position #2 after the v9-C swap lands.
-3. **External rankings (538, KenPom-public, BPI as features).** Note:
+   much. Promoted to position #1 after the v9-C swap landed.
+2. **External rankings (538, KenPom-public, BPI as features).** Note:
    we already have BPI, Sagarin, KenPom (POM), Bart Torvik (TRK), RPI
    via Massey ordinals (config.yaml lines 30-36). Truly external would
    be 538's tournament forecast or Vegas prop-bet predictions, which
    need data sourcing outside the Kaggle archive.
-4. **Roster-level returning-experience.** Player-level data is not in
+3. **Roster-level returning-experience.** Player-level data is not in
    the Kaggle Mania archive; would need an external roster CSV per
    season. Different signal from coach experience.
 
@@ -99,6 +92,18 @@
   clauses of the spec's swap-in path are satisfied. Production
   swap is a separate follow-up commit (Active queue #1).
   Findings: docs/notes/2026-05-01-v9c-feature-stripped.md.
+- **v9-C production swap (2026-05-01).** Added
+  `src/predict_2026_v9c.py` (mirror of `src/predict_2026_stage2.py`
+  for v9-C). Trains on all 22 LOSO seasons with W_UPSET=1.25,
+  W_MISS=0.0, feature_set='v9c'; applies to v4's 2026 JSON via
+  apply-time round lookup; writes versioned snapshot
+  `output/pairwise_probs_v9c_2026.json` and overwrites the
+  canonical `output/pairwise_probs.json` (the file analysis scripts
+  consume). Live bracket pipeline (`generate_bracket_real.py`)
+  unchanged -- it's pure-v4-MC today and v8 was never wired in
+  there either; live-bracket stage-2 integration is a separate
+  follow-up. Spec:
+  `docs/superpowers/specs/2026-05-01-v9c-production-swap-design.md`.
 
 
 
