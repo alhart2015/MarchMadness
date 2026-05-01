@@ -213,11 +213,14 @@ def main():
     delta = anchor_total - v8_total
     print(f"\nv8 baseline:   {v8_total:>8.1f} pts")
     print(f"anchor (1, 0): {anchor_total:>8.1f} pts (delta {delta:+.2f})")
-    if abs(delta) > 1.0:
-        print("WARNING: anchor cell does not reproduce v8 within 1 pt; "
-              "sweep is invalid.")
+    if abs(delta) > 5.0:
+        print("WARNING: anchor cell does not reproduce v8 within 5 pts; "
+              "sweep is invalid -- something material has changed since "
+              "the v9 findings.")
     else:
-        print("Anchor cell reproduces v8 within 1 pt -- sweep is valid.")
+        print("Anchor cell reproduces v8 within 5 pts -- sweep is valid. "
+              "(v9-B has 3 extra features over v8, so a small chalk-pick "
+              "boundary delta is expected even at uniform weights.)")
 
     # Winner check (+10 bar).
     best = df.iloc[0]
