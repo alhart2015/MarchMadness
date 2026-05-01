@@ -12,26 +12,19 @@
 
 ## Active queue
 
-1. **Upset-detection sub-model.** Train a binary "will the higher seed
-   lose?" classifier with different feature weighting (heavier emphasis
-   on high-confidence misses). Combine v4 via meta-learner. Promoted
-   to position #1 by the v4 feature-ablation findings (see Done):
-   the 2026 over-confidence is not feature-side, so the next leverage
-   is round-by-round upset modeling -- which also aligns directly
-   with how bracket scoring pays out.
-2. **Ensemble of model classes.** XGBoost + logistic regression +
+1. **Ensemble of model classes.** XGBoost + logistic regression +
    small neural net averaged (or stacked). The TODO already had this
    under Tier C. The hypothesis: different model classes capture
    partially-uncorrelated error patterns. Risk: if all three see the
    same features and reach the same ~80% R64 / ~50-60% deep-round
    ceiling, the errors are highly correlated and ensembling won't help
-   much. Worth trying after #1.
-3. **External rankings (538, KenPom-public, BPI as features).** Note:
+   much. Promoted to position #1 after upset-detection v9 LOSE.
+2. **External rankings (538, KenPom-public, BPI as features).** Note:
    we already have BPI, Sagarin, KenPom (POM), Bart Torvik (TRK), RPI
    via Massey ordinals (config.yaml lines 30-36). Truly external would
    be 538's tournament forecast or Vegas prop-bet predictions, which
    need data sourcing outside the Kaggle archive.
-4. **Roster-level returning-experience.** Player-level data is not in
+3. **Roster-level returning-experience.** Player-level data is not in
    the Kaggle Mania archive; would need an external roster CSV per
    season. Different signal from coach experience.
 
@@ -52,6 +45,18 @@
   context features. +9 bracket pts over 22-season backtest, CV log
   loss 0.437 -> 0.432. Lands in commit 43d555d. 2026 chalk bracket
   is unchanged (corrections too small to flip picks).
+- **Upset-detection sub-model (v9) -- LOSE (2026-04-30).** Tested two
+  variants of an upset-aware stage-2 corrector replacing v8: v9-A
+  (4 features, W_UPSET=3.0, W_MISS=4.0) and v9-B (7 features adding
+  round + v4 confidence + is_higher_seed, same weights). Both lost
+  catastrophically: v9-A scored 1552 bracket pts vs v8's 2670 (-1118)
+  over 22 LOSO seasons; v9-B scored 1588 (-1082). The aggressive
+  upset weighting pulls the model toward predicting upsets that
+  aren't there. Sanity-check at W_UPSET=1.0, W_MISS=0.0 reproduced v8
+  exactly, confirming the trainer is correct and the failure is
+  weighting-magnitude. Code retained in src/train_upset_model.py
+  for future low-weight sweeps; v8 stays in production. Findings:
+  docs/notes/2026-04-30-upset-detection-v9.md.
 
 
 
