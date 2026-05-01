@@ -7,8 +7,13 @@ import pandas as pd
 import pytest
 
 from src.train_upset_model import (
+    build_v9_pairwise,
+    compute_sample_weights,
+    double_loso_eval,
+    fit_upset_model,
     load_per_game_data_with_upset,
     parse_seed,
+    upset_features,
 )
 
 
@@ -135,8 +140,6 @@ def test_loader_produces_symmetric_rows(tmp_path):
 # compute_sample_weights
 # -----------------------------------------------------------------------------
 
-from src.train_upset_model import compute_sample_weights
-
 
 def _make_row(p_stage1: float, label: int, upset: bool) -> dict:
     return {
@@ -219,8 +222,6 @@ def test_weights_uses_correct_residual_for_loser_perspective():
 # upset_features + fit_upset_model
 # -----------------------------------------------------------------------------
 
-from src.train_upset_model import fit_upset_model, upset_features
-
 
 def test_upset_features_extracts_seven_columns():
     df = pd.DataFrame([
@@ -265,8 +266,6 @@ def test_fit_upset_model_returns_classifier_with_predict_proba():
 # -----------------------------------------------------------------------------
 # double_loso_eval: leakage guard
 # -----------------------------------------------------------------------------
-
-from src.train_upset_model import double_loso_eval
 
 
 def test_double_loso_eval_never_trains_on_test_season(monkeypatch):
@@ -317,8 +316,6 @@ def test_double_loso_eval_never_trains_on_test_season(monkeypatch):
 # -----------------------------------------------------------------------------
 # build_v9_pairwise: writes output/pairwise_v9.csv with v9-adjusted probs
 # -----------------------------------------------------------------------------
-
-from src.train_upset_model import build_v9_pairwise
 
 
 def test_build_v9_pairwise_writes_expected_schema(tmp_path):

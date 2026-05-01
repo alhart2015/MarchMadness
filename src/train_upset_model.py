@@ -280,61 +280,34 @@ def build_v9_pairwise(
 
     out_rows = []
     for season in sorted(pw.season.unique()):
-        train = per_game[per_game.season != season]
-        if len(train) == 0:
-            # Pass-through stage-1 if we have no other-season training data.
-            for _, r in pw[pw.season == season].iterrows():
-                out_rows.append({
-                    "season": int(season), "team_a": int(r.team_a),
-                    "team_b": int(r.team_b), "p_a_wins": float(r.p_a_wins),
-                })
-            continue
-
-        X_train = upset_features(train)
-        y_train = train["label"].values
-        w_train = compute_sample_weights(train)
-        model = fit_upset_model(X_train, y_train, w_train)
-
         season_pw = pw[pw.season == season].copy()
-        feat_rows = []
-        keep = []
-        for _, r in season_pw.iterrows():
-            seed_a = seed_lookup.get((int(r["season"]), int(r["team_a"])))
-            seed_b = seed_lookup.get((int(r["season"]), int(r["team_b"])))
-            if seed_a is None or seed_b is None:
-                keep.append(False)
-                continue
-            feat_rows.append([
-                float(r["p_a_wins"]),
-                seed_a, seed_b,
-                abs(seed_a - seed_b),
-                0.0,                                    # round unknown at apply time
-                abs(float(r["p_a_wins"]) - 0.5),        # v4 confidence
-                1.0 if seed_a < seed_b else 0.0,        # is_a_higher_seed
-            ])
-            keep.append(True)
+        season_pw["seed_a"] = [seed_lookup.get((int(s), int(a)))
+                               for s, a in zip(season_pw["season"], season_pw["team_a"])]
+        season_pw["seed_b"] = [seed_lookup.get((int(s), int(b)))
+                               for s, b in zip(season_pw["season"], season_pw["team_b"])]
+        valid_mask = season_pw["seed_a"].notna() & season_pw["seed_b"].notna()
 
-        if not feat_rows:
-            for _, r in season_pw.iterrows():
-                out_rows.append({
-                    "season": int(season), "team_a": int(r.team_a),
-                    "team_b": int(r.team_b), "p_a_wins": float(r.p_a_wins),
-                })
-            continue
+        train = per_game[per_game.season != season]
+        if len(train) > 0 and valid_mask.any():
+            X_train = upset_features(train)
+            y_train = train["label"].values
+            w_train = compute_sample_weights(train)
+            model = fit_upset_model(X_train, y_train, w_train)
 
-        X = np.array(feat_rows)
-        p_v9 = model.predict_proba(X)[:, 1]
+            apply_df = season_pw[valid_mask].copy()
+            apply_df["abs_seed_diff"] = (apply_df["seed_a"] - apply_df["seed_b"]).abs()
+            apply_df["round"] = 0.0  # unknown at apply time -- pairwise CSV has no DayNum
+            apply_df["p_stage1"] = apply_df["p_a_wins"]
+            p_v9 = model.predict_proba(upset_features(apply_df))[:, 1]
+            v9_by_index = pd.Series(p_v9, index=apply_df.index)
+        else:
+            v9_by_index = pd.Series(dtype=float)
 
-        i = 0
-        for (_, r), keep_row in zip(season_pw.iterrows(), keep):
-            if keep_row:
-                p = float(p_v9[i])
-                i += 1
-            else:
-                p = float(r["p_a_wins"])
+        for idx, r in season_pw.iterrows():
+            p = float(v9_by_index[idx]) if idx in v9_by_index.index else float(r["p_a_wins"])
             out_rows.append({
-                "season": int(season), "team_a": int(r.team_a),
-                "team_b": int(r.team_b), "p_a_wins": p,
+                "season": int(season), "team_a": int(r["team_a"]),
+                "team_b": int(r["team_b"]), "p_a_wins": p,
             })
 
     pd.DataFrame(out_rows).to_csv(out_path, index=False)
@@ -346,8 +319,8 @@ def main():
     print(f"  W_UPSET={W_UPSET}, W_MISS={W_MISS}")
     print("=" * 80)
 
-    pairwise_v4 = "output/pairwise_v4.csv"
-    pairwise_v8 = "output/pairwise_v8.csv"
+    pairwise_v4 = str(OUTPUT / "pairwise_v4.csv")
+    pairwise_v8 = str(OUTPUT / "pairwise_v8.csv")
     seeds_csv = str(DATA / "MNCAATourneySeeds.csv")
     results_csv = str(DATA / "MNCAATourneyCompactResults.csv")
 
@@ -361,7 +334,7 @@ def main():
 
     # v4 / v8 per-season stats from the same per_game frame for v4 (p_stage1)
     # plus pairwise_v8.csv joined back for v8.
-    pw_v4 = per_game[per_game.label == 1].copy()
+    pw_v4 = per_game[per_game.label == 1]
     v4_stats = (
         pw_v4.groupby("season")
         .apply(lambda g: pd.Series({
@@ -369,7 +342,7 @@ def main():
             "ll_v4": sklearn_log_loss(g["label"].values, g["p_stage1"].values,
                                       labels=[0, 1]),
             "acc_v4": float((g["p_stage1"].values > 0.5).mean()),
-        }))
+        }), include_groups=False)
         .reset_index()
     )
 
