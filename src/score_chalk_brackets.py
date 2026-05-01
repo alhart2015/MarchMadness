@@ -177,30 +177,63 @@ def score_season(season, slots_df, seeds_df, results_df, probs_for_season):
     return out
 
 
+def _score_pairwise_with_details(slots_df, seeds_df, results_df, path):
+    """Internal: score a pairwise CSV, return full per-round details.
+    Returns {season: {round_name: (correct, n, points)}}.
+    """
+    if not Path(path).exists():
+        return {}
+    probs_by_season = load_pairwise(path)
+    by_season = {}
+    for season, probs in probs_by_season.items():
+        by_season[int(season)] = score_season(season, slots_df, seeds_df,
+                                               results_df, probs)
+    return by_season
+
+
+def score_pairwise_path(path):
+    """Score the chalk bracket implied by `path` against actuals across all
+    seasons present. Returns {"total_pts": float, "per_season_pts": {int: float}}.
+    Raises FileNotFoundError if `path` does not exist.
+    """
+    if not Path(path).exists():
+        raise FileNotFoundError(path)
+
+    slots_df = pd.read_csv(DATA / "MNCAATourneySlots.csv")
+    seeds_df = pd.read_csv(DATA / "MNCAATourneySeeds.csv")
+    results_df = pd.read_csv(DATA / "MNCAATourneyCompactResults.csv")
+
+    by_season = _score_pairwise_with_details(slots_df, seeds_df, results_df, path)
+    per_season = {}
+    for season, rounds_dict in by_season.items():
+        total_pts = sum(t[2] for t in rounds_dict.values())
+        per_season[int(season)] = float(total_pts)
+    return {
+        "total_pts": float(sum(per_season.values())),
+        "per_season_pts": per_season,
+    }
+
+
 def main():
     slots_df = pd.read_csv(DATA / "MNCAATourneySlots.csv")
     seeds_df = pd.read_csv(DATA / "MNCAATourneySeeds.csv")
     results_df = pd.read_csv(DATA / "MNCAATourneyCompactResults.csv")
 
-    pw = {
-        "v1": load_pairwise("output/pairwise_v1.csv"),
-        "v2": load_pairwise("output/pairwise_v2.csv"),
-        "v4": load_pairwise("output/pairwise_v4.csv"),
-        "v8": load_pairwise("output/pairwise_v8.csv"),
-    }
-    pw = {v: d for v, d in pw.items() if d}
+    versions = ["v1", "v2", "v4", "v8"]
+    by_version_season = {}
+    for v in versions:
+        path = f"output/pairwise_{v}.csv"
+        details = _score_pairwise_with_details(slots_df, seeds_df, results_df, path)
+        if details:
+            by_version_season[v] = details
+
+    pw = by_version_season
     if not pw:
         print("No pairwise probs found. Run the model scripts with MM_PAIRWISE_OUT first.")
         return
 
     common_seasons = sorted(set.intersection(*(set(d.keys()) for d in pw.values())))
     print(f"Scoring {len(common_seasons)} seasons across {len(pw)} versions: {list(pw)}")
-
-    by_version_season = {v: {} for v in pw}
-    for v in pw:
-        for s in common_seasons:
-            by_version_season[v][s] = score_season(s, slots_df, seeds_df,
-                                                   results_df, pw[v][s])
 
     # Per-season totals
     print("\n" + "=" * 90)

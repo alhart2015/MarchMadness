@@ -76,6 +76,39 @@ from src.models.matchup import build_weighted_matchup_data
 
 
 # =============================================================================
+# ABLATION HELPERS
+# =============================================================================
+
+def apply_feature_drop(feature_cols, drop_env):
+    """Filter feature_cols by names listed in MM_FEATURE_DROP env-var string.
+
+    Returns (filtered_cols, missing_names_set). Unknown names are returned in
+    `missing` for the caller to log -- not raised, so a typo does not abort
+    a multi-hour LOSO retrain.
+    """
+    if not drop_env:
+        return list(feature_cols), set()
+    drop = {c.strip() for c in drop_env.split(",") if c.strip()}
+    present = drop & set(feature_cols)
+    missing = drop - set(feature_cols)
+    filtered = [c for c in feature_cols if c not in present]
+    return filtered, missing
+
+
+def apply_output_suffix(path, suffix):
+    """Insert `suffix` before the final extension of `path`. Empty suffix = no-op.
+
+    Uses os.path.splitext so only the trailing extension is split, even if
+    intermediate directory names contain dots.
+    """
+    if not suffix:
+        return path
+    import os
+    root, ext = os.path.splitext(path)
+    return f"{root}{suffix}{ext}"
+
+
+# =============================================================================
 # VEGAS LINE PROCESSING
 # =============================================================================
 
@@ -557,6 +590,11 @@ def leave_one_season_out_cv_weighted(
 def main():
     overall_start = time.time()
 
+    import os as _os
+    _output_suffix = _os.environ.get("MM_OUTPUT_SUFFIX", "")
+    if _output_suffix:
+        print(f"  ABLATION: output suffix = '{_output_suffix}'")
+
     print("\n" + "=" * 70)
     print("ENHANCED MODEL v3 -- Late-Season Features, Weighted Training, Line Blending")
     print("=" * 70)
@@ -719,6 +757,16 @@ def main():
     for i in range(0, len(feature_cols), 6):
         print(f"    {', '.join(feature_cols[i:i+6])}")
 
+    # ABLATION HOOK: drop features named in MM_FEATURE_DROP env var.
+    import os as _os
+    _drop_env = _os.environ.get("MM_FEATURE_DROP", "")
+    if _drop_env:
+        _before = len(feature_cols)
+        feature_cols, _missing = apply_feature_drop(feature_cols, _drop_env)
+        if _missing:
+            print(f"  ABLATION WARNING: MM_FEATURE_DROP names not in feature_cols: {sorted(_missing)}")
+        print(f"  ABLATION: dropped {_before - len(feature_cols)} features (drop list: {_drop_env}); remaining: {len(feature_cols)}")
+
     # -- Step 5: Build weighted matchup training data ----------------------
     print("\n" + "=" * 70)
     print("STEP 5 -- Building weighted matchup training data")
@@ -805,6 +853,14 @@ def main():
         from src.models.tuning import tune_hyperparameters
         best_params = tune_hyperparameters(X_all, y_all, n_trials=30, random_seed=42)
         print(f"  Best params: {best_params}")
+        # Persist tuned params so downstream tools (ablation driver, etc.)
+        # can reuse them via MM_TUNED_PARAMS_V3 without re-running Optuna.
+        # Not suffixed: shared input across ablations, not a per-run output.
+        import json as _json
+        _params_path = "output/v4_tuned_params.json"
+        with open(_params_path, "w") as _f:
+            _json.dump(best_params, _f, indent=2)
+        print(f"  Saved tuned params to {_params_path}")
 
     # -- Step 8: Re-evaluate with tuned params (weighted) ------------------
     print("\n" + "=" * 70)
@@ -817,8 +873,9 @@ def main():
         xgb_params=best_params, random_seed=42,
         supplemental_weight=0.25,
     )
-    cv_tuned["per_season"].to_csv("output/cv_per_season_v3.csv", index=False)
-    print("  Saved: output/cv_per_season_v3.csv")
+    cv_path = apply_output_suffix("output/cv_per_season_v3.csv", _output_suffix)
+    cv_tuned["per_season"].to_csv(cv_path, index=False)
+    print(f"  Saved: {cv_path}")
 
     per_season = cv_tuned["per_season"]
     print(f"\n{'Season':>8}  {'LogLoss':>9}  {'Brier':>7}  {'Accuracy':>9}  {'AUC':>7}  {'#Games':>7}")
@@ -1011,12 +1068,12 @@ def main():
 
     # Export advancement probabilities CSV
     from src.bracket.output import export_bracket_csv
-    csv_path = str(OUTPUT_DIR / "bracket_2026_real.csv")
+    csv_path = apply_output_suffix(str(OUTPUT_DIR / "bracket_2026_real.csv"), _output_suffix)
     export_bracket_csv(advancement_probs, bracket_kaggle, csv_path)
     print(f"  Saved: {csv_path}")
 
     # Export bracket structure
-    bracket_csv_path = str(OUTPUT_DIR / "bracket_2026_real_structure.csv")
+    bracket_csv_path = apply_output_suffix(str(OUTPUT_DIR / "bracket_2026_real_structure.csv"), _output_suffix)
     bracket_kaggle.to_csv(bracket_csv_path, index=False)
     print(f"  Saved: {bracket_csv_path}")
 
@@ -1028,7 +1085,7 @@ def main():
         if key not in pairwise_json:
             pairwise_json[key] = round(p if a < b else 1 - p, 4)
 
-    pairwise_path = str(OUTPUT_DIR / "pairwise_probs.json")
+    pairwise_path = apply_output_suffix(str(OUTPUT_DIR / "pairwise_probs.json"), _output_suffix)
     with open(pairwise_path, "w") as f:
         json.dump(pairwise_json, f)
     print(f"  Saved: {pairwise_path}")
@@ -1047,14 +1104,14 @@ def main():
                 for r, p in probs.items()
             },
         }
-    bracket_data_path = str(OUTPUT_DIR / "bracket_data.json")
+    bracket_data_path = apply_output_suffix(str(OUTPUT_DIR / "bracket_data.json"), _output_suffix)
     with open(bracket_data_path, "w") as f:
         json.dump(bracket_data, f, indent=2)
     print(f"  Saved: {bracket_data_path}")
 
     # Export compact JSON for bracket.html
     compact = build_bracket_compact_json(bracket_kaggle, advancement_probs, win_prob)
-    compact_path = str(OUTPUT_DIR / "bracket_compact.json")
+    compact_path = apply_output_suffix(str(OUTPUT_DIR / "bracket_compact.json"), _output_suffix)
     with open(compact_path, "w") as f:
         json.dump(compact, f, separators=(",", ":"))
     print(f"  Saved: {compact_path}")
@@ -1064,7 +1121,7 @@ def main():
     print("STEP 14 -- Updating bracket.html")
     print("=" * 70)
 
-    html_path = OUTPUT_DIR / "bracket.html"
+    html_path = Path(apply_output_suffix(str(OUTPUT_DIR / "bracket.html"), _output_suffix))
     if html_path.exists():
         html_content = html_path.read_text(encoding="utf-8")
         compact_json_str = json.dumps(compact, separators=(",", ":"))
@@ -1091,7 +1148,8 @@ def main():
     print("=" * 70)
 
     _regenerate_kaggle_submission(
-        data, feature_matrix, feature_cols, fm_filled, best_params
+        data, feature_matrix, feature_cols, fm_filled, best_params,
+        output_suffix=_output_suffix,
     )
 
     # -- Final summary ----------------------------------------------------
@@ -1121,7 +1179,7 @@ def main():
     print("=" * 70 + "\n")
 
 
-def _regenerate_kaggle_submission(data, feature_matrix, feature_cols, fm_filled, best_params):
+def _regenerate_kaggle_submission(data, feature_matrix, feature_cols, fm_filled, best_params, output_suffix=""):
     """Regenerate Kaggle submission files using the v3 model.
 
     This rebuilds the men's model with all v3 features and produces updated
@@ -1261,7 +1319,7 @@ def _regenerate_kaggle_submission(data, feature_matrix, feature_cols, fm_filled,
 
         sub["Pred"] = sub["Pred"].clip(0.01, 0.99)
 
-        out_path = OUTPUT_DIR / out_name
+        out_path = Path(apply_output_suffix(str(OUTPUT_DIR / out_name), output_suffix))
         sub.to_csv(out_path, index=False)
         print(f"    Written: {out_path}")
 
