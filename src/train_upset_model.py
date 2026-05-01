@@ -309,6 +309,7 @@ def double_loso_eval(
     per_game: pd.DataFrame,
     w_upset: float = W_UPSET,
     w_miss: float = W_MISS,
+    feature_set: str = "v9b",
 ) -> pd.DataFrame:
     """For each test season, train v9 on all-other-seasons and evaluate on it.
 
@@ -316,8 +317,9 @@ def double_loso_eval(
     - Uses upset_features / fit_upset_model / compute_sample_weights.
     - Reports v8-style metrics (log loss, accuracy) but for v9.
 
-    Weights are forwarded to compute_sample_weights; defaults preserve
-    canonical 3.0 / 4.0 behavior.
+    Weights and feature_set are forwarded to upset_features and
+    compute_sample_weights; defaults preserve canonical 3.0 / 4.0 behavior
+    and v9-B feature set.
 
     Returns DataFrame with per-season metrics:
         season, n_games, ll_v9, acc_v9.
@@ -335,10 +337,10 @@ def double_loso_eval(
         if len(train) == 0 or len(test) == 0:
             continue
 
-        X_train = upset_features(train)
+        X_train = upset_features(train, feature_set=feature_set)
         y_train = train["label"].values
         w_train = compute_sample_weights(train, w_upset=w_upset, w_miss=w_miss)
-        X_test = upset_features(test)
+        X_test = upset_features(test, feature_set=feature_set)
         y_test = test["label"].values
 
         model = fit_upset_model(X_train, y_train, w_train)
@@ -369,6 +371,7 @@ def build_v9_pairwise(
     slots_csv: str,
     w_upset: float = W_UPSET,
     w_miss: float = W_MISS,
+    feature_set: str = "v9b",
 ) -> None:
     """For each LOSO season, train v9 on other-seasons' per-game rows and
     apply to every pair in that season's pairwise_v4.csv. Writes a CSV in
@@ -379,8 +382,9 @@ def build_v9_pairwise(
     sample weights to fit_upset_model; the apply-time round feature is
     now resolved via build_pair_round_lookup (was hardcoded to 0.0).
 
-    Weights are forwarded to compute_sample_weights; defaults preserve
-    canonical 3.0 / 4.0 behavior.
+    Weights and feature_set are forwarded to upset_features and
+    compute_sample_weights; defaults preserve canonical 3.0 / 4.0 behavior
+    and v9-B feature set.
     """
     pw = pd.read_csv(pairwise_v4_csv).drop_duplicates(
         ["season", "team_a", "team_b"], keep="last"
@@ -402,7 +406,7 @@ def build_v9_pairwise(
 
         train = per_game[per_game.season != season]
         if len(train) > 0 and valid_mask.any():
-            X_train = upset_features(train)
+            X_train = upset_features(train, feature_set=feature_set)
             y_train = train["label"].values
             w_train = compute_sample_weights(train, w_upset=w_upset, w_miss=w_miss)
             model = fit_upset_model(X_train, y_train, w_train)
@@ -419,7 +423,7 @@ def build_v9_pairwise(
 
             apply_df["round"] = apply_df.apply(_round_for_pair, axis=1)
             apply_df["p_stage1"] = apply_df["p_a_wins"]
-            p_v9 = model.predict_proba(upset_features(apply_df))[:, 1]
+            p_v9 = model.predict_proba(upset_features(apply_df, feature_set=feature_set))[:, 1]
             v9_by_index = pd.Series(p_v9, index=apply_df.index)
         else:
             v9_by_index = pd.Series(dtype=float)
