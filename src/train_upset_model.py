@@ -359,6 +359,7 @@ def build_v9_pairwise(
     pairwise_v4_csv: str,
     seeds_csv: str,
     out_path: str,
+    slots_csv: str,
     w_upset: float = W_UPSET,
     w_miss: float = W_MISS,
 ) -> None:
@@ -368,7 +369,8 @@ def build_v9_pairwise(
     team_b on every row.
 
     Mirrors src/train_stage2.py:build_v8_pairwise. Differences: feeds
-    sample weights to fit_upset_model, no other functional change.
+    sample weights to fit_upset_model; the apply-time round feature is
+    now resolved via build_pair_round_lookup (was hardcoded to 0.0).
 
     Weights are forwarded to compute_sample_weights; defaults preserve
     canonical 3.0 / 4.0 behavior.
@@ -377,6 +379,7 @@ def build_v9_pairwise(
         ["season", "team_a", "team_b"], keep="last"
     )
     seeds = pd.read_csv(seeds_csv)
+    slots = pd.read_csv(slots_csv)
     seeds["seed_int"] = seeds["Seed"].apply(parse_seed)
     seed_lookup = {(int(r["Season"]), int(r["TeamID"])): r["seed_int"]
                    for _, r in seeds.iterrows() if r["seed_int"] is not None}
@@ -399,7 +402,15 @@ def build_v9_pairwise(
 
             apply_df = season_pw[valid_mask].copy()
             apply_df["abs_seed_diff"] = (apply_df["seed_a"] - apply_df["seed_b"]).abs()
-            apply_df["round"] = 0.0  # unknown at apply time -- pairwise CSV has no DayNum
+            season_round = build_pair_round_lookup(int(season), slots, seeds)
+
+            def _round_for_pair(row):
+                a, b = int(row["team_a"]), int(row["team_b"])
+                if a > b:
+                    a, b = b, a
+                return float(season_round.get((a, b), 0))
+
+            apply_df["round"] = apply_df.apply(_round_for_pair, axis=1)
             apply_df["p_stage1"] = apply_df["p_a_wins"]
             p_v9 = model.predict_proba(upset_features(apply_df))[:, 1]
             v9_by_index = pd.Series(p_v9, index=apply_df.index)
@@ -521,7 +532,11 @@ def main():
 
     pairwise_v9 = OUTPUT / "pairwise_v9.csv"
     print(f"Writing v9-adjusted pairwise to {pairwise_v9} ...")
-    build_v9_pairwise(per_game, pairwise_v4, seeds_csv, str(pairwise_v9))
+    slots_csv = str(DATA / "MNCAATourneySlots.csv")
+    build_v9_pairwise(
+        per_game, pairwise_v4, seeds_csv, str(pairwise_v9),
+        slots_csv=slots_csv,
+    )
     print("  Done.")
 
 

@@ -339,6 +339,18 @@ def test_build_v9_pairwise_writes_expected_schema(tmp_path):
     seeds_path = tmp_path / "seeds.csv"
     seeds.to_csv(seeds_path, index=False)
 
+    # Synthetic slots for the bracket-walk helper to exercise both
+    # round=1 (R1 game) and round=2 (R2 game) without needing a full
+    # 64-team bracket.
+    slots = pd.DataFrame({
+        "Season": [2022, 2022, 2023, 2023],
+        "Slot":   ["R1W1", "R2W1", "R1W1", "R2W1"],
+        "StrongSeed": ["W01", "R1W1", "W01", "R1W1"],
+        "WeakSeed":   ["W08", "W16",  "W08", "W16"],
+    })
+    slots_path = tmp_path / "slots.csv"
+    slots.to_csv(slots_path, index=False)
+
     # Per-game training rows mirroring two seasons (drives both LOSO folds).
     per_game = pd.DataFrame([
         {"season": 2022, "team_a": 1, "team_b": 2, "p_stage1": 0.7,
@@ -356,7 +368,10 @@ def test_build_v9_pairwise_writes_expected_schema(tmp_path):
     ])
 
     out_path = tmp_path / "pairwise_v9.csv"
-    build_v9_pairwise(per_game, str(pw_path), str(seeds_path), str(out_path))
+    build_v9_pairwise(
+        per_game, str(pw_path), str(seeds_path), str(out_path),
+        slots_csv=str(slots_path),
+    )
 
     out = pd.read_csv(out_path)
     assert list(out.columns) == ["season", "team_a", "team_b", "p_a_wins"]
@@ -476,6 +491,15 @@ def test_build_v9_pairwise_threads_weights_to_sample_weight(
     seeds_path = tmp_path / "seeds.csv"
     seeds.to_csv(seeds_path, index=False)
 
+    slots = pd.DataFrame({
+        "Season": [2022, 2022, 2023, 2023],
+        "Slot":   ["R1W1", "R2W1", "R1W1", "R2W1"],
+        "StrongSeed": ["W01", "R1W1", "W01", "R1W1"],
+        "WeakSeed":   ["W08", "W16",  "W08", "W16"],
+    })
+    slots_path = tmp_path / "slots.csv"
+    slots.to_csv(slots_path, index=False)
+
     per_game = pd.DataFrame([
         {"season": 2022, "team_a": 1, "team_b": 2, "p_stage1": 0.7,
          "seed_a": 1, "seed_b": 8, "abs_seed_diff": 7,
@@ -506,6 +530,7 @@ def test_build_v9_pairwise_threads_weights_to_sample_weight(
     out_path = tmp_path / "pairwise_v9.csv"
     build_v9_pairwise(
         per_game, str(pw_path), str(seeds_path), str(out_path),
+        slots_csv=str(slots_path),
         w_upset=1.0, w_miss=0.0,
     )
 
@@ -614,3 +639,74 @@ def test_build_pair_round_lookup_canonical_pair_ordering():
     lookup = build_pair_round_lookup(season, slots, seeds)
     for (a, b) in lookup.keys():
         assert a < b, f"non-canonical key ({a}, {b})"
+
+
+def test_build_v9_pairwise_uses_real_round_at_apply(tmp_path, monkeypatch):
+    """build_v9_pairwise must populate apply_df['round'] from the
+    season's bracket structure, not hardcode 0. Capture the apply-time
+    feature matrix via a stub fit and assert round-column values are
+    in 1..6 for at least the canonical 1-vs-16 R1 pair.
+    """
+    real_slots, real_seeds = _real_2024_slots_seeds()
+    season = 2024
+    season_seeds = real_seeds[real_seeds.Season == season]
+    w01_team = int(season_seeds[season_seeds.Seed == "W01"]["TeamID"].iloc[0])
+    w16_team = int(season_seeds[season_seeds.Seed == "W16"]["TeamID"].iloc[0])
+    a, b = sorted([w01_team, w16_team])
+
+    pw_v4 = pd.DataFrame({
+        "season": [season], "team_a": [a], "team_b": [b],
+        "p_a_wins": [0.95],
+    })
+    pw_path = tmp_path / "pairwise_v4.csv"
+    pw_v4.to_csv(pw_path, index=False)
+
+    seeds_path = tmp_path / "seeds.csv"
+    real_seeds[real_seeds.Season == season].to_csv(seeds_path, index=False)
+    slots_path = tmp_path / "slots.csv"
+    real_slots[real_slots.Season == season].to_csv(slots_path, index=False)
+
+    # Per-game training rows -- need at least one OTHER season so the
+    # LOSO loop has training data when 2024 is the test season.
+    other_season = 2023
+    per_game = pd.DataFrame([
+        {"season": other_season, "team_a": a, "team_b": b, "p_stage1": 0.95,
+         "seed_a": 1, "seed_b": 16, "abs_seed_diff": 15,
+         "upset": False, "round": 1, "label": 1},
+        {"season": other_season, "team_a": b, "team_b": a, "p_stage1": 0.05,
+         "seed_a": 16, "seed_b": 1, "abs_seed_diff": 15,
+         "upset": False, "round": 1, "label": 0},
+    ])
+
+    captured_X = []
+
+    class _StubModel:
+        def predict_proba(self, X):
+            captured_X.append(np.array(X, copy=True))
+            return np.column_stack([1 - X[:, 0], X[:, 0]])
+
+    def _stub_fit(X, y, w, seed=42):
+        return _StubModel()
+
+    monkeypatch.setattr("src.train_upset_model.fit_upset_model", _stub_fit)
+
+    out_path = tmp_path / "pairwise_v9.csv"
+    build_v9_pairwise(
+        per_game,
+        str(pw_path),
+        str(seeds_path),
+        str(out_path),
+        slots_csv=str(slots_path),
+    )
+
+    # The apply path called predict_proba with a feature matrix whose
+    # round column (index 4) is non-zero for the W01-vs-W16 pair.
+    assert len(captured_X) == 1
+    X = captured_X[0]
+    # 7 features: p_stage1, seed_a, seed_b, abs_seed_diff, round,
+    # v4_confidence, is_a_higher_seed. Round is column index 4.
+    assert X.shape[1] == 7
+    rounds = X[:, 4]
+    # Both rows of the symmetric pair should be R1 = 1.0.
+    assert np.allclose(rounds, 1.0), \
+        f"expected round=1 at apply time, got {rounds}"
