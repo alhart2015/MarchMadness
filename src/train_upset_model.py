@@ -126,3 +126,23 @@ def load_per_game_data_with_upset(
             "label": 0,
         })
     return pd.DataFrame(rows)
+
+
+def compute_sample_weights(
+    df: pd.DataFrame, w_upset: float = W_UPSET, w_miss: float = W_MISS
+) -> np.ndarray:
+    """Per-row training weight for v9.
+
+    For each row:
+        w = 1.0
+        if upset: w *= w_upset                        # upset multiplier
+        w *= 1 + w_miss * (label - p_stage1) ** 2     # miss multiplier
+                                                      # residual is per-perspective
+
+    Returns: np.ndarray of length len(df), aligned with df rows.
+    """
+    base = np.ones(len(df), dtype=float)
+    upset_factor = np.where(df["upset"].values, w_upset, 1.0)
+    residual = df["label"].values.astype(float) - df["p_stage1"].values.astype(float)
+    miss_factor = 1.0 + w_miss * (residual ** 2)
+    return base * upset_factor * miss_factor

@@ -2,6 +2,7 @@
 
 from pathlib import Path
 
+import numpy as np
 import pandas as pd
 import pytest
 
@@ -128,3 +129,87 @@ def test_loader_produces_symmetric_rows(tmp_path):
     # Mirrored p_stage1: 0.7 (winner perspective) and 1 - 0.7 = 0.3 (loser).
     assert win_row["p_stage1"] == pytest.approx(0.7)
     assert loss_row["p_stage1"] == pytest.approx(0.3)
+
+
+# -----------------------------------------------------------------------------
+# compute_sample_weights
+# -----------------------------------------------------------------------------
+
+from src.train_upset_model import compute_sample_weights
+
+
+def _make_row(p_stage1: float, label: int, upset: bool) -> dict:
+    return {
+        "p_stage1": p_stage1, "label": label, "upset": upset,
+        # The other columns aren't read by compute_sample_weights, but
+        # included so the DataFrame mirrors the loader output.
+        "season": 2023, "team_a": 1, "team_b": 2,
+        "seed_a": 1, "seed_b": 2, "abs_seed_diff": 1,
+    }
+
+
+def test_weights_non_upset_well_predicted_is_one():
+    """Non-upset row, v4 confidently right: weight ~ 1."""
+    df = pd.DataFrame([_make_row(p_stage1=0.95, label=1, upset=False)])
+    w = compute_sample_weights(df, w_upset=3.0, w_miss=4.0)
+    # residual^2 = (1 - 0.95)^2 = 0.0025; w = 1 * (1 + 4 * 0.0025) = 1.01
+    assert w.shape == (1,)
+    assert w[0] == pytest.approx(1.0 + 4.0 * (1 - 0.95) ** 2)
+    assert 1.0 < w[0] < 1.05
+
+
+def test_weights_non_upset_missed_amplifies():
+    """Non-upset row, v4 confidently wrong: weight ~ 5."""
+    df = pd.DataFrame([_make_row(p_stage1=0.05, label=1, upset=False)])
+    w = compute_sample_weights(df, w_upset=3.0, w_miss=4.0)
+    # residual = 1 - 0.05 = 0.95; (1 + 4 * 0.9025) = 4.61
+    expected = 1.0 + 4.0 * (1 - 0.05) ** 2
+    assert w[0] == pytest.approx(expected)
+    assert w[0] > 4.0
+
+
+def test_weights_upset_predicted_uses_upset_factor():
+    """Upset row, v4 nearly hit: weight ~ 3."""
+    df = pd.DataFrame([_make_row(p_stage1=0.6, label=1, upset=True)])
+    w = compute_sample_weights(df, w_upset=3.0, w_miss=4.0)
+    # base 1 * 3 (upset) * (1 + 4 * 0.4^2) = 3 * 1.64 = 4.92
+    expected = 3.0 * (1.0 + 4.0 * (1 - 0.6) ** 2)
+    assert w[0] == pytest.approx(expected)
+    # Sanity: well above non-upset baseline.
+    assert w[0] > 3.0
+
+
+def test_weights_upset_confidently_missed_is_largest():
+    """Upset row, v4 confidently wrong: weight ~ 15."""
+    df = pd.DataFrame([_make_row(p_stage1=0.05, label=1, upset=True)])
+    w = compute_sample_weights(df, w_upset=3.0, w_miss=4.0)
+    # 3 * (1 + 4 * 0.95^2) = 3 * 4.61 = 13.83
+    expected = 3.0 * (1.0 + 4.0 * (1 - 0.05) ** 2)
+    assert w[0] == pytest.approx(expected)
+    assert w[0] > 13.0
+
+
+def test_weights_disabled_when_factors_are_unit():
+    """w_upset=1, w_miss=0 -> all weights == 1."""
+    df = pd.DataFrame([
+        _make_row(0.5, 1, True),
+        _make_row(0.9, 0, False),
+        _make_row(0.05, 1, True),
+    ])
+    w = compute_sample_weights(df, w_upset=1.0, w_miss=0.0)
+    assert np.allclose(w, 1.0)
+
+
+def test_weights_uses_correct_residual_for_loser_perspective():
+    """Loser-perspective row (label=0): residual is computed against label=0,
+    not label=1. Otherwise the symmetric pair would carry asymmetric weights
+    even when v4 was perfectly calibrated.
+    """
+    # v4 says p(A wins) = 0.7. Symmetric pair: winner row p_stage1=0.7,label=1;
+    # loser row p_stage1=0.3,label=0. Both should have residual^2 = 0.09.
+    df = pd.DataFrame([
+        _make_row(p_stage1=0.7, label=1, upset=False),
+        _make_row(p_stage1=0.3, label=0, upset=False),
+    ])
+    w = compute_sample_weights(df, w_upset=3.0, w_miss=4.0)
+    assert w[0] == pytest.approx(w[1])
