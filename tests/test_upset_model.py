@@ -513,3 +513,104 @@ def test_build_v9_pairwise_threads_weights_to_sample_weight(
     assert len(captured_weights) == 2
     for w in captured_weights:
         assert np.allclose(w, 1.0), f"expected uniform weights, got {w}"
+
+
+# -----------------------------------------------------------------------------
+# build_pair_round_lookup: bracket-walk for apply-time round
+# -----------------------------------------------------------------------------
+
+
+def _real_2024_slots_seeds():
+    """Load real 2024 MNCAATourneySlots and MNCAATourneySeeds for the
+    bracket-walk helper tests. Test data lives under
+    data/raw/march-machine-learning-2026/.
+    """
+    from pathlib import Path
+    data_dir = Path("data/raw/march-machine-learning-2026")
+    slots = pd.read_csv(data_dir / "MNCAATourneySlots.csv")
+    seeds = pd.read_csv(data_dir / "MNCAATourneySeeds.csv")
+    return slots, seeds
+
+
+def test_build_pair_round_lookup_r1_same_region():
+    """1-seed vs 16-seed in the same region meet in R1."""
+    from src.train_upset_model import build_pair_round_lookup
+    slots, seeds = _real_2024_slots_seeds()
+    season = 2024
+    season_seeds = seeds[seeds.Season == season]
+    w01_team = int(season_seeds[season_seeds.Seed == "W01"]["TeamID"].iloc[0])
+    w16_team = int(season_seeds[season_seeds.Seed == "W16"]["TeamID"].iloc[0])
+    lookup = build_pair_round_lookup(season, slots, seeds)
+    a, b = sorted([w01_team, w16_team])
+    assert lookup[(a, b)] == 1
+
+
+def test_build_pair_round_lookup_r2_same_region():
+    """1-seed vs 8-seed (or 9-seed) in the same region meet in R2."""
+    from src.train_upset_model import build_pair_round_lookup
+    slots, seeds = _real_2024_slots_seeds()
+    season = 2024
+    season_seeds = seeds[seeds.Season == season]
+    w01_team = int(season_seeds[season_seeds.Seed == "W01"]["TeamID"].iloc[0])
+    w08_team = int(season_seeds[season_seeds.Seed == "W08"]["TeamID"].iloc[0])
+    lookup = build_pair_round_lookup(season, slots, seeds)
+    a, b = sorted([w01_team, w08_team])
+    assert lookup[(a, b)] == 2
+
+
+def test_build_pair_round_lookup_r4_same_region():
+    """1-seed vs 2-seed in the same region meet in R4 (regional final / E8)."""
+    from src.train_upset_model import build_pair_round_lookup
+    slots, seeds = _real_2024_slots_seeds()
+    season = 2024
+    season_seeds = seeds[seeds.Season == season]
+    w01_team = int(season_seeds[season_seeds.Seed == "W01"]["TeamID"].iloc[0])
+    w02_team = int(season_seeds[season_seeds.Seed == "W02"]["TeamID"].iloc[0])
+    lookup = build_pair_round_lookup(season, slots, seeds)
+    a, b = sorted([w01_team, w02_team])
+    assert lookup[(a, b)] == 4
+
+
+def test_build_pair_round_lookup_cross_region_r5_or_r6():
+    """1-seed in W vs 1-seed in X meet in R5 or R6 (F4 or Champ),
+    depending on F4 pairings for that season.
+    """
+    from src.train_upset_model import build_pair_round_lookup
+    slots, seeds = _real_2024_slots_seeds()
+    season = 2024
+    season_seeds = seeds[seeds.Season == season]
+    w01_team = int(season_seeds[season_seeds.Seed == "W01"]["TeamID"].iloc[0])
+    x01_team = int(season_seeds[season_seeds.Seed == "X01"]["TeamID"].iloc[0])
+    lookup = build_pair_round_lookup(season, slots, seeds)
+    a, b = sorted([w01_team, x01_team])
+    assert lookup[(a, b)] in (5, 6)
+
+
+def test_build_pair_round_lookup_covers_all_seed_pairs():
+    """For 64 main-bracket teams (after play-in resolution), expect
+    C(64, 2) = 2016 pairs in the lookup. Allow some slack for play-in
+    seeds that do not have a unique team.
+    """
+    from src.train_upset_model import build_pair_round_lookup
+    slots, seeds = _real_2024_slots_seeds()
+    season = 2024
+    lookup = build_pair_round_lookup(season, slots, seeds)
+    # Lower bound: at least 1900 pairs covered. (Some 2024 play-in slots
+    # may resolve to multiple seed strings but only one team_id, so
+    # exact-2016 is unrealistic; 1900 is a safe floor.)
+    assert len(lookup) >= 1900
+    # All round values in 1..6.
+    rounds = set(lookup.values())
+    assert rounds.issubset({1, 2, 3, 4, 5, 6})
+
+
+def test_build_pair_round_lookup_canonical_pair_ordering():
+    """All keys are (a, b) with a < b -- canonical ordering matches
+    the pairwise CSV's team_a < team_b convention.
+    """
+    from src.train_upset_model import build_pair_round_lookup
+    slots, seeds = _real_2024_slots_seeds()
+    season = 2024
+    lookup = build_pair_round_lookup(season, slots, seeds)
+    for (a, b) in lookup.keys():
+        assert a < b, f"non-canonical key ({a}, {b})"

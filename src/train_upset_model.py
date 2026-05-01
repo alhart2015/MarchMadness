@@ -68,6 +68,97 @@ def parse_seed(seed_str):
     return int(digits) if digits else None
 
 
+def _slot_leaf_seeds(
+    slot: str,
+    season_slots: pd.DataFrame,
+    memo: dict,
+) -> set:
+    """Recursively expand a slot reference to the set of leaf seed strings
+    reachable through it.
+
+    A slot like 'R1W1' has StrongSeed='W01' and WeakSeed='W16' (both leaf
+    seeds, returned as-is). A slot like 'R2W1' has StrongSeed='R1W1' and
+    WeakSeed='R1W2' (both slot references, recursed into). For play-in
+    placeholders ('W11a', 'W11b'), expand returns {slot} -- they are
+    treated as leaf seeds in the structural walk; the team-id mapping
+    step downstream will drop pairs whose seed has no unique team.
+    """
+    if slot in memo:
+        return memo[slot]
+    rows = season_slots[season_slots.Slot == slot]
+    if len(rows) == 0:
+        # No slot row -- treat as leaf seed string.
+        memo[slot] = {slot}
+        return memo[slot]
+    row = rows.iloc[0]
+    leaves = (
+        _slot_leaf_seeds(row.StrongSeed, season_slots, memo)
+        | _slot_leaf_seeds(row.WeakSeed, season_slots, memo)
+    )
+    memo[slot] = leaves
+    return leaves
+
+
+def _round_of_slot(slot: str) -> int:
+    """Map slot like 'R1W3' or 'R6CH' to its round number 1..6.
+    Returns 0 for play-in slots that do not start with 'R'.
+    """
+    if not slot.startswith("R") or len(slot) < 2 or not slot[1].isdigit():
+        return 0
+    return int(slot[1])
+
+
+def build_pair_round_lookup(
+    season: int,
+    slots_df: pd.DataFrame,
+    seeds_df: pd.DataFrame,
+) -> dict:
+    """For a season, return {(team_a_id, team_b_id): round (1..6)} where
+    team_a_id < team_b_id, computed by walking the bracket structure.
+
+    For each slot (in ascending round order), expand to the set of leaf
+    seeds reachable, then for every pair of seeds in the set, record
+    the slot's round as the round at which those seeds meet -- but only
+    if no smaller round has already been recorded for the pair.
+
+    Seeds are resolved to team IDs via seeds_df; pairs with seeds that
+    do not map to a unique team are dropped.
+    """
+    season_slots = slots_df[slots_df.Season == season]
+    season_seeds = seeds_df[seeds_df.Season == season]
+    seed_to_team = {row.Seed: int(row.TeamID) for _, row in season_seeds.iterrows()}
+
+    memo = {}
+    pair_round_seeds = {}  # (seed_a_str, seed_b_str) -> round
+    # Sort by round ascending; same-round order is stable.
+    slot_rounds = [(s, _round_of_slot(s)) for s in season_slots["Slot"].unique()]
+    slot_rounds.sort(key=lambda x: x[1])
+
+    for slot, rnd in slot_rounds:
+        if rnd == 0:
+            # Play-in slots -- no useful pair info; play-in seed pairs
+            # already meet there and they are uninteresting for the
+            # apply-time round feature anyway.
+            continue
+        leaves = sorted(_slot_leaf_seeds(slot, season_slots, memo))
+        for i, sa in enumerate(leaves):
+            for sb in leaves[i + 1:]:
+                key = (sa, sb)
+                if key not in pair_round_seeds:
+                    pair_round_seeds[key] = rnd
+
+    # Resolve seed strings to team ids and drop unresolved pairs.
+    pair_round = {}
+    for (sa, sb), rnd in pair_round_seeds.items():
+        ta = seed_to_team.get(sa)
+        tb = seed_to_team.get(sb)
+        if ta is None or tb is None:
+            continue
+        a, b = (ta, tb) if ta < tb else (tb, ta)
+        pair_round[(a, b)] = rnd
+    return pair_round
+
+
 def load_per_game_data_with_upset(
     pairwise_csv: str, results_csv: str, seeds_csv: str
 ) -> pd.DataFrame:
