@@ -64,14 +64,23 @@ def _write_minimal_inputs(tmp_path):
     results_path = tmp_path / "results.csv"
     results.to_csv(results_path, index=False)
 
-    return str(pw_path), str(seeds_path), str(results_path)
+    slots = pd.DataFrame({
+        "Season": [2022, 2022, 2023, 2023],
+        "Slot":   ["R1W1", "R2W1", "R1W1", "R2W1"],
+        "StrongSeed": ["W01", "R1W1", "W01", "R1W1"],
+        "WeakSeed":   ["W08", "W16",  "W08", "W16"],
+    })
+    slots_path = tmp_path / "slots.csv"
+    slots.to_csv(slots_path, index=False)
+
+    return str(pw_path), str(seeds_path), str(results_path), str(slots_path)
 
 
 def test_run_single_cell_writes_pairwise_and_returns_metrics(tmp_path):
     """run_single_cell writes a v8-compatible pairwise CSV at the
     expected path and returns a dict with weight + scoring keys.
     """
-    pw_path, seeds_path, results_path = _write_minimal_inputs(tmp_path)
+    pw_path, seeds_path, results_path, slots_path = _write_minimal_inputs(tmp_path)
     out_dir = tmp_path / "v9_sweep"
 
     metrics = run_single_cell(
@@ -80,6 +89,7 @@ def test_run_single_cell_writes_pairwise_and_returns_metrics(tmp_path):
         results_csv=results_path,
         seeds_csv=seeds_path,
         out_dir=str(out_dir),
+        slots_csv=slots_path,
     )
 
     # Pairwise CSV exists and has the expected schema.
@@ -107,7 +117,7 @@ def test_run_sweep_writes_results_csv(tmp_path):
     """run_sweep over a 2-cell mini-grid (anchor + one more) writes a
     results CSV with one row per cell and the expected columns.
     """
-    pw_path, seeds_path, results_path = _write_minimal_inputs(tmp_path)
+    pw_path, seeds_path, results_path, slots_path = _write_minimal_inputs(tmp_path)
     out_dir = tmp_path / "v9_sweep"
     results_csv_out = tmp_path / "v9_sweep_results.csv"
 
@@ -122,6 +132,7 @@ def test_run_sweep_writes_results_csv(tmp_path):
         seeds_csv=seeds_path,
         out_dir=str(out_dir),
         results_csv_path=str(results_csv_out),
+        slots_csv=slots_path,
     )
 
     assert results_csv_out.exists()
@@ -139,7 +150,7 @@ def test_run_sweep_writes_results_csv(tmp_path):
 
 def test_run_sweep_halts_without_anchor_cell(tmp_path):
     """run_sweep refuses to start if the anchor cell is missing."""
-    pw_path, seeds_path, results_path = _write_minimal_inputs(tmp_path)
+    pw_path, seeds_path, results_path, slots_path = _write_minimal_inputs(tmp_path)
     from src.sweep_v9_weights import run_sweep
 
     bad_grid = [(1.5, 0.5), (2.0, 1.0)]  # no (1.0, 0.0)
@@ -152,4 +163,5 @@ def test_run_sweep_halts_without_anchor_cell(tmp_path):
             seeds_csv=seeds_path,
             out_dir=str(tmp_path / "v9_sweep"),
             results_csv_path=str(tmp_path / "results.csv"),
+            slots_csv=slots_path,
         )
