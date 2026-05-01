@@ -12,13 +12,24 @@
 
 ## Active queue
 
-1. **Ensemble of model classes.** XGBoost + logistic regression +
-   small neural net averaged (or stacked). The TODO already had this
-   under Tier C. The hypothesis: different model classes capture
-   partially-uncorrelated error patterns. Risk: if all three see the
-   same features and reach the same ~80% R64 / ~50-60% deep-round
-   ceiling, the errors are highly correlated and ensembling won't help
-   much. Promoted to position #1 after the v9-C swap landed.
+1. **Ensemble of model classes.** First pass: XGBoost + logistic
+   regression only (lean diversity test -- if LR adds nothing over XGB
+   on this feature space, more exotic classes won't either, and we
+   exit cheaply). The hypothesis: different model classes capture
+   partially-uncorrelated error patterns. Risk: if both see the same
+   features and reach the same ~80% R64 / ~50-60% deep-round ceiling,
+   the errors are highly correlated and ensembling won't help.
+   Promoted to position #1 after the v9-C swap landed.
+
+   Follow-ups deliberately deferred (revisit if XGB+LR shows real
+   signal):
+   - **Small neural net (MLP) as a third ensemble member.** Adds
+     PyTorch tooling cost; diversity vs XGBoost on tabular data with
+     ~80 features is the open question.
+   - **Bayesian / probabilistic model** (e.g., hierarchical
+     Bradley-Terry where each team has a latent strength + variance).
+     Most structurally different from XGBoost; the most novel signal
+     class on the roadmap.
 2. **External rankings (538, KenPom-public, BPI as features).** Note:
    we already have BPI, Sagarin, KenPom (POM), Bart Torvik (TRK), RPI
    via Massey ordinals (config.yaml lines 30-36). Truly external would
