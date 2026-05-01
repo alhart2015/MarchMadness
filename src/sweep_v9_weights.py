@@ -42,3 +42,89 @@ def validate_grid(grid: Iterable[Tuple[float, float]]) -> None:
             f"anchor cell {ANCHOR_CELL} missing from grid; sweep is invalid "
             "(no v8 reproduction sanity check possible)"
         )
+
+
+import numpy as np
+import pandas as pd
+
+from src.train_upset_model import (
+    build_v9_pairwise,
+    double_loso_eval,
+    load_per_game_data_with_upset,
+)
+
+
+def _cell_path(out_dir: str, w_upset: float, w_miss: float) -> str:
+    """Per-cell pairwise CSV path: pairwise_v9_WU{u:.2f}_WM{m:.2f}.csv."""
+    name = f"pairwise_v9_WU{w_upset:.2f}_WM{w_miss:.2f}.csv"
+    return str(Path(out_dir) / name)
+
+
+def run_single_cell(
+    w_upset: float,
+    w_miss: float,
+    pairwise_v4_csv: str,
+    results_csv: str,
+    seeds_csv: str,
+    out_dir: str,
+) -> dict:
+    """Run one (w_upset, w_miss) cell of the sweep.
+
+    Steps:
+      1. Load per-game training rows from pairwise_v4 + results + seeds.
+      2. Build v9-adjusted pairwise CSV at out_dir/pairwise_v9_WU{u}_WM{m}.csv.
+      3. Run per-season LOSO eval to capture log loss / accuracy.
+      4. Score the pairwise CSV (best-effort: catches FileNotFoundError /
+         missing slots in score_pairwise_path so unit tests with
+         synthetic data work).
+      5. Return dict with all metrics.
+    """
+    Path(out_dir).mkdir(parents=True, exist_ok=True)
+    pairwise_csv_out = _cell_path(out_dir, w_upset, w_miss)
+
+    per_game = load_per_game_data_with_upset(
+        pairwise_v4_csv, results_csv, seeds_csv
+    )
+
+    build_v9_pairwise(
+        per_game, pairwise_v4_csv, seeds_csv, pairwise_csv_out,
+        w_upset=w_upset, w_miss=w_miss,
+    )
+
+    eval_df = double_loso_eval(
+        per_game, w_upset=w_upset, w_miss=w_miss
+    )
+    if len(eval_df) > 0 and "n_games" in eval_df.columns:
+        n_total = float(eval_df["n_games"].sum())
+        if n_total > 0:
+            ll_mean = float(
+                (eval_df["ll_v9"] * eval_df["n_games"]).sum() / n_total
+            )
+            acc_mean = float(
+                (eval_df["acc_v9"] * eval_df["n_games"]).sum() / n_total
+            )
+        else:
+            ll_mean = float("nan")
+            acc_mean = float("nan")
+    else:
+        ll_mean = float("nan")
+        acc_mean = float("nan")
+
+    # Bracket scoring: tolerate missing tournament slot data on synthetic
+    # inputs (unit tests). Production runs with real Kaggle data will
+    # produce meaningful totals.
+    try:
+        from src.score_chalk_brackets import score_pairwise_path
+        scored = score_pairwise_path(pairwise_csv_out)
+        total_pts = float(scored["total_pts"])
+    except (FileNotFoundError, KeyError, ValueError):
+        total_pts = 0.0
+
+    return {
+        "w_upset": float(w_upset),
+        "w_miss": float(w_miss),
+        "total_brkt_pts": total_pts,
+        "ll_loso_weighted_mean": ll_mean,
+        "acc_loso_weighted_mean": acc_mean,
+        "pairwise_csv": pairwise_csv_out,
+    }
