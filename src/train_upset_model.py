@@ -306,3 +306,116 @@ def build_v9_pairwise(
             })
 
     pd.DataFrame(out_rows).to_csv(out_path, index=False)
+
+
+def main():
+    print("=" * 80)
+    print("V9 TRAINING (upset-aware stage-2 on v4 OOF predictions)")
+    print(f"  W_UPSET={W_UPSET}, W_MISS={W_MISS}")
+    print("=" * 80)
+
+    pairwise_v4 = "output/pairwise_v4.csv"
+    pairwise_v8 = "output/pairwise_v8.csv"
+    seeds_csv = str(DATA / "MNCAATourneySeeds.csv")
+    results_csv = str(DATA / "MNCAATourneyCompactResults.csv")
+
+    per_game = load_per_game_data_with_upset(pairwise_v4, results_csv, seeds_csv)
+    print(f"  Per-game training rows: {len(per_game):,} "
+          f"(across {per_game.season.nunique()} seasons; "
+          f"{int(per_game['upset'].sum() / 2)} upset games)")
+
+    # Per-season log loss / accuracy -- v9 alone, v4 and v8 joined for context.
+    eval_v9 = double_loso_eval(per_game)
+
+    # v4 / v8 per-season stats from the same per_game frame for v4 (p_stage1)
+    # plus pairwise_v8.csv joined back for v8.
+    pw_v4 = per_game[per_game.label == 1].copy()
+    v4_stats = (
+        pw_v4.groupby("season")
+        .apply(lambda g: pd.Series({
+            "n": len(g),
+            "ll_v4": sklearn_log_loss(g["label"].values, g["p_stage1"].values,
+                                      labels=[0, 1]),
+            "acc_v4": float((g["p_stage1"].values > 0.5).mean()),
+        }))
+        .reset_index()
+    )
+
+    if Path(pairwise_v8).exists():
+        v8_pw = pd.read_csv(pairwise_v8).drop_duplicates(
+            ["season", "team_a", "team_b"], keep="last"
+        )
+        v8_lookup = {(int(s), int(a), int(b)): float(p)
+                     for s, a, b, p in zip(v8_pw.season, v8_pw.team_a,
+                                           v8_pw.team_b, v8_pw.p_a_wins)}
+        v8_per_season = []
+        for season, g in pw_v4.groupby("season"):
+            ps = []
+            for _, row in g.iterrows():
+                a, b = int(row.team_a), int(row.team_b)
+                if a < b:
+                    p = v8_lookup.get((int(season), a, b))
+                else:
+                    raw = v8_lookup.get((int(season), b, a))
+                    p = (1.0 - raw) if raw is not None else None
+                if p is None:
+                    p = float(row.p_stage1)  # pass-through
+                ps.append(p)
+            ps_arr = np.array(ps)
+            v8_per_season.append({
+                "season": int(season),
+                "ll_v8": sklearn_log_loss(g["label"].values, ps_arr, labels=[0, 1]),
+                "acc_v8": float((ps_arr > 0.5).mean()),
+            })
+        v8_stats = pd.DataFrame(v8_per_season)
+    else:
+        print("  (output/pairwise_v8.csv not found; skipping v8 column.)")
+        v8_stats = pd.DataFrame(columns=["season", "ll_v8", "acc_v8"])
+
+    merged = (
+        v4_stats.merge(v8_stats, on="season", how="left")
+        .merge(eval_v9, on="season", how="left")
+    )
+
+    print(f"\n{'Season':>6}  {'N':>3}  {'LL_v4':>6}  {'LL_v8':>6}  {'LL_v9':>6}  "
+          f"{'Acc_v4':>6}  {'Acc_v8':>6}  {'Acc_v9':>6}")
+    print("-" * 72)
+    for _, r in merged.iterrows():
+        ll_v8 = f"{r.ll_v8:>6.3f}" if not pd.isna(r.get('ll_v8', np.nan)) else "    --"
+        acc_v8 = f"{r.acc_v8 * 100:>5.1f}%" if not pd.isna(r.get('acc_v8', np.nan)) else "    --"
+        print(f"  {int(r.season):>4}  {int(r.n):>3}  "
+              f"{r.ll_v4:>6.3f}  {ll_v8}  {r.ll_v9:>6.3f}  "
+              f"{r.acc_v4 * 100:>5.1f}%  {acc_v8}  {r.acc_v9 * 100:>5.1f}%")
+    print("-" * 72)
+    n_total = merged["n"].sum()
+    mean_ll_v4 = (merged["ll_v4"] * merged["n"]).sum() / n_total
+    mean_ll_v9 = (merged["ll_v9"] * merged["n"]).sum() / n_total
+    mean_acc_v4 = (merged["acc_v4"] * merged["n"]).sum() / n_total
+    mean_acc_v9 = (merged["acc_v9"] * merged["n"]).sum() / n_total
+    if "ll_v8" in merged.columns and merged["ll_v8"].notna().any():
+        v8_mask = merged["ll_v8"].notna()
+        n_v8 = merged.loc[v8_mask, "n"].sum()
+        mean_ll_v8 = (merged.loc[v8_mask, "ll_v8"] * merged.loc[v8_mask, "n"]).sum() / n_v8
+        mean_acc_v8 = (merged.loc[v8_mask, "acc_v8"] * merged.loc[v8_mask, "n"]).sum() / n_v8
+        ll_v8_str = f"{mean_ll_v8:>6.3f}"
+        acc_v8_str = f"{mean_acc_v8 * 100:>5.1f}%"
+    else:
+        ll_v8_str = "    --"
+        acc_v8_str = "    --"
+    print(f"  {'WT MEAN':>6}        "
+          f"{mean_ll_v4:>6.3f}  {ll_v8_str}  {mean_ll_v9:>6.3f}  "
+          f"{mean_acc_v4 * 100:>5.1f}%  {acc_v8_str}  {mean_acc_v9 * 100:>5.1f}%")
+
+    OUTPUT.mkdir(parents=True, exist_ok=True)
+    eval_path = OUTPUT / "v9_eval.csv"
+    merged.to_csv(eval_path, index=False)
+    print(f"\nWrote per-season eval to {eval_path}")
+
+    pairwise_v9 = OUTPUT / "pairwise_v9.csv"
+    print(f"Writing v9-adjusted pairwise to {pairwise_v9} ...")
+    build_v9_pairwise(per_game, pairwise_v4, seeds_csv, str(pairwise_v9))
+    print("  Done.")
+
+
+if __name__ == "__main__":
+    main()
