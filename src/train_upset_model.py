@@ -1,4 +1,4 @@
-"""Upset-aware stage-2 model (v9): replacement for v8 with upset-weighted training.
+"""Upset-aware stage-2 model (v9-B): feature-extended fallback over v9-A.
 
 Like v8 (src/train_stage2.py), v9 is a small XGBoost trained on v4's
 out-of-fold pairwise predictions plus seed-pair context, predicting the
@@ -6,8 +6,12 @@ actual game outcome under double-LOSO. The differentiator is the loss:
 training rows are weighted to emphasize upsets (higher seed lost) and
 high-confidence-miss rows (where v4 was wrong with high confidence).
 
-Inputs (4 features, identical to v8):
-    p_v4_stage1, seed_a, seed_b, abs_seed_diff
+Inputs (7 features for v9-B):
+    p_v4_stage1, seed_a, seed_b, abs_seed_diff,
+    round (1..6 for R64..Champ; 0 at apply time -- pairwise_v4.csv has
+      no DayNum so build_v9_pairwise always passes 0.0 for this column),
+    v4_confidence (|p_stage1 - 0.5|),
+    is_a_higher_seed (1.0 if seed_a < seed_b else 0.0).
 Target:
     label = 1 if A beat B else 0 (symmetric: each game contributes 2 rows).
 
@@ -27,12 +31,21 @@ Outputs:
 
 Spec: docs/superpowers/specs/2026-04-30-upset-detection-design.md
 """
+import sys
 from pathlib import Path
 
 import numpy as np
 import pandas as pd
 import xgboost as xgb
 from sklearn.metrics import log_loss as sklearn_log_loss
+
+# Path setup: allow `python src/train_upset_model.py` invocation by ensuring
+# the project root is on sys.path before importing from `src.*`.
+_ROOT = Path(__file__).resolve().parent.parent
+if str(_ROOT) not in sys.path:
+    sys.path.insert(0, str(_ROOT))
+
+from src.models.matchup import day_to_round
 
 DATA = Path("data/raw/march-machine-learning-2026")
 OUTPUT = Path("output")
@@ -61,7 +74,7 @@ def load_per_game_data_with_upset(
     """Build per-played-game training rows for v9.
 
     Each row: (season, team_a, team_b, p_stage1, seed_a, seed_b,
-              abs_seed_diff, upset, label). Symmetric: each game produces
+              abs_seed_diff, upset, round, label). Symmetric: each game produces
               two rows (a=W,b=L; a=L,b=W). The upset flag is per-game
               (independent of A/B perspective) -- True iff the higher-
               seeded team lost. Same-seed games are flagged upset=False.
@@ -115,6 +128,7 @@ def load_per_game_data_with_upset(
             "seed_a": seed_w, "seed_b": seed_l,
             "abs_seed_diff": abs(seed_w - seed_l),
             "upset": is_upset,
+            "round": day_to_round(int(g["DayNum"])),
             "label": 1,
         })
         rows.append({
@@ -123,6 +137,7 @@ def load_per_game_data_with_upset(
             "seed_a": seed_l, "seed_b": seed_w,
             "abs_seed_diff": abs(seed_w - seed_l),
             "upset": is_upset,
+            "round": day_to_round(int(g["DayNum"])),
             "label": 0,
         })
     return pd.DataFrame(rows)
@@ -149,12 +164,23 @@ def compute_sample_weights(
 
 
 def upset_features(df: pd.DataFrame) -> np.ndarray:
-    """Pull the v9 input matrix from a per-game DataFrame.
+    """Pull the v9-B input matrix from a per-game DataFrame.
 
-    Same 4 features as v8 (src/train_stage2.py:stage2_features). The
-    differentiator from v8 is the sample weight, not the feature set.
+    7 features:
+      p_stage1, seed_a, seed_b, abs_seed_diff,
+      round (1..6 for R64..Champ; 0 if unknown DayNum -- always 0 at
+        apply time because pairwise_v4.csv has no DayNum),
+      v4_confidence (|p_stage1 - 0.5|),
+      is_a_higher_seed (1.0 if seed_a < seed_b else 0.0).
     """
-    return df[["p_stage1", "seed_a", "seed_b", "abs_seed_diff"]].values
+    p = df["p_stage1"].values.astype(float)
+    sa = df["seed_a"].values.astype(float)
+    sb = df["seed_b"].values.astype(float)
+    diff = df["abs_seed_diff"].values.astype(float)
+    rnd = df["round"].values.astype(float)
+    conf = np.abs(p - 0.5)
+    higher = (sa < sb).astype(float)
+    return np.column_stack([p, sa, sb, diff, rnd, conf, higher])
 
 
 def fit_upset_model(
@@ -278,8 +304,14 @@ def build_v9_pairwise(
             if seed_a is None or seed_b is None:
                 keep.append(False)
                 continue
-            feat_rows.append([float(r["p_a_wins"]), seed_a, seed_b,
-                              abs(seed_a - seed_b)])
+            feat_rows.append([
+                float(r["p_a_wins"]),
+                seed_a, seed_b,
+                abs(seed_a - seed_b),
+                0.0,                                    # round unknown at apply time
+                abs(float(r["p_a_wins"]) - 0.5),        # v4 confidence
+                1.0 if seed_a < seed_b else 0.0,        # is_a_higher_seed
+            ])
             keep.append(True)
 
         if not feat_rows:

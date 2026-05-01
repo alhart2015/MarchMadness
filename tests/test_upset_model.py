@@ -222,15 +222,19 @@ def test_weights_uses_correct_residual_for_loser_perspective():
 from src.train_upset_model import fit_upset_model, upset_features
 
 
-def test_upset_features_extracts_four_columns():
+def test_upset_features_extracts_seven_columns():
     df = pd.DataFrame([
-        _make_row(p_stage1=0.7, label=1, upset=True),
-        _make_row(p_stage1=0.3, label=0, upset=True),
+        {**_make_row(p_stage1=0.7, label=1, upset=True), "round": 1},
+        {**_make_row(p_stage1=0.3, label=0, upset=True), "round": 1},
     ])
     X = upset_features(df)
-    assert X.shape == (2, 4)
-    # Expected column order: p_stage1, seed_a, seed_b, abs_seed_diff
+    assert X.shape == (2, 7)
+    # Column 0 is p_stage1.
     assert X[0, 0] == pytest.approx(0.7)
+    # Column 5 is v4 confidence = |p - 0.5|.
+    assert X[0, 5] == pytest.approx(0.2)
+    # Column 6 is is_a_higher_seed (seed_a=1 < seed_b=2 -> 1.0).
+    assert X[0, 6] == pytest.approx(1.0)
 
 
 def test_fit_upset_model_returns_classifier_with_predict_proba():
@@ -246,6 +250,7 @@ def test_fit_upset_model_returns_classifier_with_predict_proba():
         "seed_a": seed_a, "seed_b": seed_b,
         "abs_seed_diff": np.abs(seed_a - seed_b),
         "upset": np.random.choice([True, False], n),
+        "round": np.random.randint(1, 7, n),
     })
     X = upset_features(df)
     y = df["label"].values
@@ -275,12 +280,12 @@ def test_double_loso_eval_never_trains_on_test_season(monkeypatch):
         rows.append({
             "season": season, "team_a": 1, "team_b": 2,
             "p_stage1": 0.7, "seed_a": 5, "seed_b": 12,
-            "abs_seed_diff": 7, "upset": True, "label": 1,
+            "abs_seed_diff": 7, "upset": True, "round": 1, "label": 1,
         })
         rows.append({
             "season": season, "team_a": 2, "team_b": 1,
             "p_stage1": 0.3, "seed_a": 12, "seed_b": 5,
-            "abs_seed_diff": 7, "upset": True, "label": 0,
+            "abs_seed_diff": 7, "upset": True, "round": 1, "label": 0,
         })
     per_game = pd.DataFrame(rows)
 
@@ -341,16 +346,16 @@ def test_build_v9_pairwise_writes_expected_schema(tmp_path):
     per_game = pd.DataFrame([
         {"season": 2022, "team_a": 1, "team_b": 2, "p_stage1": 0.7,
          "seed_a": 1, "seed_b": 8, "abs_seed_diff": 7,
-         "upset": False, "label": 1},
+         "upset": False, "round": 1, "label": 1},
         {"season": 2022, "team_a": 2, "team_b": 1, "p_stage1": 0.3,
          "seed_a": 8, "seed_b": 1, "abs_seed_diff": 7,
-         "upset": False, "label": 0},
+         "upset": False, "round": 1, "label": 0},
         {"season": 2023, "team_a": 2, "team_b": 3, "p_stage1": 0.45,
          "seed_a": 8, "seed_b": 16, "abs_seed_diff": 8,
-         "upset": True, "label": 1},
+         "upset": True, "round": 1, "label": 1},
         {"season": 2023, "team_a": 3, "team_b": 2, "p_stage1": 0.55,
          "seed_a": 16, "seed_b": 8, "abs_seed_diff": 8,
-         "upset": True, "label": 0},
+         "upset": True, "round": 1, "label": 0},
     ])
 
     out_path = tmp_path / "pairwise_v9.csv"
