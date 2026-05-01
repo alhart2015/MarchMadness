@@ -68,6 +68,17 @@
   stays in production. Documented as a candidate, not a swap-in;
   v9-B's round-asymmetry bug is a prerequisite to any future
   production swap. Findings: docs/notes/2026-05-01-v9-weight-sweep.md.
+- **v9-B round-asymmetry fix + sweep re-run (2026-05-01).** Replaced
+  apply-time `round=0` hardcoding with a season-aware
+  `MNCAATourneySlots` walk via `build_pair_round_lookup`. Re-ran the
+  same 15-cell weight sweep. Result: MARGINAL WINNER on a different
+  cell -- (W_UPSET=1.25, W_MISS=0.0) at 2690 pts (+20 vs v8, +2 vs
+  PR 7's pre-fix winner). More robust profile than PR 7's: 4W-2L
+  spread, max single-season delta +8 (vs PR 7's +12). Active
+  ingredient flipped to W_UPSET (mild upset weighting), not W_MISS.
+  Recommendation: candidate-only, not swap-in -- still within +20 of
+  v8 (spec's "marginal" band: 10 < d <= 25). v8 stays in production.
+  Findings: docs/notes/2026-05-01-v9-round-fix.md.
 
 
 
