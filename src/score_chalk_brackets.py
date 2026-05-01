@@ -219,7 +219,7 @@ def main():
     seeds_df = pd.read_csv(DATA / "MNCAATourneySeeds.csv")
     results_df = pd.read_csv(DATA / "MNCAATourneyCompactResults.csv")
 
-    versions = ["v1", "v2", "v4", "v8"]
+    versions = ["v1", "v2", "v4", "v8", "v9"]
     by_version_season = {}
     for v in versions:
         path = f"output/pairwise_{v}.csv"
