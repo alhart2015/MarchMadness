@@ -169,9 +169,10 @@ Add to `tests/test_train_upset_model.py`:
   one row per (season, team_a, team_b) in the input pairwise CSV, with
   team_a < team_b on every row.
 
-The v8 reproduction check (anchor cell total bracket pts within 1 pt
-of v8) is not a unit test -- it is the runtime gate in
-`src/sweep_v9_weights.py` and a success criterion in this spec.
+The v8 reproduction check (anchor cell total bracket pts within 5 pts
+of v8 -- see "Anchor tolerance" above) is not a unit test -- it is
+the runtime gate in `src/sweep_v9_weights.py` and a success criterion
+in this spec.
 
 New `tests/test_sweep_v9_weights.py`:
 
