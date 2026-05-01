@@ -165,3 +165,27 @@ def test_run_sweep_halts_without_anchor_cell(tmp_path):
             results_csv_path=str(tmp_path / "results.csv"),
             slots_csv=slots_path,
         )
+
+
+def test_run_single_cell_v9c_writes_pairwise(tmp_path):
+    """run_single_cell with feature_set='v9c' writes a pairwise CSV at the
+    same path template and returns metrics dict with the same keys as v9-B.
+    """
+    pw_path, seeds_path, results_path, slots_path = _write_minimal_inputs(tmp_path)
+    out_dir = tmp_path / "v9c_sweep"
+
+    metrics = run_single_cell(
+        w_upset=1.0, w_miss=0.0,
+        pairwise_v4_csv=pw_path,
+        results_csv=results_path,
+        seeds_csv=seeds_path,
+        out_dir=str(out_dir),
+        slots_csv=slots_path,
+        feature_set="v9c",
+    )
+
+    pw_path_out = out_dir / "pairwise_v9_WU1.00_WM0.00.csv"
+    assert pw_path_out.exists()
+    assert metrics["w_upset"] == 1.0
+    assert metrics["w_miss"] == 0.0
+    assert metrics["pairwise_csv"] == str(pw_path_out)

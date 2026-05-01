@@ -710,3 +710,121 @@ def test_build_v9_pairwise_uses_real_round_at_apply(tmp_path, monkeypatch):
     # Both rows of the symmetric pair should be R1 = 1.0.
     assert np.allclose(rounds, 1.0), \
         f"expected round=1 at apply time, got {rounds}"
+
+
+# ---------------------------------------------------------------------------
+# upset_features feature_set parameterization
+# ---------------------------------------------------------------------------
+
+def _per_game_fixture():
+    """Minimal per-game DataFrame with the columns upset_features reads."""
+    return pd.DataFrame({
+        "p_stage1": [0.7, 0.3, 0.55, 0.45],
+        "seed_a":   [1.0, 16.0, 5.0, 12.0],
+        "seed_b":   [16.0, 1.0, 12.0, 5.0],
+        "abs_seed_diff": [15.0, 15.0, 7.0, 7.0],
+        "round": [1.0, 1.0, 2.0, 2.0],
+    })
+
+
+def test_upset_features_default_is_v9b():
+    """Default (no feature_set kwarg) returns the 7-feature v9-B matrix."""
+    X = upset_features(_per_game_fixture())
+    assert X.shape == (4, 7)
+
+
+def test_upset_features_v9b_explicit_matches_default():
+    """Passing feature_set='v9b' is bit-identical to the default."""
+    df = _per_game_fixture()
+    X_default = upset_features(df)
+    X_v9b = upset_features(df, feature_set="v9b")
+    assert np.array_equal(X_default, X_v9b)
+
+
+def test_upset_features_v9c_shape_5():
+    """feature_set='v9c' returns shape (n, 5): drops v4_confidence and
+    is_a_higher_seed."""
+    X = upset_features(_per_game_fixture(), feature_set="v9c")
+    assert X.shape == (4, 5)
+
+
+def test_upset_features_v9c_columns_match_v9b_subset():
+    """v9-C columns 0..4 must equal v9-B columns 0..4 elementwise.
+    The first 5 columns (p_stage1, seed_a, seed_b, abs_seed_diff, round)
+    are identical between variants; v9-B just appends 2 more.
+    """
+    df = _per_game_fixture()
+    X_v9b = upset_features(df, feature_set="v9b")
+    X_v9c = upset_features(df, feature_set="v9c")
+    assert np.array_equal(X_v9c, X_v9b[:, :5])
+
+
+def test_upset_features_invalid_feature_set_raises():
+    """Unknown feature_set values raise ValueError -- typos must fail fast."""
+    with pytest.raises(ValueError, match="feature_set"):
+        upset_features(_per_game_fixture(), feature_set="v9a")
+
+
+# -----------------------------------------------------------------------------
+# double_loso_eval / build_v9_pairwise feature_set threading
+# -----------------------------------------------------------------------------
+
+def _two_season_per_game_fixture(tmp_path: Path):
+    """Build a per-game DataFrame across 2 seasons via load_per_game_data_with_upset."""
+    pairwise = pd.DataFrame({
+        "season": [2022, 2022, 2023, 2023],
+        "team_a": [1, 1, 1, 2],
+        "team_b": [2, 3, 3, 3],
+        "p_a_wins": [0.7, 0.6, 0.55, 0.45],
+    })
+    results = pd.DataFrame({
+        "Season": [2022, 2022, 2023, 2023],
+        "DayNum": [136, 138, 136, 138],
+        "WTeamID": [1, 1, 1, 2],
+        "WScore": [70, 75, 65, 70],
+        "LTeamID": [2, 3, 3, 3],
+        "LScore": [60, 65, 60, 65],
+    })
+    seeds = pd.DataFrame({
+        "Season": [2022, 2022, 2022, 2023, 2023, 2023],
+        "Seed":   ["W01", "W08", "W16", "W01", "W08", "W16"],
+        "TeamID": [1, 2, 3, 1, 2, 3],
+    })
+    pw_p, res_p, seeds_p = _write_csvs(tmp_path, pairwise, results, seeds)
+    return load_per_game_data_with_upset(pw_p, res_p, seeds_p), pw_p, seeds_p
+
+
+def test_double_loso_eval_v9c_runs(tmp_path):
+    """double_loso_eval accepts feature_set='v9c' and returns valid metrics."""
+    per_game, _, _ = _two_season_per_game_fixture(tmp_path)
+    eval_df = double_loso_eval(per_game, feature_set="v9c")
+    assert len(eval_df) > 0
+    assert "ll_v9" in eval_df.columns
+    assert "acc_v9" in eval_df.columns
+
+
+def test_build_v9_pairwise_v9c_writes_csv(tmp_path):
+    """build_v9_pairwise accepts feature_set='v9c' and writes a v8-compatible
+    pairwise CSV with the expected schema and row count.
+    """
+    per_game, pw_path, seeds_path = _two_season_per_game_fixture(tmp_path)
+    slots = pd.DataFrame({
+        "Season": [2022, 2022, 2023, 2023],
+        "Slot":   ["R1W1", "R2W1", "R1W1", "R2W1"],
+        "StrongSeed": ["W01", "R1W1", "W01", "R1W1"],
+        "WeakSeed":   ["W08", "W16",  "W08", "W16"],
+    })
+    slots_path = tmp_path / "slots.csv"
+    slots.to_csv(slots_path, index=False)
+
+    out_path = tmp_path / "pairwise_v9c.csv"
+    build_v9_pairwise(
+        per_game, pw_path, seeds_path, str(out_path),
+        slots_csv=str(slots_path),
+        feature_set="v9c",
+    )
+    out = pd.read_csv(out_path)
+    assert list(out.columns) == ["season", "team_a", "team_b", "p_a_wins"]
+    # Same row count as input pairwise (4 rows).
+    assert len(out) == 4
+    assert (out["team_a"] < out["team_b"]).all()

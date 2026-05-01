@@ -68,6 +68,7 @@ def run_single_cell(
     seeds_csv: str,
     out_dir: str,
     slots_csv: str,
+    feature_set: str = "v9b",
 ) -> dict:
     """Run one (w_upset, w_miss) cell of the sweep.
 
@@ -91,10 +92,11 @@ def run_single_cell(
         per_game, pairwise_v4_csv, seeds_csv, pairwise_csv_out,
         slots_csv=slots_csv,
         w_upset=w_upset, w_miss=w_miss,
+        feature_set=feature_set,
     )
 
     eval_df = double_loso_eval(
-        per_game, w_upset=w_upset, w_miss=w_miss
+        per_game, w_upset=w_upset, w_miss=w_miss, feature_set=feature_set
     )
     if len(eval_df) > 0 and "n_games" in eval_df.columns:
         n_total = float(eval_df["n_games"].sum())
@@ -140,6 +142,7 @@ def run_sweep(
     out_dir: str,
     results_csv_path: str,
     slots_csv: str,
+    feature_set: str = "v9b",
 ) -> pd.DataFrame:
     """Run the full grid; write per-cell pairwise CSVs to out_dir and
     aggregate results to results_csv_path. Returns the results DataFrame
@@ -161,6 +164,7 @@ def run_sweep(
             seeds_csv=seeds_csv,
             out_dir=out_dir,
             slots_csv=slots_csv,
+            feature_set=feature_set,
         )
         print(f"  total_brkt_pts={m['total_brkt_pts']:.1f}, "
               f"ll={m['ll_loso_weighted_mean']:.4f}, "
@@ -180,11 +184,21 @@ def run_sweep(
 def main():
     """Run the canonical 15-cell sweep against production data paths.
 
+    feature_set is read from the V9_FEATURE_SET env var (default 'v9b').
+    Output paths key off the choice so v9-B and v9-C artifacts coexist.
+
     Compares the anchor cell (1.0, 0.0) bracket points against
     output/pairwise_v8.csv as a sanity gate after the sweep.
     """
+    import os
+    feature_set = os.environ.get("V9_FEATURE_SET", "v9b")
+    if feature_set not in ("v9b", "v9c"):
+        raise ValueError(
+            f"V9_FEATURE_SET={feature_set!r} invalid; must be 'v9b' or 'v9c'"
+        )
+
     print("=" * 80)
-    print("V9 UPSET-WEIGHT SWEEP")
+    print(f"V9 UPSET-WEIGHT SWEEP (feature_set={feature_set})")
     print(f"  Grid: {len(GRID)} cells, "
           f"W_UPSET in {W_UPSET_VALUES}, W_MISS in {W_MISS_VALUES}")
     print("=" * 80)
@@ -194,8 +208,13 @@ def main():
     seeds_csv = "data/raw/march-machine-learning-2026/MNCAATourneySeeds.csv"
     results_csv = "data/raw/march-machine-learning-2026/MNCAATourneyCompactResults.csv"
     slots_csv = "data/raw/march-machine-learning-2026/MNCAATourneySlots.csv"
-    out_dir = "output/v9_sweep"
-    results_csv_path = "output/v9_sweep_results.csv"
+
+    if feature_set == "v9b":
+        out_dir = "output/v9_sweep"
+        results_csv_path = "output/v9_sweep_results.csv"
+    else:  # v9c
+        out_dir = "output/v9c_sweep"
+        results_csv_path = "output/v9c_sweep_results.csv"
 
     df = run_sweep(
         grid=GRID,
@@ -205,6 +224,7 @@ def main():
         out_dir=out_dir,
         results_csv_path=results_csv_path,
         slots_csv=slots_csv,
+        feature_set=feature_set,
     )
 
     # Summary table.
@@ -221,12 +241,12 @@ def main():
     print(f"anchor (1, 0): {anchor_total:>8.1f} pts (delta {delta:+.2f})")
     if abs(delta) > 5.0:
         print("WARNING: anchor cell does not reproduce v8 within 5 pts; "
-              "sweep is invalid -- something material has changed since "
-              "the v9 findings.")
+              "sweep results may be invalid -- inspect per-game LL/Acc to "
+              "confirm trainer is sane before trusting cell rankings.")
     else:
-        print("Anchor cell reproduces v8 within 5 pts -- sweep is valid. "
-              "(v9-B has 3 extra features over v8, so a small chalk-pick "
-              "boundary delta is expected even at uniform weights.)")
+        print(f"Anchor cell reproduces v8 within 5 pts -- sweep is valid. "
+              f"(feature_set={feature_set} differs from v8 in features and "
+              "may produce small chalk-pick boundary deltas at uniform weights.)")
 
     # Winner check (+10 bar).
     best = df.iloc[0]
