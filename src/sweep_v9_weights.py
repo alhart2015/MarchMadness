@@ -128,3 +128,109 @@ def run_single_cell(
         "acc_loso_weighted_mean": acc_mean,
         "pairwise_csv": pairwise_csv_out,
     }
+
+
+def run_sweep(
+    grid: Iterable[Tuple[float, float]],
+    pairwise_v4_csv: str,
+    results_csv: str,
+    seeds_csv: str,
+    out_dir: str,
+    results_csv_path: str,
+) -> pd.DataFrame:
+    """Run the full grid; write per-cell pairwise CSVs to out_dir and
+    aggregate results to results_csv_path. Returns the results DataFrame
+    (sorted by total_brkt_pts descending).
+
+    Halts if the anchor cell (1.0, 0.0) is missing -- the v8 reproduction
+    sanity check would be impossible.
+    """
+    grid = list(grid)
+    validate_grid(grid)
+
+    rows = []
+    for i, (w_upset, w_miss) in enumerate(grid, start=1):
+        print(f"[cell {i}/{len(grid)}] W_UPSET={w_upset}, W_MISS={w_miss}")
+        m = run_single_cell(
+            w_upset=w_upset, w_miss=w_miss,
+            pairwise_v4_csv=pairwise_v4_csv,
+            results_csv=results_csv,
+            seeds_csv=seeds_csv,
+            out_dir=out_dir,
+        )
+        print(f"  total_brkt_pts={m['total_brkt_pts']:.1f}, "
+              f"ll={m['ll_loso_weighted_mean']:.4f}, "
+              f"acc={m['acc_loso_weighted_mean']:.3f}")
+        rows.append(m)
+
+    df = (
+        pd.DataFrame(rows)
+        .sort_values("total_brkt_pts", ascending=False)
+        .reset_index(drop=True)
+    )
+    Path(results_csv_path).parent.mkdir(parents=True, exist_ok=True)
+    df.to_csv(results_csv_path, index=False)
+    return df
+
+
+def main():
+    """Run the canonical 15-cell sweep against production data paths.
+
+    Compares the anchor cell (1.0, 0.0) bracket points against
+    output/pairwise_v8.csv as a sanity gate after the sweep.
+    """
+    print("=" * 80)
+    print("V9 UPSET-WEIGHT SWEEP")
+    print(f"  Grid: {len(GRID)} cells, "
+          f"W_UPSET in {W_UPSET_VALUES}, W_MISS in {W_MISS_VALUES}")
+    print("=" * 80)
+
+    pairwise_v4 = "output/pairwise_v4.csv"
+    pairwise_v8 = "output/pairwise_v8.csv"
+    seeds_csv = "data/raw/march-machine-learning-2026/MNCAATourneySeeds.csv"
+    results_csv = "data/raw/march-machine-learning-2026/MNCAATourneyCompactResults.csv"
+    out_dir = "output/v9_sweep"
+    results_csv_path = "output/v9_sweep_results.csv"
+
+    df = run_sweep(
+        grid=GRID,
+        pairwise_v4_csv=pairwise_v4,
+        results_csv=results_csv,
+        seeds_csv=seeds_csv,
+        out_dir=out_dir,
+        results_csv_path=results_csv_path,
+    )
+
+    # Summary table.
+    print("\nResults sorted by total_brkt_pts (descending):")
+    print(df.to_string(index=False))
+
+    # v8 baseline + anchor-cell sanity gate.
+    from src.score_chalk_brackets import score_pairwise_path
+    v8_total = float(score_pairwise_path(pairwise_v8)["total_pts"])
+    anchor_row = df[(df["w_upset"] == 1.0) & (df["w_miss"] == 0.0)].iloc[0]
+    anchor_total = float(anchor_row["total_brkt_pts"])
+    delta = anchor_total - v8_total
+    print(f"\nv8 baseline:   {v8_total:>8.1f} pts")
+    print(f"anchor (1, 0): {anchor_total:>8.1f} pts (delta {delta:+.2f})")
+    if abs(delta) > 1.0:
+        print("WARNING: anchor cell does not reproduce v8 within 1 pt; "
+              "sweep is invalid.")
+    else:
+        print("Anchor cell reproduces v8 within 1 pt -- sweep is valid.")
+
+    # Winner check (+10 bar).
+    best = df.iloc[0]
+    best_delta = float(best["total_brkt_pts"]) - v8_total
+    print(f"\nbest cell:     W_UPSET={best['w_upset']}, "
+          f"W_MISS={best['w_miss']}, "
+          f"total_brkt_pts={best['total_brkt_pts']:.1f}, "
+          f"delta vs v8={best_delta:+.2f}")
+    if best_delta > 10.0:
+        print(f"WINNER: best cell beats v8 by {best_delta:.1f} pts (> +10).")
+    else:
+        print(f"NO WINNER: best cell delta {best_delta:+.2f} pts (bar +10).")
+
+
+if __name__ == "__main__":
+    main()

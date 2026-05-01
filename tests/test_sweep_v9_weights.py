@@ -101,3 +101,55 @@ def test_run_single_cell_writes_pairwise_and_returns_metrics(tmp_path):
     # 2-season synthetic data: total_brkt_pts may be zero or positive
     # (no full bracket, just R64 stubs); just assert it's a float.
     assert isinstance(metrics["total_brkt_pts"], float)
+
+
+def test_run_sweep_writes_results_csv(tmp_path):
+    """run_sweep over a 2-cell mini-grid (anchor + one more) writes a
+    results CSV with one row per cell and the expected columns.
+    """
+    pw_path, seeds_path, results_path = _write_minimal_inputs(tmp_path)
+    out_dir = tmp_path / "v9_sweep"
+    results_csv_out = tmp_path / "v9_sweep_results.csv"
+
+    from src.sweep_v9_weights import run_sweep
+
+    mini_grid = [(1.0, 0.0), (1.5, 0.5)]
+
+    run_sweep(
+        grid=mini_grid,
+        pairwise_v4_csv=pw_path,
+        results_csv=results_path,
+        seeds_csv=seeds_path,
+        out_dir=str(out_dir),
+        results_csv_path=str(results_csv_out),
+    )
+
+    assert results_csv_out.exists()
+    df = pd.read_csv(results_csv_out)
+    assert len(df) == 2
+    assert set(df.columns) >= {
+        "w_upset", "w_miss",
+        "total_brkt_pts",
+        "ll_loso_weighted_mean", "acc_loso_weighted_mean",
+        "pairwise_csv",
+    }
+    # Sorted by total_brkt_pts descending (non-increasing).
+    assert df["total_brkt_pts"].is_monotonic_decreasing
+
+
+def test_run_sweep_halts_without_anchor_cell(tmp_path):
+    """run_sweep refuses to start if the anchor cell is missing."""
+    pw_path, seeds_path, results_path = _write_minimal_inputs(tmp_path)
+    from src.sweep_v9_weights import run_sweep
+
+    bad_grid = [(1.5, 0.5), (2.0, 1.0)]  # no (1.0, 0.0)
+
+    with pytest.raises(ValueError, match="anchor cell"):
+        run_sweep(
+            grid=bad_grid,
+            pairwise_v4_csv=pw_path,
+            results_csv=results_path,
+            seeds_csv=seeds_path,
+            out_dir=str(tmp_path / "v9_sweep"),
+            results_csv_path=str(tmp_path / "results.csv"),
+        )
