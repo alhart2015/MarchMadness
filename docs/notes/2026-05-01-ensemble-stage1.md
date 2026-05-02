@@ -109,15 +109,54 @@ The losing seasons are not isolated noise: 2006 (-21), 2010 (-13),
 against the ensemble. The ensemble's wins are smaller in magnitude
 (max +7 in 2021).
 
+## Diagnostic: error correlation + ideal-weight search
+
+The bracket-points result alone leaves an open question: would a
+better-tuned LR (polynomial features, L1, etc.) produce a different
+verdict? Cheap diagnostic on the existing LOSO outputs answers
+that without retraining:
+
+| measure                                       | value             |
+|-----------------------------------------------|-------------------|
+| Pearson r(residual_v4, residual_lr)           | **0.767**         |
+| Pearson r(p_v4_for_winner, p_lr_for_winner)   | 0.767             |
+| disagreement on predicted winner              | 203 / 1449 (14.0%)|
+| both-correct                                  | 1045 / 1449 (72.1%)|
+| v4-only-correct                               | 121 / 1449 (8.4%) |
+| LR-only-correct                               | 82 / 1449 (5.7%)  |
+| both-wrong                                    | 201 / 1449 (13.9%)|
+
+Then a *cheating* ideal-weight search -- pick the constant `w` that
+minimizes log loss on the actual played-game outputs (no LOSO
+discipline; the test data is the train data) -- gives the upper bound
+on what averaging these specific predictions could ever buy:
+
+| weight `w` | log loss             |
+|------------|----------------------|
+| 1.0 (v4)   | 0.4369               |
+| 0.5 (avg)  | 0.4513               |
+| 0.0 (LR)   | 0.4983               |
+| **0.93** (optimal) | **0.4362** (-0.0006 vs v4) |
+
+The cheating-best blend weights v4 at 93% and LR at 7%. Even with no
+LOSO discipline -- letting the weight tune to the test outcomes
+themselves -- the headroom is **0.0006 log loss**, noise-level.
+
+The point: the ceiling here is not LR's standalone quality. It is
+the **error-correlation structure given identical features**.
+Tuning LR (polynomial expansion, L1, supplemental_weight) would
+lower LR's standalone log loss (currently 0.4983 vs v4's 0.4369),
+but a more accurate LR is not necessarily a more uncorrelated LR --
+it might learn what XGB already knows and *increase* the
+correlation. The 0.77 residual correlation is a property of "two
+models, same feature view," not a tunable parameter.
+
 ## Verdict
 
 NO-GO. The ensemble loses by 105 bracket points -- well below the
-+10 marginal floor and far below the +25 clear-win bar.
-
-This falsifies the diversity-at-identical-features hypothesis at
-this scale: a logistic regression's inductive bias does not produce
-errors uncorrelated enough with v4's to make averaging worthwhile,
-and LR is a weaker base learner besides. v4 stays as stage-1.
++10 marginal floor and far below the +25 clear-win bar -- and the
+diagnostic above shows the result is structural, not a tuning
+artifact. v4 stays as stage-1.
 
 ## Recommendation
 
@@ -128,19 +167,22 @@ and LR is a weaker base learner besides. v4 stays as stage-1.
   (`pairwise_lr.csv`, `pairwise_ensemble.csv`,
   `pairwise_v9c_v4_baseline.csv`, `pairwise_v9c_ensemble.csv`)
   document the head-to-head reproducibly.
-- Promote NN and Bayesian (deferred follow-ups in TODO.md) to the
-  active queue with the explicit caveat that the same correlated-
-  error risk applies. A NN on the same 67-feature input is unlikely
-  to disagree with XGB much more than LR did. A Bayesian /
-  hierarchical Bradley-Terry model has the most structurally
-  different inductive bias on the queue and is the better next
-  swing if we keep pulling on the model-class lever.
-- A fundamentally different angle worth flagging: feature-view
-  diversity rather than model-class diversity (e.g., one model on
-  KenPom-only features, one on Vegas-only, average). The current
-  experiment intentionally held inputs identical to isolate the
-  model-class question; pivoting to deliberate input diversity is a
-  separate experiment with its own spec.
+- **Next swing: Bayesian / hierarchical Bradley-Terry stage-1.**
+  Promoted to active queue #1. A Bradley-Terry model with latent
+  team-strength + variance has a structurally different inductive
+  bias from XGBoost (it operates on game-level outcomes rather than
+  the assembled feature matrix), so the residual-correlation
+  ceiling that killed the XGB+LR ensemble does not automatically
+  apply. The diagnostic above is the hypothesis to falsify next:
+  measure `r(residual_v4, residual_bayes)` and the optimal blend
+  weight; if the correlation is meaningfully lower than 0.77 and
+  the optimal weight is non-degenerate (not 0.93+), the ensemble
+  has a real shot.
+- **Future work: feature-view diversity.** A different angle on the
+  same goal: hold the model class fixed (e.g., XGBoost) but train
+  multiple instances on different feature subsets (KenPom-only,
+  Vegas-only, roster-only). Forces uncorrelated errors by
+  construction. Tracked as queue item #3.
 
 ## Files of record
 
