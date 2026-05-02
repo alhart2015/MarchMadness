@@ -113,3 +113,54 @@ def test_load_per_game_data_pbt_drops_missing_lookups(tmp_path):
     assert len(df) == 2
     assert df["p_bt"].notna().all()
     assert set(zip(df.team_a, df.team_b)) == {(1, 2), (2, 1)}
+
+
+def test_upset_features_v9d_shape_and_columns(tmp_path):
+    """feature_set='v9d' returns (n, 6) matrix with columns
+    [p_stage1, seed_a, seed_b, abs_seed_diff, round, p_bt].
+    """
+    from src.train_upset_model import upset_features
+
+    df = pd.DataFrame([
+        {"p_stage1": 0.7, "seed_a": 1, "seed_b": 8, "abs_seed_diff": 7,
+         "round": 1, "p_bt": 0.6},
+        {"p_stage1": 0.3, "seed_a": 16, "seed_b": 1, "abs_seed_diff": 15,
+         "round": 1, "p_bt": 0.2},
+    ])
+    X = upset_features(df, feature_set="v9d")
+
+    assert X.shape == (2, 6)
+    # Column order: p_stage1, seed_a, seed_b, abs_seed_diff, round, p_bt.
+    assert X[0, 0] == 0.7
+    assert X[0, 1] == 1
+    assert X[0, 2] == 8
+    assert X[0, 3] == 7
+    assert X[0, 4] == 1
+    assert X[0, 5] == 0.6
+
+
+def test_upset_features_v9d_missing_pbt_raises():
+    """If feature_set='v9d' is requested but the frame lacks 'p_bt',
+    raise ValueError with a helpful message rather than silently
+    producing a bad column.
+    """
+    from src.train_upset_model import upset_features
+
+    df = pd.DataFrame([
+        {"p_stage1": 0.7, "seed_a": 1, "seed_b": 8, "abs_seed_diff": 7,
+         "round": 1},
+    ])
+    with pytest.raises(ValueError, match="p_bt"):
+        upset_features(df, feature_set="v9d")
+
+
+def test_upset_features_unknown_feature_set_raises():
+    """Defensive: 'v9z' is not a known set."""
+    from src.train_upset_model import upset_features
+
+    df = pd.DataFrame([
+        {"p_stage1": 0.7, "seed_a": 1, "seed_b": 8, "abs_seed_diff": 7,
+         "round": 1},
+    ])
+    with pytest.raises(ValueError, match="v9z"):
+        upset_features(df, feature_set="v9z")

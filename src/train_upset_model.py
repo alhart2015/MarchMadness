@@ -292,10 +292,15 @@ def upset_features(df: pd.DataFrame, feature_set: str = "v9b") -> np.ndarray:
         is_a_higher_seed (1.0 if seed_a < seed_b else 0.0).
       "v9c" (5 features): drops v4_confidence and is_a_higher_seed; keeps
         the other five.
+      "v9d" (6 features): v9c plus p_bt (Bradley-Terry winner-perspective
+        probability from output/pairwise_bt.csv, joined upstream by
+        load_per_game_data_with_upset). Raises ValueError if the input
+        frame lacks the 'p_bt' column.
     """
-    if feature_set not in ("v9b", "v9c"):
+    if feature_set not in ("v9b", "v9c", "v9d"):
         raise ValueError(
-            f"unknown feature_set {feature_set!r}; must be 'v9b' or 'v9c'"
+            f"unknown feature_set {feature_set!r}; "
+            "must be 'v9b', 'v9c', or 'v9d'"
         )
     p = df["p_stage1"].values.astype(float)
     sa = df["seed_a"].values.astype(float)
@@ -306,6 +311,14 @@ def upset_features(df: pd.DataFrame, feature_set: str = "v9b") -> np.ndarray:
         conf = np.abs(p - 0.5)
         higher = (sa < sb).astype(float)
         return np.column_stack([p, sa, sb, diff, rnd, conf, higher])
+    if feature_set == "v9d":
+        if "p_bt" not in df.columns:
+            raise ValueError(
+                "feature_set='v9d' requires a 'p_bt' column on the input "
+                "frame; pass pairwise_bt_csv to load_per_game_data_with_upset"
+            )
+        p_bt = df["p_bt"].values.astype(float)
+        return np.column_stack([p, sa, sb, diff, rnd, p_bt])
     return np.column_stack([p, sa, sb, diff, rnd])
 
 
