@@ -49,6 +49,12 @@ def average_pairwise_csvs(
                 f"columns: {sorted(missing)}"
             )
 
+    # Inputs from v3's LOSO loop may have duplicate (season, team_a, team_b)
+    # rows from default + tuned passes; take the last write per pair, matching
+    # train_upset_model.load_per_game_data_with_upset and eval_stage1.
+    df_a = df_a.drop_duplicates(subset=JOIN_KEYS, keep="last")
+    df_b = df_b.drop_duplicates(subset=JOIN_KEYS, keep="last")
+
     # Inner join + coverage check.
     merged = df_a.merge(
         df_b, on=JOIN_KEYS, suffixes=("_a", "_b"), how="outer", indicator=True
