@@ -189,3 +189,58 @@ def test_run_single_cell_v9c_writes_pairwise(tmp_path):
     assert metrics["w_upset"] == 1.0
     assert metrics["w_miss"] == 0.0
     assert metrics["pairwise_csv"] == str(pw_path_out)
+
+
+def _write_pairwise_bt(path, rows):
+    """rows: list of (season, team_a, team_b, p_a_wins)."""
+    df = pd.DataFrame(rows, columns=["season", "team_a", "team_b", "p_a_wins"])
+    df.to_csv(path, index=False)
+
+
+def test_run_single_cell_v9d_writes_pairwise(tmp_path):
+    """run_single_cell with feature_set='v9d' + pairwise_bt_csv writes
+    a pairwise CSV in the canonical schema and returns the metrics dict.
+    """
+    pw_path, seeds_path, results_path, slots_path = _write_minimal_inputs(tmp_path)
+    pw_bt_path = tmp_path / "pw_bt.csv"
+    # Match the (season, team_a, team_b) keys present in pw_v4 fixture.
+    _write_pairwise_bt(pw_bt_path, [
+        (2022, 1, 2, 0.6), (2022, 1, 3, 0.55),
+        (2023, 1, 3, 0.45), (2023, 2, 3, 0.4),
+    ])
+    out_dir = tmp_path / "v9d_sweep"
+
+    metrics = run_single_cell(
+        w_upset=1.0, w_miss=0.0,
+        pairwise_v4_csv=pw_path,
+        results_csv=results_path,
+        seeds_csv=seeds_path,
+        out_dir=str(out_dir),
+        slots_csv=slots_path,
+        feature_set="v9d",
+        pairwise_bt_csv=str(pw_bt_path),
+    )
+
+    pw_path_out = out_dir / "pairwise_v9_WU1.00_WM0.00.csv"
+    assert pw_path_out.exists()
+    out = pd.read_csv(pw_path_out)
+    assert list(out.columns) == ["season", "team_a", "team_b", "p_a_wins"]
+    assert (out["team_a"] < out["team_b"]).all()
+    assert metrics["pairwise_csv"] == str(pw_path_out)
+
+
+def test_run_single_cell_v9d_requires_pairwise_bt_csv(tmp_path):
+    """feature_set='v9d' without pairwise_bt_csv raises before any work."""
+    pw_path, seeds_path, results_path, slots_path = _write_minimal_inputs(tmp_path)
+    out_dir = tmp_path / "v9d_sweep"
+
+    with pytest.raises(ValueError, match="pairwise_bt_csv"):
+        run_single_cell(
+            w_upset=1.0, w_miss=0.0,
+            pairwise_v4_csv=pw_path,
+            results_csv=results_path,
+            seeds_csv=seeds_path,
+            out_dir=str(out_dir),
+            slots_csv=slots_path,
+            feature_set="v9d",
+        )

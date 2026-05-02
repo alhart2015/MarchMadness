@@ -69,23 +69,33 @@ def run_single_cell(
     out_dir: str,
     slots_csv: str,
     feature_set: str = "v9b",
+    pairwise_bt_csv: str | None = None,
 ) -> dict:
     """Run one (w_upset, w_miss) cell of the sweep.
 
     Steps:
-      1. Load per-game training rows from pairwise_v4 + results + seeds.
+      1. Load per-game training rows from pairwise_v4 + results + seeds
+         (with optional p_bt join when pairwise_bt_csv is provided).
       2. Build v9-adjusted pairwise CSV at out_dir/pairwise_v9_WU{u}_WM{m}.csv.
       3. Run per-season LOSO eval to capture log loss / accuracy.
       4. Score the pairwise CSV (best-effort: catches FileNotFoundError /
          missing slots in score_pairwise_path so unit tests with
          synthetic data work).
       5. Return dict with all metrics.
+
+    feature_set='v9d' requires pairwise_bt_csv to be provided.
     """
+    if feature_set == "v9d" and pairwise_bt_csv is None:
+        raise ValueError(
+            "feature_set='v9d' requires pairwise_bt_csv to be provided"
+        )
+
     Path(out_dir).mkdir(parents=True, exist_ok=True)
     pairwise_csv_out = _cell_path(out_dir, w_upset, w_miss)
 
     per_game = load_per_game_data_with_upset(
-        pairwise_v4_csv, results_csv, seeds_csv
+        pairwise_v4_csv, results_csv, seeds_csv,
+        pairwise_bt_csv=pairwise_bt_csv,
     )
 
     build_v9_pairwise(
@@ -93,6 +103,7 @@ def run_single_cell(
         slots_csv=slots_csv,
         w_upset=w_upset, w_miss=w_miss,
         feature_set=feature_set,
+        pairwise_bt_csv=pairwise_bt_csv,
     )
 
     eval_df = double_loso_eval(
@@ -143,6 +154,7 @@ def run_sweep(
     results_csv_path: str,
     slots_csv: str,
     feature_set: str = "v9b",
+    pairwise_bt_csv: str | None = None,
 ) -> pd.DataFrame:
     """Run the full grid; write per-cell pairwise CSVs to out_dir and
     aggregate results to results_csv_path. Returns the results DataFrame
@@ -150,6 +162,9 @@ def run_sweep(
 
     Halts if the anchor cell (1.0, 0.0) is missing -- the v8 reproduction
     sanity check would be impossible.
+
+    feature_set='v9d' requires pairwise_bt_csv (passed through to
+    run_single_cell -> load_per_game_data_with_upset / build_v9_pairwise).
     """
     grid = list(grid)
     validate_grid(grid)
@@ -165,6 +180,7 @@ def run_sweep(
             out_dir=out_dir,
             slots_csv=slots_csv,
             feature_set=feature_set,
+            pairwise_bt_csv=pairwise_bt_csv,
         )
         print(f"  total_brkt_pts={m['total_brkt_pts']:.1f}, "
               f"ll={m['ll_loso_weighted_mean']:.4f}, "
@@ -192,9 +208,10 @@ def main():
     """
     import os
     feature_set = os.environ.get("V9_FEATURE_SET", "v9b")
-    if feature_set not in ("v9b", "v9c"):
+    if feature_set not in ("v9b", "v9c", "v9d"):
         raise ValueError(
-            f"V9_FEATURE_SET={feature_set!r} invalid; must be 'v9b' or 'v9c'"
+            f"V9_FEATURE_SET={feature_set!r} invalid; "
+            "must be 'v9b', 'v9c', or 'v9d'"
         )
 
     print("=" * 80)
@@ -212,9 +229,14 @@ def main():
     if feature_set == "v9b":
         out_dir = "output/v9_sweep"
         results_csv_path = "output/v9_sweep_results.csv"
-    else:  # v9c
+    elif feature_set == "v9c":
         out_dir = "output/v9c_sweep"
         results_csv_path = "output/v9c_sweep_results.csv"
+    else:  # v9d
+        out_dir = "output/v9d_sweep"
+        results_csv_path = "output/v9d_sweep_results.csv"
+
+    pairwise_bt_csv = "output/pairwise_bt.csv" if feature_set == "v9d" else None
 
     df = run_sweep(
         grid=GRID,
@@ -225,6 +247,7 @@ def main():
         results_csv_path=results_csv_path,
         slots_csv=slots_csv,
         feature_set=feature_set,
+        pairwise_bt_csv=pairwise_bt_csv,
     )
 
     # Summary table.
