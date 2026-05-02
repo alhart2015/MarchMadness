@@ -413,6 +413,7 @@ def build_v9_pairwise(
     w_upset: float = W_UPSET,
     w_miss: float = W_MISS,
     feature_set: str = "v9b",
+    pairwise_bt_csv: str | None = None,
 ) -> None:
     """For each LOSO season, train v9 on other-seasons' per-game rows and
     apply to every pair in that season's pairwise_v4.csv. Writes a CSV in
@@ -421,12 +422,24 @@ def build_v9_pairwise(
 
     Mirrors src/train_stage2.py:build_v8_pairwise. Differences: feeds
     sample weights to fit_upset_model; the apply-time round feature is
-    now resolved via build_pair_round_lookup (was hardcoded to 0.0).
+    now resolved via build_pair_round_lookup (was hardcoded to 0.0); when
+    feature_set='v9d', joins p_bt from pairwise_bt_csv at apply time so
+    the trained model has its 6th feature available per pair.
 
     Weights and feature_set are forwarded to upset_features and
     compute_sample_weights; defaults preserve canonical 3.0 / 4.0 behavior
     and v9-B feature set.
+
+    feature_set='v9d' requires pairwise_bt_csv. Pairs missing from the BT
+    lookup at apply time are dropped from the apply DataFrame and fall
+    back to the v4 pass-through (consistent with the per-game loader's
+    skip-on-miss semantics).
     """
+    if feature_set == "v9d" and pairwise_bt_csv is None:
+        raise ValueError(
+            "feature_set='v9d' requires pairwise_bt_csv to be provided"
+        )
+
     pw = pd.read_csv(pairwise_v4_csv).drop_duplicates(
         ["season", "team_a", "team_b"], keep="last"
     )
@@ -435,6 +448,13 @@ def build_v9_pairwise(
     seeds["seed_int"] = seeds["Seed"].apply(parse_seed)
     seed_lookup = {(int(r["Season"]), int(r["TeamID"])): r["seed_int"]
                    for _, r in seeds.iterrows() if r["seed_int"] is not None}
+
+    bt_lookup: dict | None = None
+    if pairwise_bt_csv is not None:
+        bt = pd.read_csv(pairwise_bt_csv)
+        bt = bt.drop_duplicates(["season", "team_a", "team_b"], keep="last")
+        bt_lookup = {(int(s), int(a), int(b)): float(p)
+                     for s, a, b, p in zip(bt.season, bt.team_a, bt.team_b, bt.p_a_wins)}
 
     out_rows = []
     for season in sorted(pw.season.unique()):
@@ -464,8 +484,29 @@ def build_v9_pairwise(
 
             apply_df["round"] = apply_df.apply(_round_for_pair, axis=1)
             apply_df["p_stage1"] = apply_df["p_a_wins"]
-            p_v9 = model.predict_proba(upset_features(apply_df, feature_set=feature_set))[:, 1]
-            v9_by_index = pd.Series(p_v9, index=apply_df.index)
+
+            if bt_lookup is not None:
+                # season_pw already orients team_a < team_b upstream, so
+                # the BT lookup at (season, team_a, team_b) is in the
+                # same orientation as p_stage1. No flip needed.
+                apply_df["p_bt"] = [
+                    bt_lookup.get((int(s), int(a), int(b)))
+                    for s, a, b in zip(
+                        apply_df["season"], apply_df["team_a"], apply_df["team_b"]
+                    )
+                ]
+                # Drop pairs missing from the BT lookup -- the trained
+                # model has no defined behavior on NaN inputs, and silent
+                # fallback would mislabel a v4-pass-through row as v9-D.
+                apply_df = apply_df[apply_df["p_bt"].notna()].copy()
+
+            if len(apply_df) > 0:
+                p_v9 = model.predict_proba(
+                    upset_features(apply_df, feature_set=feature_set)
+                )[:, 1]
+                v9_by_index = pd.Series(p_v9, index=apply_df.index)
+            else:
+                v9_by_index = pd.Series(dtype=float)
         else:
             v9_by_index = pd.Series(dtype=float)
 
