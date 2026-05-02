@@ -587,17 +587,28 @@ def leave_one_season_out_cv_weighted(
 # MAIN
 # =============================================================================
 
-def main():
-    overall_start = time.time()
+def prepare_loso_inputs() -> dict:
+    """Build the v3/v4 feature matrix, training data, and per-season top-80
+    team ID sets for use by any LOSO-loop trainer. This is the data-setup
+    half of v4's main() extracted as a callable so parallel trainers (e.g.,
+    the LR stage-1 in src/train_lr_stage1.py) can reuse the byte-identical
+    inputs.
 
+    Returns dict with keys:
+        feature_matrix      -- pd.DataFrame with TeamID, Season, all features
+        tourney_filtered    -- pd.DataFrame of tournament results filtered
+                               to seasons present in feature_matrix
+        regular_results     -- pd.DataFrame of regular-season results
+                               (data["reg_season"] in v4 main)
+        feature_cols        -- list of feature column names (post-NaN-prune)
+        top_80_by_season    -- dict[int -> set[int]] of top-80 team IDs
+                               per season, used by the weighted matchup
+                               builder to mark supplemental rows
+        feature_medians     -- pd.Series of per-feature medians from the
+                               weighted-matchup X_all (used to fill NaNs
+                               in apply-time pair construction)
+    """
     import os as _os
-    _output_suffix = _os.environ.get("MM_OUTPUT_SUFFIX", "")
-    if _output_suffix:
-        print(f"  ABLATION: output suffix = '{_output_suffix}'")
-
-    print("\n" + "=" * 70)
-    print("ENHANCED MODEL v3 -- Late-Season Features, Weighted Training, Line Blending")
-    print("=" * 70)
 
     # -- Step 1: Load all base data ----------------------------------------
     data = load_all_data()
@@ -758,7 +769,6 @@ def main():
         print(f"    {', '.join(feature_cols[i:i+6])}")
 
     # ABLATION HOOK: drop features named in MM_FEATURE_DROP env var.
-    import os as _os
     _drop_env = _os.environ.get("MM_FEATURE_DROP", "")
     if _drop_env:
         _before = len(feature_cols)
@@ -814,6 +824,55 @@ def main():
     n_supplemental = int((weights_all < 1.0).sum())
     print(f"  Training samples : {len(X_all):,}  (tourney: {n_tourney}, supplemental: {n_supplemental})")
     print(f"  Features used    : {len(feature_cols)}")
+
+    return {
+        "feature_matrix": feature_matrix,
+        "tourney_filtered": tourney_filtered,
+        "regular_results": data["reg_season"],
+        "feature_cols": feature_cols,
+        "top_80_by_season": top_80_by_season,
+        "feature_medians": medians,
+        # Additional artifacts retained so v4's main() can continue without
+        # rebuilding them. Not part of the public contract for stage-1
+        # ensemble trainers (those should rely only on the documented keys
+        # above), but kept here so this extraction is a pure refactor.
+        "_data": data,
+        "_kp_to_kaggle": kp_to_kaggle,
+        "_vegas_df": vegas_df,
+        "_name_resolution": name_resolution,
+        "_X_all": X_all,
+        "_y_all": y_all,
+        "_weights_all": weights_all,
+    }
+
+
+def main():
+    overall_start = time.time()
+
+    import os as _os
+    _output_suffix = _os.environ.get("MM_OUTPUT_SUFFIX", "")
+    if _output_suffix:
+        print(f"  ABLATION: output suffix = '{_output_suffix}'")
+
+    print("\n" + "=" * 70)
+    print("ENHANCED MODEL v3 -- Late-Season Features, Weighted Training, Line Blending")
+    print("=" * 70)
+
+    inputs = prepare_loso_inputs()
+    feature_matrix = inputs["feature_matrix"]
+    tourney_filtered = inputs["tourney_filtered"]
+    regular_results = inputs["regular_results"]
+    feature_cols = inputs["feature_cols"]
+    top_80_by_season = inputs["top_80_by_season"]
+    medians = inputs["feature_medians"]
+    # Internal artifacts that the rest of main() still needs.
+    data = inputs["_data"]
+    kp_to_kaggle = inputs["_kp_to_kaggle"]
+    vegas_df = inputs["_vegas_df"]
+    name_resolution = inputs["_name_resolution"]
+    X_all = inputs["_X_all"]
+    y_all = inputs["_y_all"]
+    weights_all = inputs["_weights_all"]
 
     # -- Step 6: LOSO CV with default params (weighted) --------------------
     print("\n" + "=" * 70)
