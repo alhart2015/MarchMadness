@@ -198,13 +198,19 @@ def run_lr_loso(out_csv: str = DEFAULT_PAIRWISE_OUT) -> dict:
         X_train_s = scaler.transform(X_train)
         X_test_s = scaler.transform(X_test)
 
+        # build_weighted_matchup_data and build_matchup_data_from_kaggle
+        # may return Series or ndarray for y/w; np.asarray handles both.
+        y_train_arr = np.asarray(y_train)
+        w_train_arr = np.asarray(w_train, dtype=float)
+        y_test_arr = np.asarray(y_test)
+
         model = fit_lr_with_calibration(
-            X_train_s, y_train.to_numpy(), w_train.to_numpy(), seed=42,
+            X_train_s, y_train_arr, w_train_arr, seed=42,
         )
         p_test = model.predict_proba(X_test_s)[:, 1]
 
-        ll = float(sklearn_log_loss(y_test, p_test, labels=[0, 1]))
-        acc = float(((p_test > 0.5).astype(int) == y_test.to_numpy()).mean())
+        ll = float(sklearn_log_loss(y_test_arr, p_test, labels=[0, 1]))
+        acc = float(((p_test > 0.5).astype(int) == y_test_arr).mean())
 
         # Per-team raw-feature medians from the training-fold seasons,
         # used to NaN-fill any team's raw features before building diffs.
