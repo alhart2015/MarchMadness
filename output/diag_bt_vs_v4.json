@@ -1,0 +1,22 @@
+{
+  "diagnostic": {
+    "n_games": 1449,
+    "ll_v4": 0.43687625530413987,
+    "ll_bt": 0.5650178371418968,
+    "acc_v4": 0.8046928916494134,
+    "acc_bt": 0.6984126984126984,
+    "r_residual": 0.5765591125328889,
+    "disagree_n": 348,
+    "both_correct": 915,
+    "v4_only_correct": 251,
+    "bt_only_correct": 97,
+    "both_wrong": 186,
+    "optimal_w": 0.98,
+    "optimal_ll": 0.43683429750527775,
+    "headroom": 4.1957798862124474e-05
+  },
+  "gate": {
+    "pass": false,
+    "reason": "optimal weight 0.98 outside [0.3, 0.85]; headroom 0.0000 <= 0.005"
+  }
+}
