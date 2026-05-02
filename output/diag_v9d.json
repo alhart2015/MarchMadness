@@ -1,0 +1,14 @@
+{
+  "diagnostic": {
+    "n_games_v9c": 1449,
+    "n_games_v9d": 1449,
+    "ll_v9c": 0.43244045297876466,
+    "ll_v9d": 0.43392287487738196,
+    "headroom": -0.0014824218986173032,
+    "threshold": 0.001
+  },
+  "gate": {
+    "pass": false,
+    "reason": "headroom -0.0015 < 0.001"
+  }
+}

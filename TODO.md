@@ -37,6 +37,23 @@
   (correlation vs standalone weakness), both caught by the same
   gate. Findings: `docs/notes/2026-05-01-bayesian-stage1.md`. Saved
   ~3 hours of compute by gating before the v9-C backtest.
+- **BT-as-feature for v9-C (2026-05-02).** Added p_bt from
+  output/pairwise_bt.csv as a 6th input feature to v9-C's
+  upset-aware stage-2 model under feature_set='v9d'. Pre-sweep
+  falsification gate FAILED: at uniform weights (1.0, 0.0),
+  v9-D wt-mean LL 0.4339 vs v9-C 0.4324 -- headroom -0.0015 < 0.001
+  threshold, and *negative*. Adding BT as input feature didn't
+  merely fail to help; it actively hurt the model (XGB spends some
+  splits on the noisy p_bt feature, net loss vs v9-C's 5-feature
+  baseline). Saved ~45-75 min of compute by not running the 15-cell
+  sweep. v9-C's representation already extracts essentially
+  everything p_bt could contribute on top of v4 + seed/round
+  context. Closes the "v9-C as a learnable trust-weight function"
+  escape hatch from the BT-ensemble failure -- v9-C's training data
+  (~2898 per-game rows under double-LOSO) is too thin to learn
+  useful per-context gating from a noisy feature. Code retained on
+  feat/bt-as-feature as the experiment record. Findings:
+  docs/notes/2026-05-02-bt-as-feature.md.
 
 ## Active queue
 
@@ -45,39 +62,35 @@
    one on raw efficiency). Same model class -> same standalone
    strength as v4 (sidesteps the BT experiment's bottleneck).
    Disjoint feature views -> different errors by construction
-   (sidesteps the LR experiment's bottleneck). Most likely of the
-   remaining items to clear all three diagnostic-gate clauses.
-2. **Use Bradley-Terry as a *feature* for v9-C, not an ensemble
-   peer.** v9-C currently sees `(p_v4_stage1, seed_a, seed_b,
-   abs_seed_diff, round)`. Add a sixth feature: `p_bt_stage1` from
-   `output/pairwise_bt.csv`. v9-C learns when to lean on BT vs v4
-   conditional on context (seeds, round, confidence). Sidesteps
-   BT's standalone-weakness problem -- v9-C only consults BT where
-   v4 is unsure. Cheap to try: reuse the existing pairwise_bt.csv,
-   modify `upset_features` in `train_upset_model.py`, re-run the
-   PR 9 sweep with the extended feature set.
-3. **Hierarchical Bradley-Terry with feature priors** (`s_team ~
+   (sidesteps the LR experiment's bottleneck). With BT-as-feature
+   now also closed, the per-context gating mechanism still applies
+   but with model peers individually as strong as v4, the per-
+   context training signal v9-C sees is also stronger. Most likely
+   of the remaining items to clear all relevant diagnostic clauses.
+2. **Hierarchical Bradley-Terry with feature priors** (`s_team ~
    Normal(beta . v4_features_team, sigma)`). Couples BT back to
    v4 features to gain standalone strength. Risk: residual
    correlation may regress from 0.58 back toward 0.77 as the
-   models re-converge. Worth trying if items 1 and 2 hit ceilings.
-4. **Small neural net (MLP) as a stage-1.** Adds PyTorch tooling
+   models re-converge. With BT-as-feature now closed, this is the
+   next angle on getting a stronger BT signal. Worth trying if
+   item 1 hits a ceiling.
+3. **Small neural net (MLP) as a stage-1.** Adds PyTorch tooling
    cost; diversity vs XGBoost on the 67-feature tabular space is
    the open question. Same correlated-error caveat as LR if it
    reuses the same feature matrix.
-5. **Full Bayesian Bradley-Terry with strength + variance per team**
+4. **Full Bayesian Bradley-Terry with strength + variance per team**
    (PyMC / NumPyro / Stan). The TODO's "Architecture Rethink (Tier
    C)" entry. Lets "consistent vs volatile" teams differentiate.
    Standalone-strength bottleneck likely persists (full posterior
    over weak strengths is still a weak point estimate); deferred
    until item 1 or 2 is settled.
-6. **External rankings (538, KenPom-public, BPI as features).**
+5. **External rankings (538, KenPom-public, BPI as features).**
    Note: we already have BPI, Sagarin, KenPom (POM), Bart Torvik
    (TRK), RPI via Massey ordinals (config.yaml lines 30-36).
    Truly external would be 538's tournament forecast or Vegas
    prop-bet predictions, which need data sourcing outside the
    Kaggle archive.
-7. **Roster-level returning-experience.** Player-level data is not
+6. **Roster-level returning-experience.** Player-level data is not
    in the Kaggle Mania archive; would need an external roster CSV
    per season. Different signal from coach experience.
 

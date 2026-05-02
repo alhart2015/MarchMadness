@@ -178,6 +178,11 @@ artifact. v4 stays as stage-1.
   weight; if the correlation is meaningfully lower than 0.77 and
   the optimal weight is non-degenerate (not 0.93+), the ensemble
   has a real shot.
+  - **Update 2026-05-02:** tested in PR 12 and rejected; see
+    `docs/notes/2026-05-01-bayesian-stage1.md`. BT-only stage-1
+    diagnostic failed the gate, so this direction is closed at the
+    "stage-1 swap" granularity. BT may still surface as a *feature*
+    inside v9-C (active queue #2).
 - **Future work: feature-view diversity.** A different angle on the
   same goal: hold the model class fixed (e.g., XGBoost) but train
   multiple instances on different feature subsets (KenPom-only,

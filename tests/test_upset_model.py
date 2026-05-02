@@ -828,3 +828,213 @@ def test_build_v9_pairwise_v9c_writes_csv(tmp_path):
     # Same row count as input pairwise (4 rows).
     assert len(out) == 4
     assert (out["team_a"] < out["team_b"]).all()
+
+
+# -----------------------------------------------------------------------------
+# v9-D extension: pairwise_bt_csv join + 'v9d' feature_set + apply-time threading
+# Spec: docs/superpowers/specs/2026-05-02-bt-as-feature-design.md
+# -----------------------------------------------------------------------------
+
+def _v9d_write_pairwise(path, rows):
+    pd.DataFrame(rows, columns=["season", "team_a", "team_b", "p_a_wins"]).to_csv(
+        path, index=False
+    )
+
+
+def _v9d_write_seeds(path, rows):
+    pd.DataFrame(rows, columns=["Season", "Seed", "TeamID"]).to_csv(path, index=False)
+
+
+def _v9d_write_results(path, rows):
+    pd.DataFrame(rows, columns=["Season", "DayNum", "WTeamID", "LTeamID"]).to_csv(
+        path, index=False
+    )
+
+
+def test_load_per_game_data_no_pbt_backwards_compat(tmp_path):
+    """When pairwise_bt_csv is omitted, the returned frame has no p_bt
+    column -- v9-A/B/C consumers continue to work unchanged.
+    """
+    pw = tmp_path / "pw_v4.csv"
+    seeds = tmp_path / "seeds.csv"
+    results = tmp_path / "results.csv"
+    _v9d_write_pairwise(pw, [(2022, 1, 2, 0.7)])
+    _v9d_write_seeds(seeds, [(2022, "W01", 1), (2022, "W08", 2)])
+    _v9d_write_results(results, [(2022, 136, 1, 2)])
+
+    df = load_per_game_data_with_upset(str(pw), str(results), str(seeds))
+
+    assert "p_bt" not in df.columns
+    assert len(df) == 2  # symmetric W/L rows
+
+
+def test_load_per_game_data_joins_pbt(tmp_path):
+    """When pairwise_bt_csv is provided, p_bt is joined per row with
+    correct A/B orientation. The (W=1, L=2) row gets the (1, 2, p) BT
+    lookup directly; the (W=2, L=1) symmetric row gets 1 - p.
+    """
+    pw_v4 = tmp_path / "pw_v4.csv"
+    pw_bt = tmp_path / "pw_bt.csv"
+    seeds = tmp_path / "seeds.csv"
+    results = tmp_path / "results.csv"
+    _v9d_write_pairwise(pw_v4, [(2022, 1, 2, 0.7)])
+    _v9d_write_pairwise(pw_bt, [(2022, 1, 2, 0.6)])
+    _v9d_write_seeds(seeds, [(2022, "W01", 1), (2022, "W08", 2)])
+    _v9d_write_results(results, [(2022, 136, 1, 2)])
+
+    df = load_per_game_data_with_upset(
+        str(pw_v4), str(results), str(seeds),
+        pairwise_bt_csv=str(pw_bt),
+    )
+
+    assert "p_bt" in df.columns
+    win_row = df[(df.team_a == 1) & (df.team_b == 2)].iloc[0]
+    assert win_row["label"] == 1
+    assert win_row["p_bt"] == pytest.approx(0.6)
+    los_row = df[(df.team_a == 2) & (df.team_b == 1)].iloc[0]
+    assert los_row["label"] == 0
+    assert los_row["p_bt"] == pytest.approx(0.4)
+
+
+def test_load_per_game_data_pbt_drops_missing_lookups(tmp_path):
+    """If a (season, a, b) pair appears in pairwise_v4 but not in
+    pairwise_bt, the row is dropped (consistent with how missing v4
+    lookups already drop rows). Avoids silent NaN propagation into
+    the feature matrix.
+    """
+    pw_v4 = tmp_path / "pw_v4.csv"
+    pw_bt = tmp_path / "pw_bt.csv"
+    seeds = tmp_path / "seeds.csv"
+    results = tmp_path / "results.csv"
+    _v9d_write_pairwise(pw_v4, [(2022, 1, 2, 0.7), (2022, 1, 3, 0.6)])
+    _v9d_write_pairwise(pw_bt, [(2022, 1, 2, 0.6)])
+    _v9d_write_seeds(seeds, [
+        (2022, "W01", 1), (2022, "W08", 2), (2022, "W16", 3),
+    ])
+    _v9d_write_results(results, [(2022, 136, 1, 2), (2022, 138, 1, 3)])
+
+    df = load_per_game_data_with_upset(
+        str(pw_v4), str(results), str(seeds),
+        pairwise_bt_csv=str(pw_bt),
+    )
+
+    assert len(df) == 2
+    assert df["p_bt"].notna().all()
+    assert set(zip(df.team_a, df.team_b)) == {(1, 2), (2, 1)}
+
+
+def test_upset_features_v9d_shape_and_columns():
+    """feature_set='v9d' returns (n, 6) matrix with columns
+    [p_stage1, seed_a, seed_b, abs_seed_diff, round, p_bt].
+    """
+    df = pd.DataFrame([
+        {"p_stage1": 0.7, "seed_a": 1, "seed_b": 8, "abs_seed_diff": 7,
+         "round": 1, "p_bt": 0.6},
+        {"p_stage1": 0.3, "seed_a": 16, "seed_b": 1, "abs_seed_diff": 15,
+         "round": 1, "p_bt": 0.2},
+    ])
+    X = upset_features(df, feature_set="v9d")
+
+    assert X.shape == (2, 6)
+    assert X[0, 0] == 0.7
+    assert X[0, 1] == 1
+    assert X[0, 2] == 8
+    assert X[0, 3] == 7
+    assert X[0, 4] == 1
+    assert X[0, 5] == 0.6
+
+
+def test_upset_features_v9d_missing_pbt_raises():
+    """If feature_set='v9d' is requested but the frame lacks 'p_bt',
+    raise ValueError with a helpful message rather than silently
+    producing a bad column.
+    """
+    df = pd.DataFrame([
+        {"p_stage1": 0.7, "seed_a": 1, "seed_b": 8, "abs_seed_diff": 7,
+         "round": 1},
+    ])
+    with pytest.raises(ValueError, match="p_bt"):
+        upset_features(df, feature_set="v9d")
+
+
+def test_build_v9_pairwise_v9d_threads_pbt(tmp_path):
+    """When called with feature_set='v9d' and pairwise_bt_csv, the
+    apply-time builder writes a pairwise CSV in the canonical schema --
+    proving that the per-pair BT lookup at apply time works.
+    """
+    pw_v4 = tmp_path / "pw_v4.csv"
+    pw_bt = tmp_path / "pw_bt.csv"
+    seeds = tmp_path / "seeds.csv"
+    results = tmp_path / "results.csv"
+    slots = tmp_path / "slots.csv"
+    out_csv = tmp_path / "pw_v9d.csv"
+
+    _v9d_write_pairwise(pw_v4, [
+        (2022, 1, 2, 0.7), (2023, 1, 2, 0.55),
+    ])
+    _v9d_write_pairwise(pw_bt, [
+        (2022, 1, 2, 0.6), (2023, 1, 2, 0.5),
+    ])
+    _v9d_write_seeds(seeds, [
+        (2022, "W01", 1), (2022, "W08", 2),
+        (2023, "W01", 1), (2023, "W08", 2),
+    ])
+    _v9d_write_results(results, [
+        (2022, 136, 1, 2), (2023, 136, 2, 1),
+    ])
+    pd.DataFrame({
+        "Season": [2022, 2023],
+        "Slot":   ["R1W1", "R1W1"],
+        "StrongSeed": ["W01", "W01"],
+        "WeakSeed":   ["W08", "W08"],
+    }).to_csv(slots, index=False)
+
+    per_game = load_per_game_data_with_upset(
+        str(pw_v4), str(results), str(seeds),
+        pairwise_bt_csv=str(pw_bt),
+    )
+
+    build_v9_pairwise(
+        per_game, str(pw_v4), str(seeds), str(out_csv),
+        slots_csv=str(slots),
+        feature_set="v9d",
+        pairwise_bt_csv=str(pw_bt),
+    )
+
+    out = pd.read_csv(out_csv)
+    assert list(out.columns) == ["season", "team_a", "team_b", "p_a_wins"]
+    assert (out["team_a"] < out["team_b"]).all()
+    assert len(out) == 2  # one pair per season
+
+
+def test_build_v9_pairwise_v9d_requires_pairwise_bt_csv(tmp_path):
+    """feature_set='v9d' without pairwise_bt_csv raises -- the apply-time
+    grid has no p_bt column otherwise.
+    """
+    pw_v4 = tmp_path / "pw_v4.csv"
+    pw_bt = tmp_path / "pw_bt.csv"
+    seeds = tmp_path / "seeds.csv"
+    results = tmp_path / "results.csv"
+    slots = tmp_path / "slots.csv"
+    out_csv = tmp_path / "pw_v9d.csv"
+
+    _v9d_write_pairwise(pw_v4, [(2022, 1, 2, 0.7)])
+    _v9d_write_pairwise(pw_bt, [(2022, 1, 2, 0.6)])
+    _v9d_write_seeds(seeds, [(2022, "W01", 1), (2022, "W08", 2)])
+    _v9d_write_results(results, [(2022, 136, 1, 2)])
+    pd.DataFrame({
+        "Season": [2022], "Slot": ["R1W1"],
+        "StrongSeed": ["W01"], "WeakSeed": ["W08"],
+    }).to_csv(slots, index=False)
+
+    per_game = load_per_game_data_with_upset(
+        str(pw_v4), str(results), str(seeds),
+        pairwise_bt_csv=str(pw_bt),
+    )
+
+    with pytest.raises(ValueError, match="pairwise_bt_csv"):
+        build_v9_pairwise(
+            per_game, str(pw_v4), str(seeds), str(out_csv),
+            slots_csv=str(slots),
+            feature_set="v9d",
+        )

@@ -160,18 +160,25 @@ def build_pair_round_lookup(
 
 
 def load_per_game_data_with_upset(
-    pairwise_csv: str, results_csv: str, seeds_csv: str
+    pairwise_csv: str, results_csv: str, seeds_csv: str,
+    pairwise_bt_csv: str | None = None,
 ) -> pd.DataFrame:
     """Build per-played-game training rows for v9.
 
     Each row: (season, team_a, team_b, p_stage1, seed_a, seed_b,
-              abs_seed_diff, upset, round, label). Symmetric: each game produces
-              two rows (a=W,b=L; a=L,b=W). The upset flag is per-game
-              (independent of A/B perspective) -- True iff the higher-
-              seeded team lost. Same-seed games are flagged upset=False.
+              abs_seed_diff, upset, round, label) plus, when
+              pairwise_bt_csv is provided, p_bt -- the Bradley-Terry
+              winner-perspective probability for the (team_a, team_b)
+              pair, oriented to match p_stage1 (i.e., for the (W, L)
+              row p_bt is the BT prob of W winning; for the (L, W)
+              symmetric row p_bt = 1 - that value).
+              Symmetric: each game produces two rows (a=W,b=L; a=L,b=W).
+              The upset flag is per-game (independent of A/B perspective)
+              -- True iff the higher-seeded team lost. Same-seed games
+              are flagged upset=False.
 
     Adapted from src/train_stage2.py:load_per_game_data: identical except
-    for the added upset column.
+    for the added upset column (and the optional p_bt column for v9-D).
     """
     pw = pd.read_csv(pairwise_csv)
     pw["pair_key"] = list(zip(pw["season"], pw["team_a"], pw["team_b"]))
@@ -179,6 +186,13 @@ def load_per_game_data_with_upset(
     pw = pw.drop_duplicates("pair_key", keep="last")
     pw_lookup = {(s, a, b): float(p)
                  for s, a, b, p in zip(pw.season, pw.team_a, pw.team_b, pw.p_a_wins)}
+
+    bt_lookup: dict | None = None
+    if pairwise_bt_csv is not None:
+        bt = pd.read_csv(pairwise_bt_csv)
+        bt = bt.drop_duplicates(["season", "team_a", "team_b"], keep="last")
+        bt_lookup = {(int(s), int(a), int(b)): float(p)
+                     for s, a, b, p in zip(bt.season, bt.team_a, bt.team_b, bt.p_a_wins)}
 
     results = pd.read_csv(results_csv)
     seeds = pd.read_csv(seeds_csv)
@@ -204,6 +218,15 @@ def load_per_game_data_with_upset(
         if seed_w is None or seed_l is None:
             continue
 
+        # BT lookup with the same skip-on-miss semantics as v4.
+        if bt_lookup is not None:
+            p_bt_a_wins = bt_lookup.get((season, a, b))
+            if p_bt_a_wins is None:
+                continue
+            p_bt_w = p_bt_a_wins if a == w else (1.0 - p_bt_a_wins)
+        else:
+            p_bt_w = None
+
         # Upset flag (per-game; same value for both symmetric rows): True
         # iff the higher-seeded team lost. Same-seed games: False.
         # Lower seed_int = better seed (1 is the top seed).
@@ -213,7 +236,7 @@ def load_per_game_data_with_upset(
             is_upset = seed_w > seed_l  # winner had a worse seed than loser
 
         # Symmetric pair: A=W (label=1), then A=L (label=0).
-        rows.append({
+        win_row = {
             "season": season, "team_a": w, "team_b": l,
             "p_stage1": p_w,
             "seed_a": seed_w, "seed_b": seed_l,
@@ -221,8 +244,8 @@ def load_per_game_data_with_upset(
             "upset": is_upset,
             "round": day_to_round(int(g["DayNum"])),
             "label": 1,
-        })
-        rows.append({
+        }
+        los_row = {
             "season": season, "team_a": l, "team_b": w,
             "p_stage1": 1.0 - p_w,
             "seed_a": seed_l, "seed_b": seed_w,
@@ -230,7 +253,12 @@ def load_per_game_data_with_upset(
             "upset": is_upset,
             "round": day_to_round(int(g["DayNum"])),
             "label": 0,
-        })
+        }
+        if bt_lookup is not None:
+            win_row["p_bt"] = p_bt_w
+            los_row["p_bt"] = 1.0 - p_bt_w
+        rows.append(win_row)
+        rows.append(los_row)
     return pd.DataFrame(rows)
 
 
@@ -264,10 +292,15 @@ def upset_features(df: pd.DataFrame, feature_set: str = "v9b") -> np.ndarray:
         is_a_higher_seed (1.0 if seed_a < seed_b else 0.0).
       "v9c" (5 features): drops v4_confidence and is_a_higher_seed; keeps
         the other five.
+      "v9d" (6 features): v9c plus p_bt (Bradley-Terry winner-perspective
+        probability from output/pairwise_bt.csv, joined upstream by
+        load_per_game_data_with_upset). Raises ValueError if the input
+        frame lacks the 'p_bt' column.
     """
-    if feature_set not in ("v9b", "v9c"):
+    if feature_set not in ("v9b", "v9c", "v9d"):
         raise ValueError(
-            f"unknown feature_set {feature_set!r}; must be 'v9b' or 'v9c'"
+            f"unknown feature_set {feature_set!r}; "
+            "must be 'v9b', 'v9c', or 'v9d'"
         )
     p = df["p_stage1"].values.astype(float)
     sa = df["seed_a"].values.astype(float)
@@ -278,6 +311,14 @@ def upset_features(df: pd.DataFrame, feature_set: str = "v9b") -> np.ndarray:
         conf = np.abs(p - 0.5)
         higher = (sa < sb).astype(float)
         return np.column_stack([p, sa, sb, diff, rnd, conf, higher])
+    if feature_set == "v9d":
+        if "p_bt" not in df.columns:
+            raise ValueError(
+                "feature_set='v9d' requires a 'p_bt' column on the input "
+                "frame; pass pairwise_bt_csv to load_per_game_data_with_upset"
+            )
+        p_bt = df["p_bt"].values.astype(float)
+        return np.column_stack([p, sa, sb, diff, rnd, p_bt])
     return np.column_stack([p, sa, sb, diff, rnd])
 
 
@@ -372,6 +413,7 @@ def build_v9_pairwise(
     w_upset: float = W_UPSET,
     w_miss: float = W_MISS,
     feature_set: str = "v9b",
+    pairwise_bt_csv: str | None = None,
 ) -> None:
     """For each LOSO season, train v9 on other-seasons' per-game rows and
     apply to every pair in that season's pairwise_v4.csv. Writes a CSV in
@@ -380,12 +422,24 @@ def build_v9_pairwise(
 
     Mirrors src/train_stage2.py:build_v8_pairwise. Differences: feeds
     sample weights to fit_upset_model; the apply-time round feature is
-    now resolved via build_pair_round_lookup (was hardcoded to 0.0).
+    now resolved via build_pair_round_lookup (was hardcoded to 0.0); when
+    feature_set='v9d', joins p_bt from pairwise_bt_csv at apply time so
+    the trained model has its 6th feature available per pair.
 
     Weights and feature_set are forwarded to upset_features and
     compute_sample_weights; defaults preserve canonical 3.0 / 4.0 behavior
     and v9-B feature set.
+
+    feature_set='v9d' requires pairwise_bt_csv. Pairs missing from the BT
+    lookup at apply time are dropped from the apply DataFrame and fall
+    back to the v4 pass-through (consistent with the per-game loader's
+    skip-on-miss semantics).
     """
+    if feature_set == "v9d" and pairwise_bt_csv is None:
+        raise ValueError(
+            "feature_set='v9d' requires pairwise_bt_csv to be provided"
+        )
+
     pw = pd.read_csv(pairwise_v4_csv).drop_duplicates(
         ["season", "team_a", "team_b"], keep="last"
     )
@@ -394,6 +448,13 @@ def build_v9_pairwise(
     seeds["seed_int"] = seeds["Seed"].apply(parse_seed)
     seed_lookup = {(int(r["Season"]), int(r["TeamID"])): r["seed_int"]
                    for _, r in seeds.iterrows() if r["seed_int"] is not None}
+
+    bt_lookup: dict | None = None
+    if pairwise_bt_csv is not None:
+        bt = pd.read_csv(pairwise_bt_csv)
+        bt = bt.drop_duplicates(["season", "team_a", "team_b"], keep="last")
+        bt_lookup = {(int(s), int(a), int(b)): float(p)
+                     for s, a, b, p in zip(bt.season, bt.team_a, bt.team_b, bt.p_a_wins)}
 
     out_rows = []
     for season in sorted(pw.season.unique()):
@@ -423,8 +484,29 @@ def build_v9_pairwise(
 
             apply_df["round"] = apply_df.apply(_round_for_pair, axis=1)
             apply_df["p_stage1"] = apply_df["p_a_wins"]
-            p_v9 = model.predict_proba(upset_features(apply_df, feature_set=feature_set))[:, 1]
-            v9_by_index = pd.Series(p_v9, index=apply_df.index)
+
+            if bt_lookup is not None:
+                # season_pw already orients team_a < team_b upstream, so
+                # the BT lookup at (season, team_a, team_b) is in the
+                # same orientation as p_stage1. No flip needed.
+                apply_df["p_bt"] = [
+                    bt_lookup.get((int(s), int(a), int(b)))
+                    for s, a, b in zip(
+                        apply_df["season"], apply_df["team_a"], apply_df["team_b"]
+                    )
+                ]
+                # Drop pairs missing from the BT lookup -- the trained
+                # model has no defined behavior on NaN inputs, and silent
+                # fallback would mislabel a v4-pass-through row as v9-D.
+                apply_df = apply_df[apply_df["p_bt"].notna()].copy()
+
+            if len(apply_df) > 0:
+                p_v9 = model.predict_proba(
+                    upset_features(apply_df, feature_set=feature_set)
+                )[:, 1]
+                v9_by_index = pd.Series(p_v9, index=apply_df.index)
+            else:
+                v9_by_index = pd.Series(dtype=float)
         else:
             v9_by_index = pd.Series(dtype=float)
 
