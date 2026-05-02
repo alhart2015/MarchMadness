@@ -14,47 +14,72 @@
   matrix. -105 brkt pts vs v4 alone over 22 LOSO seasons (v4 2713,
   ensemble 2608) after the v9-C correction. W/L/T = 7/13/2. Stage-1-
   only quality also worse (LL 0.4513 vs 0.4369; acc 0.801 vs 0.805).
-  Falsifies the diversity-at-identical-features hypothesis at this
-  scale: LR's inductive bias does not produce errors uncorrelated
-  enough with XGB's to make averaging worthwhile, and LR is a weaker
-  base learner besides. v4 stays as stage-1. Findings:
-  `docs/notes/2026-05-01-ensemble-stage1.md`. Code retained on
-  `feat/ensemble-stage1` branch as the experiment record
+  Diagnostic: residual correlation 0.77, optimal blend w=0.93,
+  headroom +0.0006. Falsifies the diversity-at-identical-features
+  hypothesis at this scale: LR's inductive bias does not produce
+  errors uncorrelated enough with XGB's to make averaging worthwhile,
+  and LR is a weaker base learner besides. v4 stays as stage-1.
+  Findings: `docs/notes/2026-05-01-ensemble-stage1.md`. Code retained
+  on `feat/ensemble-stage1` branch as the experiment record
   (`src/train_lr_stage1.py`, `src/ensemble_stage1.py`,
   `src/eval_stage1.py`, `src/run_v9c_on_stage1.py`); the refactor
   of `enhanced_model_v3.py` exposing `prepare_loso_inputs()` is
   reusable for any future model-class swap that wants the byte-
   identical v4 feature matrix.
+- **Stage-1 ensemble: XGBoost + Bradley-Terry (2026-05-01).** Per-
+  season plain BT (binary outcomes, regular-season-only, MAP via L2
+  LR with team-indicator + home-court design). Gate FAILED at
+  optimal w=0.98 and headroom +0.0000, but PASSED at residual
+  correlation 0.577 < 0.60. Lesson: BT is structurally different
+  enough to lower correlation from LR's 0.77 to 0.58, but too weak
+  standalone (LL 0.565 vs v4's 0.437) for any meaningful blend
+  weight to help. Two distinct failure modes from the LR experiment
+  (correlation vs standalone weakness), both caught by the same
+  gate. Findings: `docs/notes/2026-05-01-bayesian-stage1.md`. Saved
+  ~3 hours of compute by gating before the v9-C backtest.
 
 ## Active queue
 
-1. **Bayesian / probabilistic stage-1 model** (e.g., hierarchical
-   Bradley-Terry where each team has a latent strength + variance).
-   Most structurally different from XGBoost on the queue. Caveat from
-   the rejected XGB+LR experiment: at the *same* feature view, model-
-   class diversity didn't help; a Bayesian model with the same inputs
-   may face the same correlated-error ceiling. Strongest version of
-   the experiment pairs a different model class with a deliberately
-   different feature view (e.g., Bradley-Terry on game-level outcomes
-   only, ignoring the assembled feature matrix entirely), so the
-   inductive biases differ on *both* axes.
-2. **Small neural net (MLP) as an alternative stage-1.** Adds PyTorch
-   tooling cost; diversity vs XGBoost on this 67-feature tabular space
-   is the open question. Same correlated-error caveat as Bayesian if
-   it reuses the same feature matrix.
-3. **Feature-view diversity ensemble** (e.g., one model on KenPom-only
-   features, one on Vegas-only, average). Pivots from "model-class
-   diversity at identical features" -- which the XGB+LR experiment
-   ruled out -- to deliberate input-set diversity. Different question,
-   own spec.
-4. **External rankings (538, KenPom-public, BPI as features).** Note:
-   we already have BPI, Sagarin, KenPom (POM), Bart Torvik (TRK), RPI
-   via Massey ordinals (config.yaml lines 30-36). Truly external would
-   be 538's tournament forecast or Vegas prop-bet predictions, which
-   need data sourcing outside the Kaggle archive.
-5. **Roster-level returning-experience.** Player-level data is not in
-   the Kaggle Mania archive; would need an external roster CSV per
-   season. Different signal from coach experience.
+1. **Feature-view diversity ensemble: XGBoost on disjoint feature
+   subsets** (e.g., one model on KenPom-only, one on Vegas-only,
+   one on raw efficiency). Same model class -> same standalone
+   strength as v4 (sidesteps the BT experiment's bottleneck).
+   Disjoint feature views -> different errors by construction
+   (sidesteps the LR experiment's bottleneck). Most likely of the
+   remaining items to clear all three diagnostic-gate clauses.
+2. **Use Bradley-Terry as a *feature* for v9-C, not an ensemble
+   peer.** v9-C currently sees `(p_v4_stage1, seed_a, seed_b,
+   abs_seed_diff, round)`. Add a sixth feature: `p_bt_stage1` from
+   `output/pairwise_bt.csv`. v9-C learns when to lean on BT vs v4
+   conditional on context (seeds, round, confidence). Sidesteps
+   BT's standalone-weakness problem -- v9-C only consults BT where
+   v4 is unsure. Cheap to try: reuse the existing pairwise_bt.csv,
+   modify `upset_features` in `train_upset_model.py`, re-run the
+   PR 9 sweep with the extended feature set.
+3. **Hierarchical Bradley-Terry with feature priors** (`s_team ~
+   Normal(beta . v4_features_team, sigma)`). Couples BT back to
+   v4 features to gain standalone strength. Risk: residual
+   correlation may regress from 0.58 back toward 0.77 as the
+   models re-converge. Worth trying if items 1 and 2 hit ceilings.
+4. **Small neural net (MLP) as a stage-1.** Adds PyTorch tooling
+   cost; diversity vs XGBoost on the 67-feature tabular space is
+   the open question. Same correlated-error caveat as LR if it
+   reuses the same feature matrix.
+5. **Full Bayesian Bradley-Terry with strength + variance per team**
+   (PyMC / NumPyro / Stan). The TODO's "Architecture Rethink (Tier
+   C)" entry. Lets "consistent vs volatile" teams differentiate.
+   Standalone-strength bottleneck likely persists (full posterior
+   over weak strengths is still a weak point estimate); deferred
+   until item 1 or 2 is settled.
+6. **External rankings (538, KenPom-public, BPI as features).**
+   Note: we already have BPI, Sagarin, KenPom (POM), Bart Torvik
+   (TRK), RPI via Massey ordinals (config.yaml lines 30-36).
+   Truly external would be 538's tournament forecast or Vegas
+   prop-bet predictions, which need data sourcing outside the
+   Kaggle archive.
+7. **Roster-level returning-experience.** Player-level data is not
+   in the Kaggle Mania archive; would need an external roster CSV
+   per season. Different signal from coach experience.
 
 ## Done
 
