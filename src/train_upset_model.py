@@ -160,18 +160,25 @@ def build_pair_round_lookup(
 
 
 def load_per_game_data_with_upset(
-    pairwise_csv: str, results_csv: str, seeds_csv: str
+    pairwise_csv: str, results_csv: str, seeds_csv: str,
+    pairwise_bt_csv: str | None = None,
 ) -> pd.DataFrame:
     """Build per-played-game training rows for v9.
 
     Each row: (season, team_a, team_b, p_stage1, seed_a, seed_b,
-              abs_seed_diff, upset, round, label). Symmetric: each game produces
-              two rows (a=W,b=L; a=L,b=W). The upset flag is per-game
-              (independent of A/B perspective) -- True iff the higher-
-              seeded team lost. Same-seed games are flagged upset=False.
+              abs_seed_diff, upset, round, label) plus, when
+              pairwise_bt_csv is provided, p_bt -- the Bradley-Terry
+              winner-perspective probability for the (team_a, team_b)
+              pair, oriented to match p_stage1 (i.e., for the (W, L)
+              row p_bt is the BT prob of W winning; for the (L, W)
+              symmetric row p_bt = 1 - that value).
+              Symmetric: each game produces two rows (a=W,b=L; a=L,b=W).
+              The upset flag is per-game (independent of A/B perspective)
+              -- True iff the higher-seeded team lost. Same-seed games
+              are flagged upset=False.
 
     Adapted from src/train_stage2.py:load_per_game_data: identical except
-    for the added upset column.
+    for the added upset column (and the optional p_bt column for v9-D).
     """
     pw = pd.read_csv(pairwise_csv)
     pw["pair_key"] = list(zip(pw["season"], pw["team_a"], pw["team_b"]))
@@ -179,6 +186,13 @@ def load_per_game_data_with_upset(
     pw = pw.drop_duplicates("pair_key", keep="last")
     pw_lookup = {(s, a, b): float(p)
                  for s, a, b, p in zip(pw.season, pw.team_a, pw.team_b, pw.p_a_wins)}
+
+    bt_lookup: dict | None = None
+    if pairwise_bt_csv is not None:
+        bt = pd.read_csv(pairwise_bt_csv)
+        bt = bt.drop_duplicates(["season", "team_a", "team_b"], keep="last")
+        bt_lookup = {(int(s), int(a), int(b)): float(p)
+                     for s, a, b, p in zip(bt.season, bt.team_a, bt.team_b, bt.p_a_wins)}
 
     results = pd.read_csv(results_csv)
     seeds = pd.read_csv(seeds_csv)
@@ -204,6 +218,15 @@ def load_per_game_data_with_upset(
         if seed_w is None or seed_l is None:
             continue
 
+        # BT lookup with the same skip-on-miss semantics as v4.
+        if bt_lookup is not None:
+            p_bt_a_wins = bt_lookup.get((season, a, b))
+            if p_bt_a_wins is None:
+                continue
+            p_bt_w = p_bt_a_wins if a == w else (1.0 - p_bt_a_wins)
+        else:
+            p_bt_w = None
+
         # Upset flag (per-game; same value for both symmetric rows): True
         # iff the higher-seeded team lost. Same-seed games: False.
         # Lower seed_int = better seed (1 is the top seed).
@@ -213,7 +236,7 @@ def load_per_game_data_with_upset(
             is_upset = seed_w > seed_l  # winner had a worse seed than loser
 
         # Symmetric pair: A=W (label=1), then A=L (label=0).
-        rows.append({
+        win_row = {
             "season": season, "team_a": w, "team_b": l,
             "p_stage1": p_w,
             "seed_a": seed_w, "seed_b": seed_l,
@@ -221,8 +244,8 @@ def load_per_game_data_with_upset(
             "upset": is_upset,
             "round": day_to_round(int(g["DayNum"])),
             "label": 1,
-        })
-        rows.append({
+        }
+        los_row = {
             "season": season, "team_a": l, "team_b": w,
             "p_stage1": 1.0 - p_w,
             "seed_a": seed_l, "seed_b": seed_w,
@@ -230,7 +253,12 @@ def load_per_game_data_with_upset(
             "upset": is_upset,
             "round": day_to_round(int(g["DayNum"])),
             "label": 0,
-        })
+        }
+        if bt_lookup is not None:
+            win_row["p_bt"] = p_bt_w
+            los_row["p_bt"] = 1.0 - p_bt_w
+        rows.append(win_row)
+        rows.append(los_row)
     return pd.DataFrame(rows)
 
 
