@@ -229,7 +229,10 @@ def run_lr_loso(out_csv: str = DEFAULT_PAIRWISE_OUT) -> dict:
         feature_lookup = {}
         for tid in fm_year.index:
             row = fm_year.loc[tid, feature_cols]
-            vals = pd.to_numeric(row, errors="coerce").to_numpy(dtype=float)
+            vals = np.array(
+                pd.to_numeric(row, errors="coerce").to_numpy(dtype=float),
+                copy=True,
+            )
             mask = np.isnan(vals)
             if mask.any():
                 vals[mask] = raw_medians_arr[mask]
