@@ -9,33 +9,50 @@
 - **Round-as-a-feature (v7):** added round (1..6) as a column. -10 pts
   vs v4. CV log loss flat (0.4384 -> 0.4387). Reverted. The model could
   not extract round-conditional signal from the existing features.
+- **Stage-1 ensemble: XGBoost + LR (2026-05-01).** Simple-average
+  ensemble of v4 + new logistic regression on the same 67-feature
+  matrix. -105 brkt pts vs v4 alone over 22 LOSO seasons (v4 2713,
+  ensemble 2608) after the v9-C correction. W/L/T = 7/13/2. Stage-1-
+  only quality also worse (LL 0.4513 vs 0.4369; acc 0.801 vs 0.805).
+  Falsifies the diversity-at-identical-features hypothesis at this
+  scale: LR's inductive bias does not produce errors uncorrelated
+  enough with XGB's to make averaging worthwhile, and LR is a weaker
+  base learner besides. v4 stays as stage-1. Findings:
+  `docs/notes/2026-05-01-ensemble-stage1.md`. Code retained on
+  `feat/ensemble-stage1` branch as the experiment record
+  (`src/train_lr_stage1.py`, `src/ensemble_stage1.py`,
+  `src/eval_stage1.py`, `src/run_v9c_on_stage1.py`); the refactor
+  of `enhanced_model_v3.py` exposing `prepare_loso_inputs()` is
+  reusable for any future model-class swap that wants the byte-
+  identical v4 feature matrix.
 
 ## Active queue
 
-1. **Ensemble of model classes.** First pass: XGBoost + logistic
-   regression only (lean diversity test -- if LR adds nothing over XGB
-   on this feature space, more exotic classes won't either, and we
-   exit cheaply). The hypothesis: different model classes capture
-   partially-uncorrelated error patterns. Risk: if both see the same
-   features and reach the same ~80% R64 / ~50-60% deep-round ceiling,
-   the errors are highly correlated and ensembling won't help.
-   Promoted to position #1 after the v9-C swap landed.
-
-   Follow-ups deliberately deferred (revisit if XGB+LR shows real
-   signal):
-   - **Small neural net (MLP) as a third ensemble member.** Adds
-     PyTorch tooling cost; diversity vs XGBoost on tabular data with
-     ~80 features is the open question.
-   - **Bayesian / probabilistic model** (e.g., hierarchical
-     Bradley-Terry where each team has a latent strength + variance).
-     Most structurally different from XGBoost; the most novel signal
-     class on the roadmap.
-2. **External rankings (538, KenPom-public, BPI as features).** Note:
+1. **Bayesian / probabilistic stage-1 model** (e.g., hierarchical
+   Bradley-Terry where each team has a latent strength + variance).
+   Most structurally different from XGBoost on the queue. Caveat from
+   the rejected XGB+LR experiment: at the *same* feature view, model-
+   class diversity didn't help; a Bayesian model with the same inputs
+   may face the same correlated-error ceiling. Strongest version of
+   the experiment pairs a different model class with a deliberately
+   different feature view (e.g., Bradley-Terry on game-level outcomes
+   only, ignoring the assembled feature matrix entirely), so the
+   inductive biases differ on *both* axes.
+2. **Small neural net (MLP) as an alternative stage-1.** Adds PyTorch
+   tooling cost; diversity vs XGBoost on this 67-feature tabular space
+   is the open question. Same correlated-error caveat as Bayesian if
+   it reuses the same feature matrix.
+3. **Feature-view diversity ensemble** (e.g., one model on KenPom-only
+   features, one on Vegas-only, average). Pivots from "model-class
+   diversity at identical features" -- which the XGB+LR experiment
+   ruled out -- to deliberate input-set diversity. Different question,
+   own spec.
+4. **External rankings (538, KenPom-public, BPI as features).** Note:
    we already have BPI, Sagarin, KenPom (POM), Bart Torvik (TRK), RPI
    via Massey ordinals (config.yaml lines 30-36). Truly external would
    be 538's tournament forecast or Vegas prop-bet predictions, which
    need data sourcing outside the Kaggle archive.
-3. **Roster-level returning-experience.** Player-level data is not in
+5. **Roster-level returning-experience.** Player-level data is not in
    the Kaggle Mania archive; would need an external roster CSV per
    season. Different signal from coach experience.
 
