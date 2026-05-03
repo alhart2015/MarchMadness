@@ -478,13 +478,21 @@ def leave_one_season_out_cv_weighted(
     xgb_params: dict = None,
     random_seed: int = 42,
     supplemental_weight: float = 0.25,
+    allowed_holdouts: list[int] | None = None,
 ) -> dict:
-    """Run LOSO CV using weighted matchup data (tournament + supplemental)."""
+    """Run LOSO CV using weighted matchup data (tournament + supplemental).
+
+    If allowed_holdouts is provided, restrict the iteration to those
+    seasons (used by diagnostic gates for cheap subsets); training on
+    each iteration still uses ALL non-holdout seasons.
+    """
     from sklearn.metrics import log_loss as sklearn_log_loss, roc_auc_score
     from src.models.train import train_model
 
     seasons = sorted(tourney_results["Season"].unique())
     seasons = [s for s in seasons if s >= 2003]
+    if allowed_holdouts is not None:
+        seasons = [s for s in seasons if s in set(allowed_holdouts)]
 
     results = []
 
