@@ -80,6 +80,69 @@ def average_pairwise_csvs(
     out_df.to_csv(out, index=False)
 
 
+def blend_pairwise_csvs(
+    inputs: list,
+    weights: list,
+    out: str,
+) -> None:
+    """K-way generalization of average_pairwise_csvs.
+
+    inputs:  list of paths to pairwise CSVs (schema season, team_a, team_b, p_a_wins).
+             All inputs must share identical (season, team_a, team_b) coverage.
+    weights: list of per-input non-negative weights, len == len(inputs),
+             must sum to 1.0 within 1e-9.
+    out:     path to write the blended CSV (same schema as inputs).
+    """
+    if len(weights) != len(inputs):
+        raise ValueError(
+            f"weights count ({len(weights)}) != inputs count ({len(inputs)})"
+        )
+    w_sum = sum(float(w) for w in weights)
+    if abs(w_sum - 1.0) > 1e-9:
+        raise ValueError(
+            f"weights must sum to 1; got {w_sum:.6f}"
+        )
+
+    dfs = [pd.read_csv(p) for p in inputs]
+    for i, df in enumerate(dfs):
+        missing = set(SCHEMA) - set(df.columns)
+        if missing:
+            raise ValueError(
+                f"input {i} ({inputs[i]}) missing columns: {sorted(missing)}"
+            )
+        dfs[i] = df.drop_duplicates(subset=JOIN_KEYS, keep="last")
+
+    # Inner-join all inputs on (season, team_a, team_b); coverage check.
+    base = dfs[0][JOIN_KEYS + ["p_a_wins"]].rename(columns={"p_a_wins": "p_0"})
+    for i, df in enumerate(dfs[1:], start=1):
+        rhs = df[JOIN_KEYS + ["p_a_wins"]].rename(columns={"p_a_wins": f"p_{i}"})
+        base = base.merge(rhs, on=JOIN_KEYS, how="outer", indicator=True)
+        only_left = (base["_merge"] == "left_only").sum()
+        only_right = (base["_merge"] == "right_only").sum()
+        if only_left or only_right:
+            raise ValueError(
+                f"input {i} coverage mismatch: {only_left} rows only in prior "
+                f"inputs, {only_right} rows only in input {i}; the blend "
+                "requires identical (season, team_a, team_b) coverage"
+            )
+        base = base.drop(columns=["_merge"])
+
+    # Weighted sum of the per-input p columns.
+    p_blend = sum(
+        float(weights[i]) * base[f"p_{i}"]
+        for i in range(len(inputs))
+    )
+    base["p_a_wins"] = p_blend
+
+    out_df = (
+        base[SCHEMA]
+        .sort_values(JOIN_KEYS)
+        .reset_index(drop=True)
+    )
+    Path(out).parent.mkdir(parents=True, exist_ok=True)
+    out_df.to_csv(out, index=False)
+
+
 def _parse_weights(s: str) -> Tuple[float, float]:
     parts = s.split(",")
     if len(parts) != 2:
