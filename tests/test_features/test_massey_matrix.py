@@ -190,3 +190,28 @@ def test_home_court_constant_recovered():
     assert h == pytest.approx(5.0, abs=1e-4)
     for tid, r in ratings.items():
         assert abs(r) < 1e-4, f"Team {tid} expected ~0 rating, got {r}"
+
+
+def test_cache_roundtrip(tmp_path: Path):
+    """load_massey_mov_ratings writes parquet + sidecar on first call,
+    reads from cache on second call; both return equal frames."""
+    team_ids = [1101, 1102, 1103, 1104]
+    games = _make_round_robin(team_ids, [5.0, 2.0, -2.0, -5.0], h=1.0)
+
+    df1 = load_massey_mov_ratings(games, mov_cap=21, cache_dir=tmp_path)
+    parquet_path = tmp_path / "massey_mov_ratings.parquet"
+    meta_path = tmp_path / "massey_mov_ratings.meta.json"
+    assert parquet_path.exists()
+    assert meta_path.exists()
+
+    df2 = load_massey_mov_ratings(games, mov_cap=21, cache_dir=tmp_path)
+    pd.testing.assert_frame_equal(
+        df1.sort_values(["Season", "TeamID"]).reset_index(drop=True),
+        df2.sort_values(["Season", "TeamID"]).reset_index(drop=True),
+    )
+
+    meta = json.loads(meta_path.read_text())
+    assert meta["producer_version"] == _PRODUCER_VERSION
+    assert meta["mov_cap"] == 21
+    assert meta["n_input_rows"] == len(games)
+    assert "sha_input" in meta

@@ -158,6 +158,52 @@ def compute_massey_mov_ratings(
     return pd.DataFrame(rows)
 
 
-def load_massey_mov_ratings(*args, **kwargs):
-    """Placeholder; real implementation added in Task 5."""
-    raise NotImplementedError("load_massey_mov_ratings is added in Task 5")
+def _hash_input(reg_season: pd.DataFrame) -> str:
+    """Stable content hash of the relevant columns of the input frame."""
+    cols = ["Season", "DayNum", "WTeamID", "WScore", "LTeamID", "LScore", "WLoc"]
+    h = hashlib.sha256()
+    for c in cols:
+        if c in reg_season.columns:
+            h.update(reg_season[c].astype(str).str.cat(sep="|").encode("ascii", errors="replace"))
+    return h.hexdigest()[:16]
+
+
+def load_massey_mov_ratings(
+    reg_season: pd.DataFrame,
+    mov_cap: int = 21,
+    cache_dir: str | Path = "data/cache",
+) -> pd.DataFrame:
+    """Cached wrapper around compute_massey_mov_ratings.
+
+    Reads from <cache_dir>/massey_mov_ratings.parquet on cache hit.
+    Cache hit requires the sidecar metadata at
+    <cache_dir>/massey_mov_ratings.meta.json to match the current
+    (_PRODUCER_VERSION, mov_cap, n_input_rows, sha_input).
+    """
+    cache_dir = Path(cache_dir)
+    parquet_path = cache_dir / "massey_mov_ratings.parquet"
+    meta_path = cache_dir / "massey_mov_ratings.meta.json"
+
+    expected_meta = {
+        "producer_version": _PRODUCER_VERSION,
+        "mov_cap": int(mov_cap),
+        "n_input_rows": int(len(reg_season)),
+        "sha_input": _hash_input(reg_season),
+    }
+
+    if parquet_path.exists() and meta_path.exists():
+        try:
+            actual_meta = json.loads(meta_path.read_text())
+        except (json.JSONDecodeError, OSError):
+            actual_meta = {}
+        if all(actual_meta.get(k) == expected_meta[k] for k in expected_meta):
+            logger.info("Massey MOV cache hit: %s", parquet_path)
+            return pd.read_parquet(parquet_path)
+        logger.info("Massey MOV cache stale (metadata mismatch); rebuilding")
+
+    df = compute_massey_mov_ratings(reg_season, mov_cap=mov_cap)
+    cache_dir.mkdir(parents=True, exist_ok=True)
+    df.to_parquet(parquet_path, index=False)
+    meta_path.write_text(json.dumps({**expected_meta, "written_at_n_rows": len(df)}, indent=2))
+    logger.info("Massey MOV cache written: %s (%d rows)", parquet_path, len(df))
+    return df
