@@ -215,3 +215,35 @@ def test_cache_roundtrip(tmp_path: Path):
     assert meta["mov_cap"] == 21
     assert meta["n_input_rows"] == len(games)
     assert "sha_input" in meta
+
+
+def test_cache_invalidates_on_meta_mismatch(tmp_path: Path, monkeypatch):
+    """If sidecar metadata's producer_version doesn't match the module
+    constant, the cache is rebuilt rather than reused."""
+    team_ids = [1101, 1102, 1103, 1104]
+    games = _make_round_robin(team_ids, [5.0, 2.0, -2.0, -5.0], h=1.0)
+
+    # Initial write under v1 (current).
+    df1 = load_massey_mov_ratings(games, mov_cap=21, cache_dir=tmp_path)
+    parquet_path = tmp_path / "massey_mov_ratings.parquet"
+    initial_mtime = parquet_path.stat().st_mtime_ns
+
+    # Hand-edit the sidecar to claim a different producer version.
+    meta_path = tmp_path / "massey_mov_ratings.meta.json"
+    meta = json.loads(meta_path.read_text())
+    meta["producer_version"] = "v0-stale"
+    meta_path.write_text(json.dumps(meta))
+
+    # Next load should detect the mismatch and rebuild.
+    df2 = load_massey_mov_ratings(games, mov_cap=21, cache_dir=tmp_path)
+    new_mtime = parquet_path.stat().st_mtime_ns
+    assert new_mtime > initial_mtime, "parquet should have been rewritten"
+
+    # The rebuilt sidecar should claim the current version.
+    refreshed = json.loads(meta_path.read_text())
+    assert refreshed["producer_version"] == _PRODUCER_VERSION
+
+    pd.testing.assert_frame_equal(
+        df1.sort_values(["Season", "TeamID"]).reset_index(drop=True),
+        df2.sort_values(["Season", "TeamID"]).reset_index(drop=True),
+    )
