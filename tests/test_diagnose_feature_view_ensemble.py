@@ -186,6 +186,82 @@ def test_compute_gate_fails_clause_per_peer_ll_ceiling(tmp_path):
     assert "per_peer_ll_ceiling" in gate["failed_clauses"]
 
 
+def test_compute_gate_fails_clause_residual_correlation(tmp_path):
+    """Peer A and peer B have perfectly aligned predictions (rho=1.0):
+    clause 2 fails. Peer LLs are within ceiling so clause 1 passes;
+    headroom is positive so clause 3 may pass.
+    """
+    from src.diagnose_feature_view_ensemble import compute_gate, check_gate
+
+    n = 100
+    rng = np.random.default_rng(0)
+    # Peers A and B identical -> rho=1.0 -> clause 2 fails.
+    # Both slightly better than v4 -> clause 1 passes, clause 3 may pass.
+    p_v4 = np.full(n, 0.65) + 0.02 * rng.standard_normal(n)
+    p_v4 = np.clip(p_v4, 1e-3, 1 - 1e-3)
+    p_shared = np.full(n, 0.66) + 0.02 * rng.standard_normal(n)
+    p_shared = np.clip(p_shared, 1e-3, 1 - 1e-3)
+    p_a = p_shared
+    p_b = p_shared.copy()
+
+    pw_v4 = tmp_path / "pw_v4.csv"
+    pw_a = tmp_path / "pw_a.csv"
+    pw_b = tmp_path / "pw_b.csv"
+    res = tmp_path / "res.csv"
+    season = 2024
+    for path, p in [(pw_v4, p_v4), (pw_a, p_a), (pw_b, p_b)]:
+        pd.DataFrame({
+            "season": season, "team_a": 1,
+            "team_b": 2 + np.arange(n), "p_a_wins": p,
+        }).to_csv(path, index=False)
+    _write_results(res, [(season, 136 + i, 1, 2 + i) for i in range(n)])
+
+    diag = compute_gate(
+        pairwise_v4_csv=str(pw_v4),
+        pairwise_peer_a_csv=str(pw_a),
+        pairwise_peer_b_csv=str(pw_b),
+        results_csv=str(res),
+    )
+    gate = check_gate(diag)
+    assert gate["pass"] is False
+    assert "residual_correlation" in gate["failed_clauses"]
+
+
+def test_compute_gate_fails_clause_blend_headroom(tmp_path):
+    """Peer A == Peer B == v4: best 2-blend has zero headroom.
+    Clause 3 fails (and clause 2 also fails because rho=1.0); we
+    only assert clause 3 is in failed_clauses.
+    """
+    from src.diagnose_feature_view_ensemble import compute_gate, check_gate
+
+    n = 100
+    rng = np.random.default_rng(0)
+    p = np.full(n, 0.65) + 0.02 * rng.standard_normal(n)
+    p = np.clip(p, 1e-3, 1 - 1e-3)
+
+    pw_v4 = tmp_path / "pw_v4.csv"
+    pw_a = tmp_path / "pw_a.csv"
+    pw_b = tmp_path / "pw_b.csv"
+    res = tmp_path / "res.csv"
+    season = 2024
+    for path in [pw_v4, pw_a, pw_b]:
+        pd.DataFrame({
+            "season": season, "team_a": 1,
+            "team_b": 2 + np.arange(n), "p_a_wins": p,
+        }).to_csv(path, index=False)
+    _write_results(res, [(season, 136 + i, 1, 2 + i) for i in range(n)])
+
+    diag = compute_gate(
+        pairwise_v4_csv=str(pw_v4),
+        pairwise_peer_a_csv=str(pw_a),
+        pairwise_peer_b_csv=str(pw_b),
+        results_csv=str(res),
+    )
+    gate = check_gate(diag)
+    assert gate["pass"] is False
+    assert "blend_headroom" in gate["failed_clauses"]
+
+
 def test_compute_gate_main_exits_nonzero_on_fail(tmp_path):
     """Subprocess invocation: a failing gate exits with code 1."""
     n = 50

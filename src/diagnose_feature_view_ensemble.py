@@ -35,9 +35,9 @@ DATA = Path("data/raw/march-machine-learning-2026")
 DEFAULT_DIAGNOSTIC_OUT = "output/diag_feature_view_ensemble.json"
 
 # Clause thresholds. Each maps to a prior-experiment failure mode.
-PEER_LL_CEILING_DELTA = 0.025
-RESID_CORR_MAX = 0.60
-HEADROOM_MIN = 0.001
+PEER_LL_CEILING_DELTA = 0.025  # PR 12 BT-ensemble (peer too weak)
+RESID_CORR_MAX = 0.60          # PR 11 LR-ensemble (errors too correlated)
+HEADROOM_MIN = 0.001           # PR 13 BT-as-feature (no signal lift)
 
 EPS = 1e-15
 
@@ -109,23 +109,52 @@ def optimal_3blend(
 ) -> tuple[tuple[float, float, float], float]:
     """Find (w_v4, w_a, w_b) on the simplex minimizing LL of the blend.
 
-    Returns ((w_v4, w_a, w_b), ll_opt). Used for E2 ensemble materialization
-    in Task 9; not part of any gate clause.
+    Uses multistart to escape the centroid-start failure mode in
+    v4-dominated landscapes. Returns ((w_v4, w_a, w_b), ll_opt).
+
+    Starting points:
+      - (1, 0, 0): v4-only baseline -- the likely optimum when v4 dominates.
+      - (0, w_2b, 1-w_2b): the 2-blend solution embedded in 3-D -- the
+        optimum of the (v4=0) face of the simplex; together with (1,0,0)
+        these two starts bracket the true optimum along the connecting line.
+      - (1/3, 1/3, 1/3): centroid -- kept as a fallback.
     """
     def loss(w):
-        w0, w1, w2 = w[0], w[1], w[2]
-        blend = w0 * p_winner_v4 + w1 * p_winner_a + w2 * p_winner_b
+        blend = w[0] * p_winner_v4 + w[1] * p_winner_a + w[2] * p_winner_b
         return _winner_log_loss(blend)
 
     constraints = [{"type": "eq", "fun": lambda w: w.sum() - 1.0}]
     bounds = [(0.0, 1.0), (0.0, 1.0), (0.0, 1.0)]
-    x0 = np.array([1.0 / 3, 1.0 / 3, 1.0 / 3])
-    result = minimize(
-        loss, x0, method="SLSQP", bounds=bounds, constraints=constraints,
-    )
+
+    # Seed starts: v4-only, the 2-blend solution embedded in 3-D, and centroid.
+    w_2b, _ = optimal_2blend(p_winner_a, p_winner_b)
+    starts = [
+        np.array([1.0, 0.0, 0.0]),
+        np.array([0.0, w_2b, 1.0 - w_2b]),
+        np.array([1.0 / 3, 1.0 / 3, 1.0 / 3]),
+    ]
+
+    best_w = None
+    best_ll = float("inf")
+    for x0 in starts:
+        result = minimize(
+            loss, x0, method="SLSQP", bounds=bounds, constraints=constraints,
+        )
+        if result.success and result.fun < best_ll:
+            best_ll = result.fun
+            best_w = result.x
+
+    if best_w is None:  # all starts failed -- fall back to centroid result
+        result = minimize(
+            loss, np.array([1.0 / 3, 1.0 / 3, 1.0 / 3]),
+            method="SLSQP", bounds=bounds, constraints=constraints,
+        )
+        best_w = result.x
+        best_ll = result.fun
+
     return (
-        (float(result.x[0]), float(result.x[1]), float(result.x[2])),
-        float(result.fun),
+        (float(best_w[0]), float(best_w[1]), float(best_w[2])),
+        float(best_ll),
     )
 
 
