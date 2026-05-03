@@ -162,3 +162,31 @@ def test_solver_handles_all_neutral_games():
     from src.features.massey_matrix import _solve_one_season
     _ratings, h = _solve_one_season(games, mov_cap=21)
     assert h == 0.0, f"expected h=0 on all-neutral schedule, got {h}"
+
+
+def test_home_court_constant_recovered():
+    """If teams are equal-strength but home always wins by 5, h ~= 5."""
+    team_ids = [1101, 1102, 1103, 1104]
+    rows = []
+    daynum = 10
+    for i, ti in enumerate(team_ids):
+        for j, tj in enumerate(team_ids):
+            if i == j:
+                continue
+            # ti is home; ti wins by 5
+            rows.append({
+                "Season": 2024, "DayNum": daynum,
+                "WTeamID": ti, "WScore": 75,
+                "LTeamID": tj, "LScore": 70,
+                "WLoc": "H", "NumOT": 0,
+            })
+            daynum += 1
+    games = pd.DataFrame(rows)
+
+    # Solve directly with the private function so we can inspect h.
+    from src.features.massey_matrix import _solve_one_season
+    ratings, h = _solve_one_season(games, mov_cap=21)
+
+    assert h == pytest.approx(5.0, abs=1e-4)
+    for tid, r in ratings.items():
+        assert abs(r) < 1e-4, f"Team {tid} expected ~0 rating, got {r}"
