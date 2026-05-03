@@ -54,43 +54,55 @@
   useful per-context gating from a noisy feature. Code retained on
   feat/bt-as-feature as the experiment record. Findings:
   docs/notes/2026-05-02-bt-as-feature.md.
+- **Feature-view diversity ensemble: K=2 semantic split (2026-05-02).**
+  Trained two same-class XGBoost peers on disjoint v4 feature
+  subsets: PEER_A (40 team-strength features: efficiency, four
+  factors, KenPom, Massey, conf strength, season summary) and
+  PEER_B (27 form/market/meta features: late-season, trajectory,
+  rolling form, conf tourney, coach, Vegas). Pre-sweep 3-clause
+  gate FAILED on 2 of 3 clauses: peer_A LL 0.5720 was +0.1375
+  above v4's 0.4345 (clause 1 fails by 5.5x tolerance), and best
+  2-blend headroom was -0.0206 (clause 3 fails). Clause 2
+  (residual correlation r=0.45 < 0.60) PASSED -- the disjoint-view
+  *mechanism* works, but PEER_A's standalone weakness sinks the
+  ensemble. The 3-blend optimum (v4 + peer_A + peer_B) was
+  (0.757, 0.000, 0.243) at LL 0.4316 -- v4 dominates and PEER_A
+  contributes nothing; PEER_B's 24% is a side observation but
+  BT-as-feature already falsified "added feature on top of v4" at
+  this data scale. Saved ~90-150 min of compute by gating before
+  E1+E2 sweeps. Code retained on feat/feature-view-ensemble as
+  the experiment record (src/feature_views.py, src/train_peer_stage1.py,
+  src/diagnose_feature_view_ensemble.py, blend_pairwise_csvs in
+  ensemble_stage1.py, V9_STAGE1_PAIRWISE env var in
+  sweep_v9_weights.py). Findings:
+  docs/notes/2026-05-02-feature-view-ensemble.md.
 
 ## Active queue
 
-1. **Feature-view diversity ensemble: XGBoost on disjoint feature
-   subsets** (e.g., one model on KenPom-only, one on Vegas-only,
-   one on raw efficiency). Same model class -> same standalone
-   strength as v4 (sidesteps the BT experiment's bottleneck).
-   Disjoint feature views -> different errors by construction
-   (sidesteps the LR experiment's bottleneck). With BT-as-feature
-   now also closed, the per-context gating mechanism still applies
-   but with model peers individually as strong as v4, the per-
-   context training signal v9-C sees is also stronger. Most likely
-   of the remaining items to clear all relevant diagnostic clauses.
-2. **Hierarchical Bradley-Terry with feature priors** (`s_team ~
+1. **Hierarchical Bradley-Terry with feature priors** (`s_team ~
    Normal(beta . v4_features_team, sigma)`). Couples BT back to
    v4 features to gain standalone strength. Risk: residual
    correlation may regress from 0.58 back toward 0.77 as the
-   models re-converge. With BT-as-feature now closed, this is the
-   next angle on getting a stronger BT signal. Worth trying if
-   item 1 hits a ceiling.
-3. **Small neural net (MLP) as a stage-1.** Adds PyTorch tooling
+   models re-converge. With BT-as-feature and feature-view
+   ensemble now both closed, this is the next angle on getting a
+   stronger BT signal that survives ensemble criteria.
+2. **Small neural net (MLP) as a stage-1.** Adds PyTorch tooling
    cost; diversity vs XGBoost on the 67-feature tabular space is
    the open question. Same correlated-error caveat as LR if it
    reuses the same feature matrix.
-4. **Full Bayesian Bradley-Terry with strength + variance per team**
+3. **Full Bayesian Bradley-Terry with strength + variance per team**
    (PyMC / NumPyro / Stan). The TODO's "Architecture Rethink (Tier
    C)" entry. Lets "consistent vs volatile" teams differentiate.
    Standalone-strength bottleneck likely persists (full posterior
    over weak strengths is still a weak point estimate); deferred
-   until item 1 or 2 is settled.
-5. **External rankings (538, KenPom-public, BPI as features).**
+   until item 1 is settled.
+4. **External rankings (538, KenPom-public, BPI as features).**
    Note: we already have BPI, Sagarin, KenPom (POM), Bart Torvik
    (TRK), RPI via Massey ordinals (config.yaml lines 30-36).
    Truly external would be 538's tournament forecast or Vegas
    prop-bet predictions, which need data sourcing outside the
    Kaggle archive.
-6. **Roster-level returning-experience.** Player-level data is not
+5. **Roster-level returning-experience.** Player-level data is not
    in the Kaggle Mania archive; would need an external roster CSV
    per season. Different signal from coach experience.
 
