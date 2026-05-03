@@ -90,3 +90,13 @@ def test_synthetic_round_robin_recovers_ratings_and_home_constant():
         assert rating_by_team[tid] == pytest.approx(expected, abs=1e-4), (
             f"Team {tid} expected {expected}, got {rating_by_team[tid]}"
         )
+
+
+def test_sum_to_zero_invariant():
+    """Solver enforces sum(ratings) = 0 for identifiability."""
+    team_ids = [1101, 1102, 1103, 1104]
+    ratings = [5.0, 2.0, -2.0, -5.0]
+    games = _make_round_robin(team_ids, ratings, h=1.0)
+
+    df = compute_massey_mov_ratings(games, mov_cap=21)
+    assert df["massey_mov_rating"].sum() == pytest.approx(0.0, abs=1e-8)
