@@ -247,3 +247,35 @@ def test_cache_invalidates_on_meta_mismatch(tmp_path: Path, monkeypatch):
         df1.sort_values(["Season", "TeamID"]).reset_index(drop=True),
         df2.sort_values(["Season", "TeamID"]).reset_index(drop=True),
     )
+
+
+_REG_SEASON_CSV = (
+    Path(__file__).resolve().parents[2]
+    / "data" / "raw" / "march-machine-learning-2026"
+    / "MRegularSeasonCompactResults.csv"
+)
+
+
+@pytest.mark.skipif(not _REG_SEASON_CSV.exists(), reason="raw Kaggle data not available")
+def test_real_data_shape_and_rating_range(tmp_path: Path):
+    """Smoke-test: solver runs on real Kaggle data, output shape is
+    plausible, ratings fall in a sane range (no infinity / NaN)."""
+    reg = pd.read_csv(_REG_SEASON_CSV)
+    # v4 trains on Season >= 2003; smoke-test the same range.
+    reg = reg[reg["Season"] >= 2003]
+    df = load_massey_mov_ratings(reg, mov_cap=21, cache_dir=tmp_path)
+
+    assert df["massey_mov_rating"].notna().all(), "no NaN ratings"
+    assert np.isfinite(df["massey_mov_rating"]).all(), "no inf ratings"
+    # D-I rating range: cap=21 means individual game contributions
+    # are bounded; per-team aggregates fall in roughly [-25, +25].
+    assert df["massey_mov_rating"].abs().max() < 40.0, (
+        f"unexpectedly large rating: {df['massey_mov_rating'].abs().max():.2f}"
+    )
+    # Each season should have at least 300 D-I teams and at most 380.
+    counts = df.groupby("Season").size()
+    assert (counts >= 300).all(), f"min teams per season: {counts.min()}"
+    assert (counts <= 380).all(), f"max teams per season: {counts.max()}"
+    # Sum-to-zero per season.
+    sums = df.groupby("Season")["massey_mov_rating"].sum()
+    assert sums.abs().max() < 1e-6, f"per-season sum drift: {sums.abs().max()}"
