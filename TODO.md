@@ -79,30 +79,51 @@
 
 ## Active queue
 
-1. **Hierarchical Bradley-Terry with feature priors** (`s_team ~
+1. **Massey matrix and Colley matrix ranking systems.** Two
+   classical linear-algebraic team-ranking systems with known
+   prior success in March Madness prediction. Massey solves a
+   least-squares system on margin-of-victory data (`M x = b`
+   where `M` encodes opponents and `b` is the score-differential
+   vector); Colley solves `(C - A) x = b` on win/loss only (no
+   margin), with the property that ratings sum to a constant.
+   Computed from raw Kaggle game results -- distinct from the
+   existing `massey_*` features in v4 (which are external
+   composite orderings from massey-ratings.com, not our own
+   Massey-matrix solve). Three potential entry points: (a) add
+   each rating as a new per-team feature in the feature matrix
+   (most likely productive -- sidesteps the ensemble failure
+   modes that closed PRs 11/12/13/14); (b) use rating diff ->
+   sigmoid as a stage-1 alternative or ensemble peer (faces the
+   BT-style standalone-strength bottleneck if ratings are weak);
+   (c) feed both rating outputs to v9-C as features (faces the
+   v9-C-data-thinness bottleneck from BT-as-feature). Worth
+   trying both Massey and Colley as feature additions first --
+   user has used these successfully on March Madness before, so
+   prior on predictive value is high.
+2. **Hierarchical Bradley-Terry with feature priors** (`s_team ~
    Normal(beta . v4_features_team, sigma)`). Couples BT back to
    v4 features to gain standalone strength. Risk: residual
    correlation may regress from 0.58 back toward 0.77 as the
    models re-converge. With BT-as-feature and feature-view
    ensemble now both closed, this is the next angle on getting a
    stronger BT signal that survives ensemble criteria.
-2. **Small neural net (MLP) as a stage-1.** Adds PyTorch tooling
+3. **Small neural net (MLP) as a stage-1.** Adds PyTorch tooling
    cost; diversity vs XGBoost on the 67-feature tabular space is
    the open question. Same correlated-error caveat as LR if it
    reuses the same feature matrix.
-3. **Full Bayesian Bradley-Terry with strength + variance per team**
+4. **Full Bayesian Bradley-Terry with strength + variance per team**
    (PyMC / NumPyro / Stan). The TODO's "Architecture Rethink (Tier
    C)" entry. Lets "consistent vs volatile" teams differentiate.
    Standalone-strength bottleneck likely persists (full posterior
    over weak strengths is still a weak point estimate); deferred
-   until item 1 is settled.
-4. **External rankings (538, KenPom-public, BPI as features).**
+   until items 1-2 are settled.
+5. **External rankings (538, KenPom-public, BPI as features).**
    Note: we already have BPI, Sagarin, KenPom (POM), Bart Torvik
    (TRK), RPI via Massey ordinals (config.yaml lines 30-36).
    Truly external would be 538's tournament forecast or Vegas
    prop-bet predictions, which need data sourcing outside the
    Kaggle archive.
-5. **Roster-level returning-experience.** Player-level data is not
+6. **Roster-level returning-experience.** Player-level data is not
    in the Kaggle Mania archive; would need an external roster CSV
    per season. Different signal from coach experience.
 
