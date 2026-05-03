@@ -128,9 +128,9 @@ def run_single_cell(
 
     # Bracket scoring: tolerate missing tournament slot data on synthetic
     # inputs (unit tests). Production runs with real Kaggle data will
-    # produce meaningful totals.
+    # produce meaningful totals. score_pairwise_path is module-imported
+    # at the top of the file so test monkeypatching reaches this path.
     try:
-        from src.score_chalk_brackets import score_pairwise_path
         scored = score_pairwise_path(pairwise_csv_out)
         total_pts = float(scored["total_pts"])
     except (FileNotFoundError, KeyError, ValueError):
