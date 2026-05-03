@@ -52,6 +52,7 @@ from src.train_upset_model import (
     double_loso_eval,
     load_per_game_data_with_upset,
 )
+from src.score_chalk_brackets import score_pairwise_path
 
 
 def _cell_path(out_dir: str, w_upset: float, w_miss: float) -> str:
@@ -201,7 +202,11 @@ def main():
     """Run the canonical 15-cell sweep against production data paths.
 
     feature_set is read from the V9_FEATURE_SET env var (default 'v9b').
-    Output paths key off the choice so v9-B and v9-C artifacts coexist.
+    pairwise_v4_csv is read from the V9_STAGE1_PAIRWISE env var
+    (default 'output/pairwise_v4.csv') -- the harness uses whatever
+    pairwise CSV is supplied as the stage-1 input. Output dirs key off
+    feature_set and the stage-1 input's basename so v9-B / v9-C /
+    v9-D / ensemble-E1 / ensemble-E2 artifacts coexist.
 
     Compares the anchor cell (1.0, 0.0) bracket points against
     output/pairwise_v8.csv as a sanity gate after the sweep.
@@ -214,27 +219,42 @@ def main():
             "must be 'v9b', 'v9c', or 'v9d'"
         )
 
+    pairwise_v4 = os.environ.get(
+        "V9_STAGE1_PAIRWISE", "output/pairwise_v4.csv"
+    )
+
     print("=" * 80)
     print(f"V9 UPSET-WEIGHT SWEEP (feature_set={feature_set})")
+    print(f"  stage-1 input: {pairwise_v4}")
     print(f"  Grid: {len(GRID)} cells, "
           f"W_UPSET in {W_UPSET_VALUES}, W_MISS in {W_MISS_VALUES}")
     print("=" * 80)
 
-    pairwise_v4 = "output/pairwise_v4.csv"
     pairwise_v8 = "output/pairwise_v8.csv"
     seeds_csv = "data/raw/march-machine-learning-2026/MNCAATourneySeeds.csv"
     results_csv = "data/raw/march-machine-learning-2026/MNCAATourneyCompactResults.csv"
     slots_csv = "data/raw/march-machine-learning-2026/MNCAATourneySlots.csv"
 
-    if feature_set == "v9b":
-        out_dir = "output/v9_sweep"
-        results_csv_path = "output/v9_sweep_results.csv"
-    elif feature_set == "v9c":
-        out_dir = "output/v9c_sweep"
-        results_csv_path = "output/v9c_sweep_results.csv"
-    else:  # v9d
-        out_dir = "output/v9d_sweep"
-        results_csv_path = "output/v9d_sweep_results.csv"
+    # Output dir keys off the stage-1 input basename so different stage-1s
+    # produce non-colliding artifacts. The default ('pairwise_v4.csv')
+    # preserves the historical 'output/v9{b|c|d}_sweep' naming for
+    # backwards compatibility.
+    pw_basename = Path(pairwise_v4).stem  # e.g. 'pairwise_v4', 'pairwise_ensemble_e1'
+    if pw_basename == "pairwise_v4":
+        if feature_set == "v9b":
+            out_dir = "output/v9_sweep"
+            results_csv_path = "output/v9_sweep_results.csv"
+        elif feature_set == "v9c":
+            out_dir = "output/v9c_sweep"
+            results_csv_path = "output/v9c_sweep_results.csv"
+        else:  # v9d
+            out_dir = "output/v9d_sweep"
+            results_csv_path = "output/v9d_sweep_results.csv"
+    else:
+        # Custom stage-1 input: e.g. pairwise_ensemble_e1.csv -> v9c_ensemble_e1_sweep.
+        suffix = pw_basename.replace("pairwise_", "")
+        out_dir = f"output/{feature_set}_{suffix}_sweep"
+        results_csv_path = f"output/{feature_set}_{suffix}_sweep_results.csv"
 
     pairwise_bt_csv = "output/pairwise_bt.csv" if feature_set == "v9d" else None
 
@@ -255,7 +275,6 @@ def main():
     print(df.to_string(index=False))
 
     # v8 baseline + anchor-cell sanity gate.
-    from src.score_chalk_brackets import score_pairwise_path
     v8_total = float(score_pairwise_path(pairwise_v8)["total_pts"])
     anchor_row = df[(df["w_upset"] == 1.0) & (df["w_miss"] == 0.0)].iloc[0]
     anchor_total = float(anchor_row["total_brkt_pts"])

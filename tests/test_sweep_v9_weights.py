@@ -244,3 +244,78 @@ def test_run_single_cell_v9d_requires_pairwise_bt_csv(tmp_path):
             slots_csv=slots_path,
             feature_set="v9d",
         )
+
+
+def test_sweep_main_uses_v9_stage1_pairwise_env_var(tmp_path, monkeypatch):
+    """When V9_STAGE1_PAIRWISE is set, main() uses that path as the
+    stage-1 input and writes outputs to a basename-keyed dir.
+
+    We don't run the full sweep here -- we monkey-patch run_sweep to
+    capture its arguments and assert the env-var value flowed through.
+    """
+    from src import sweep_v9_weights as sw
+
+    captured = {}
+
+    def fake_run_sweep(**kwargs):
+        captured.update(kwargs)
+        # Return a minimal df so main() doesn't crash on the score-anchor block.
+        return pd.DataFrame([{
+            "w_upset": 1.0, "w_miss": 0.0, "total_brkt_pts": 100.0,
+            "ll_loso_weighted_mean": 0.5, "acc_loso_weighted_mean": 0.5,
+            "pairwise_csv": str(tmp_path / "fake.csv"),
+        }])
+
+    monkeypatch.setattr(sw, "run_sweep", fake_run_sweep)
+    monkeypatch.setattr(
+        sw, "score_pairwise_path",
+        lambda *a, **k: {"total_pts": 100.0},
+        raising=False,
+    )
+    monkeypatch.setenv("V9_FEATURE_SET", "v9c")
+
+    pw_override = tmp_path / "pairwise_ensemble_e1.csv"
+    pw_override.write_text("season,team_a,team_b,p_a_wins\n")
+    monkeypatch.setenv("V9_STAGE1_PAIRWISE", str(pw_override))
+
+    try:
+        sw.main()
+    except Exception:
+        # The fake doesn't fully simulate downstream IO; we only care that
+        # run_sweep was called with the override path.
+        pass
+
+    assert captured.get("pairwise_v4_csv") == str(pw_override)
+    # Output dir basename incorporates the override filename.
+    assert "ensemble_e1" in captured.get("out_dir", "")
+
+
+def test_sweep_default_path_when_env_var_unset(monkeypatch):
+    """When V9_STAGE1_PAIRWISE is unset, main() uses output/pairwise_v4.csv."""
+    from src import sweep_v9_weights as sw
+
+    captured = {}
+
+    def fake_run_sweep(**kwargs):
+        captured.update(kwargs)
+        return pd.DataFrame([{
+            "w_upset": 1.0, "w_miss": 0.0, "total_brkt_pts": 100.0,
+            "ll_loso_weighted_mean": 0.5, "acc_loso_weighted_mean": 0.5,
+            "pairwise_csv": "fake.csv",
+        }])
+
+    monkeypatch.setattr(sw, "run_sweep", fake_run_sweep)
+    monkeypatch.setattr(
+        sw, "score_pairwise_path",
+        lambda *a, **k: {"total_pts": 100.0},
+        raising=False,
+    )
+    monkeypatch.setenv("V9_FEATURE_SET", "v9c")
+    monkeypatch.delenv("V9_STAGE1_PAIRWISE", raising=False)
+
+    try:
+        sw.main()
+    except Exception:
+        pass
+
+    assert captured.get("pairwise_v4_csv") == "output/pairwise_v4.csv"
