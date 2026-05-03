@@ -87,6 +87,12 @@ def dump_pairwise_for_season(
     """
     from src.models.matchup import expand_feature_cols
 
+    if (train_medians is None) != (peer_cols is None):
+        raise ValueError(
+            "train_medians and peer_cols must be provided together; "
+            "passing one without the other is a likely bug"
+        )
+
     field = sorted(set(int(t) for t in field_team_ids if t in feature_lookup))
     if len(field) < 2:
         return 0
@@ -181,6 +187,7 @@ def run_peer_loso(peer: str, out_csv: str | None = None) -> dict:
             regular_results=train_regular,
             feature_cols=peer_cols,
             top_n_team_ids=train_top_ids,
+            supplemental_weight=0.25,
         )
 
         # Mirror v4's guard (enhanced_model_v3.py:516-517): skip degenerate
