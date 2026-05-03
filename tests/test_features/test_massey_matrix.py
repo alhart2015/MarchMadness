@@ -100,3 +100,37 @@ def test_sum_to_zero_invariant():
 
     df = compute_massey_mov_ratings(games, mov_cap=21)
     assert df["massey_mov_rating"].sum() == pytest.approx(0.0, abs=1e-8)
+
+
+def test_mov_cap_clips_blowouts():
+    """Capping at 21 produces materially different (smaller-magnitude)
+    ratings than capping at 100 when a single blowout exists."""
+    # Team 1101 plays team 1102 once (100-point blowout) and team 1103
+    # plays team 1104 once (3-point game). Two-component schedule.
+    # At least one non-neutral game is required so the home-constant h is
+    # identifiable; otherwise the M matrix is singular.
+    rows = [
+        {"Season": 2024, "DayNum": 10, "WTeamID": 1101, "WScore": 150, "LTeamID": 1102,
+         "LScore": 50, "WLoc": "N", "NumOT": 0},
+        {"Season": 2024, "DayNum": 11, "WTeamID": 1103, "WScore": 70, "LTeamID": 1104,
+         "LScore": 67, "WLoc": "N", "NumOT": 0},
+        # Connect the two components so the system is solvable; H/A makes h identifiable.
+        {"Season": 2024, "DayNum": 12, "WTeamID": 1101, "WScore": 75, "LTeamID": 1103,
+         "LScore": 70, "WLoc": "H", "NumOT": 0},
+        {"Season": 2024, "DayNum": 13, "WTeamID": 1102, "WScore": 60, "LTeamID": 1104,
+         "LScore": 58, "WLoc": "A", "NumOT": 0},
+    ]
+    games = pd.DataFrame(rows)
+
+    df_capped = compute_massey_mov_ratings(games, mov_cap=21)
+    df_uncapped = compute_massey_mov_ratings(games, mov_cap=100)
+
+    rating_capped = dict(zip(df_capped["TeamID"], df_capped["massey_mov_rating"]))
+    rating_uncapped = dict(zip(df_uncapped["TeamID"], df_uncapped["massey_mov_rating"]))
+
+    # Team 1101's rating in the uncapped solve is dominated by the +100
+    # game vs 1102, so |rating_1101_uncapped| > |rating_1101_capped|.
+    assert abs(rating_uncapped[1101]) > abs(rating_capped[1101]) + 1.0
+    # Sanity: the capped 1101 rating is bounded by mov_cap (its games
+    # contributed at most cap=21 each toward the rating in score units).
+    assert abs(rating_capped[1101]) < 30.0  # well under the uncapped value
