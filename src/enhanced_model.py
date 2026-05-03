@@ -197,6 +197,10 @@ def compute_all_features(data: dict) -> pd.DataFrame:
     # Only process seasons where we have detailed results (2003+)
     seasons = [s for s in seasons if s >= 2003]
 
+    # -- Massey-matrix MOV ratings (cached) -------------------------------
+    from src.features.massey_matrix import load_massey_mov_ratings
+    massey_mov_full = load_massey_mov_ratings(reg)
+
     # -- Build KenPom -> Kaggle ID mapping --------------------------------
     print("  Building team ID mapping (KenPom -> Kaggle)...")
     kp_to_kaggle = build_kenpom_to_kaggle_map(kenpom, teams, spellings)
@@ -334,6 +338,10 @@ def compute_all_features(data: dict) -> pd.DataFrame:
         for _, row in season_seeds.iterrows():
             seed_map[int(row["TeamID"])] = _parse_seed_number(row["Seed"])
 
+        # -- 2i: Massey-matrix MOV rating ---------------------------------
+        season_mov_df = massey_mov_full[massey_mov_full["Season"] == season]
+        massey_mov = dict(zip(season_mov_df["TeamID"], season_mov_df["massey_mov_rating"]))
+
         # -- Assemble features for each team in this season ---------------
         all_team_ids = set()
         all_team_ids.update(eff["TeamID"].values if not eff.empty else [])
@@ -372,6 +380,10 @@ def compute_all_features(data: dict) -> pd.DataFrame:
             # Massey ordinals
             if tid in massey_features:
                 row_data.update(massey_features[tid])
+
+            # Massey-matrix MOV rating
+            if tid in massey_mov:
+                row_data["massey_mov_rating"] = massey_mov[tid]
 
             # Conference strength
             if tid in conf_strength:
