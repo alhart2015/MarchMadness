@@ -1,5 +1,6 @@
 """Unit tests for src/ensemble_stage1.py."""
 from pathlib import Path
+import numpy as np
 import pandas as pd
 import pytest
 
@@ -103,3 +104,78 @@ def test_cli_invocation(tmp_path):
     assert result.returncode == 0, result.stderr
     df = pd.read_csv(out)
     assert df.loc[0, "p_a_wins"] == pytest.approx(0.5)
+
+
+def test_blend_pairwise_csvs_three_inputs(tmp_path):
+    """Three input CSVs at uniform 1/3 weights produce row-wise mean
+    of p_a_wins. Schema and join coverage same as average_pairwise_csvs.
+    """
+    from src.ensemble_stage1 import blend_pairwise_csvs
+
+    csvs = []
+    p_values = [0.6, 0.4, 0.5]
+    for i, p in enumerate(p_values):
+        path = tmp_path / f"in_{i}.csv"
+        pd.DataFrame({
+            "season": 2024, "team_a": 1, "team_b": 2,
+            "p_a_wins": [p],
+        }).to_csv(path, index=False)
+        csvs.append(str(path))
+
+    out = tmp_path / "out.csv"
+    blend_pairwise_csvs(csvs, weights=[1/3, 1/3, 1/3], out=str(out))
+
+    df = pd.read_csv(out)
+    assert list(df.columns) == ["season", "team_a", "team_b", "p_a_wins"]
+    assert df["p_a_wins"].iloc[0] == pytest.approx(np.mean(p_values))
+
+
+def test_blend_pairwise_csvs_anchor_one_input(tmp_path):
+    """Single input at weight 1.0 reproduces input row-for-row."""
+    from src.ensemble_stage1 import blend_pairwise_csvs
+
+    src = tmp_path / "src.csv"
+    pd.DataFrame({
+        "season": [2024, 2024],
+        "team_a": [1, 1],
+        "team_b": [2, 3],
+        "p_a_wins": [0.6, 0.7],
+    }).to_csv(src, index=False)
+
+    out = tmp_path / "out.csv"
+    blend_pairwise_csvs([str(src)], weights=[1.0], out=str(out))
+
+    expected = pd.read_csv(src)
+    actual = pd.read_csv(out)
+    pd.testing.assert_frame_equal(
+        actual.sort_values(["season", "team_a", "team_b"]).reset_index(drop=True),
+        expected.sort_values(["season", "team_a", "team_b"]).reset_index(drop=True),
+    )
+
+
+def test_blend_pairwise_csvs_weight_count_mismatch_raises(tmp_path):
+    from src.ensemble_stage1 import blend_pairwise_csvs
+
+    pd.DataFrame({"season": 2024, "team_a": [1], "team_b": [2],
+                  "p_a_wins": [0.5]}).to_csv(tmp_path / "a.csv", index=False)
+
+    with pytest.raises(ValueError, match="weights"):
+        blend_pairwise_csvs(
+            [str(tmp_path / "a.csv")],
+            weights=[0.5, 0.5],
+            out=str(tmp_path / "out.csv"),
+        )
+
+
+def test_blend_pairwise_csvs_weights_must_sum_to_one(tmp_path):
+    from src.ensemble_stage1 import blend_pairwise_csvs
+
+    pd.DataFrame({"season": 2024, "team_a": [1], "team_b": [2],
+                  "p_a_wins": [0.5]}).to_csv(tmp_path / "a.csv", index=False)
+
+    with pytest.raises(ValueError, match="sum"):
+        blend_pairwise_csvs(
+            [str(tmp_path / "a.csv")],
+            weights=[0.7],
+            out=str(tmp_path / "out.csv"),
+        )
