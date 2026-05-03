@@ -67,3 +67,80 @@ def clause1_correlations(feature_matrix: pd.DataFrame) -> dict:
         and summary["max_abs_corr_vs_massey_composite"] < CORR_PER_SEASON_MAX
     )
     return summary
+
+
+def clause2_headroom(seasons: list[int] = GATE_SUBSET_SEASONS) -> dict:
+    """Run LOSO twice on the 3-season subset -- once with massey_mov_rating
+    in feature_cols, once with it excluded. Compare mean test LL.
+
+    Pass: mean(LL_with) - mean(LL_without) <= LL_HEADROOM_MAX.
+
+    Implementation note: we toggle massey_mov_rating in feature_cols
+    (NOT in the matrix) so train/test splits are byte-identical between
+    arms; the column simply isn't fed to XGBoost in the without-arm.
+
+    The trainer (leave_one_season_out_cv_weighted) returns a dict with
+    a 'per_season' DataFrame keyed by 'season' with a 'log_loss' column.
+    """
+    from src.enhanced_model_v3 import (
+        leave_one_season_out_cv_weighted,
+        prepare_loso_inputs,
+    )
+
+    inputs = prepare_loso_inputs()
+    fm = inputs["feature_matrix"]
+    tourney = inputs["tourney_filtered"]
+    regular = inputs["regular_results"]
+    feature_cols_full = inputs["feature_cols"]
+    top_80 = inputs["top_80_by_season"]
+
+    if "massey_mov_rating" not in fm.columns:
+        raise RuntimeError(
+            "massey_mov_rating not present in feature_matrix; "
+            "ensure Task 8 wire-in is committed"
+        )
+    if "massey_mov_rating" not in feature_cols_full:
+        raise RuntimeError(
+            "massey_mov_rating not in feature_cols; "
+            "check get_feature_cols include logic"
+        )
+
+    cols_with = list(feature_cols_full)
+    cols_without = [c for c in feature_cols_full if c != "massey_mov_rating"]
+
+    res_with = leave_one_season_out_cv_weighted(
+        fm, tourney, regular, cols_with, top_80, allowed_holdouts=seasons,
+    )
+    res_without = leave_one_season_out_cv_weighted(
+        fm, tourney, regular, cols_without, top_80, allowed_holdouts=seasons,
+    )
+
+    df_with = res_with["per_season"]
+    df_without = res_without["per_season"]
+    per_with = {int(r["season"]): r for _, r in df_with.iterrows()}
+    per_without = {int(r["season"]): r for _, r in df_without.iterrows()}
+
+    per_season = []
+    for season in seasons:
+        rw = per_with.get(int(season))
+        rwo = per_without.get(int(season))
+        if rw is None or rwo is None:
+            continue
+        per_season.append({
+            "season": int(season),
+            "ll_with": float(rw["log_loss"]),
+            "ll_without": float(rwo["log_loss"]),
+            "ll_delta": float(rw["log_loss"] - rwo["log_loss"]),
+        })
+
+    mean_with = float(np.mean([r["ll_with"] for r in per_season]))
+    mean_without = float(np.mean([r["ll_without"] for r in per_season]))
+    delta = mean_with - mean_without
+    return {
+        "subset_seasons": list(seasons),
+        "per_season": per_season,
+        "mean_ll_with_massey": mean_with,
+        "mean_ll_without_massey": mean_without,
+        "mean_ll_delta": delta,
+        "pass": bool(delta <= LL_HEADROOM_MAX),
+    }
