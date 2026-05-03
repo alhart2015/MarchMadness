@@ -279,3 +279,21 @@ def test_real_data_shape_and_rating_range(tmp_path: Path):
     # Sum-to-zero per season.
     sums = df.groupby("Season")["massey_mov_rating"].sum()
     assert sums.abs().max() < 1e-6, f"per-season sum drift: {sums.abs().max()}"
+
+
+def test_clause1_pass_when_uncorrelated():
+    """Clause 1 passes when massey_mov_rating is uncorrelated with the
+    two baseline columns."""
+    from src.diagnose_massey_mov import clause1_correlations
+    rng = np.random.default_rng(0)
+    n = 100
+    fm = pd.DataFrame({
+        "Season": [2024] * n,
+        "TeamID": list(range(1, n + 1)),
+        "massey_mov_rating": rng.standard_normal(n),
+        "adj_em": rng.standard_normal(n),
+        "massey_composite": rng.standard_normal(n),
+    })
+    out = clause1_correlations(fm)
+    assert out["pass"] is True
+    assert out["mean_abs_corr_vs_adj_em"] < 0.5  # random, easily under 0.95
