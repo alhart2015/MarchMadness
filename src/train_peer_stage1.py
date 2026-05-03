@@ -64,6 +64,8 @@ def dump_pairwise_for_season(
     feature_lookup: dict,
     model,
     out_csv: str,
+    train_medians: "pd.Series | None" = None,
+    peer_cols: "list[str] | None" = None,
 ) -> int:
     """Append (season, team_a, team_b, p_a_wins) rows for the season to out_csv.
 
@@ -73,9 +75,18 @@ def dump_pairwise_for_season(
     model: a fitted classifier with predict_proba(X) -> [N, 2].
     out_csv: appended-to (header written only on first call when file
         doesn't exist).
+    train_medians: per-diff-column medians computed on the training fold's
+        X_train (already in matchup diff-space). Mirrors v4's predict-time
+        fillna(medians) at enhanced_model_v3.py:548. Must be passed together
+        with peer_cols so the matchup DataFrame is named correctly.
+    peer_cols: list of raw feature column names (used to name the diff
+        columns via expand_feature_cols). Required when train_medians is
+        passed.
 
     Returns the number of pair rows written.
     """
+    from src.models.matchup import expand_feature_cols
+
     field = sorted(set(int(t) for t in field_team_ids if t in feature_lookup))
     if len(field) < 2:
         return 0
@@ -90,8 +101,17 @@ def dump_pairwise_for_season(
             pair_rows.append(build_matchup_features(av, bv))
             pair_ids.append((a, b))
 
-    X = np.array(pair_rows, dtype=float)
-    p = model.predict_proba(X)[:, 1]
+    # Mirror v4's predict-time NaN fill (enhanced_model_v3.py:548):
+    # build a named DataFrame in diff-space, fill with training-fold medians,
+    # then predict. If train_medians is not provided (e.g., unit tests using
+    # stub models without NaN), fall back to a plain numpy array.
+    if train_medians is not None and peer_cols is not None:
+        diff_cols = expand_feature_cols(peer_cols)
+        X_df = pd.DataFrame(pair_rows, columns=diff_cols).fillna(train_medians)
+        p = model.predict_proba(X_df)[:, 1]
+    else:
+        X = np.array(pair_rows, dtype=float)
+        p = model.predict_proba(X)[:, 1]
 
     out_df = pd.DataFrame({
         "season": season,
@@ -139,6 +159,9 @@ def run_peer_loso(peer: str, out_csv: str | None = None) -> dict:
         Path(out_csv).unlink()
 
     seasons = sorted(set(int(s) for s in tourney["Season"].unique()))
+    # Mirror v4's filter (enhanced_model_v3.py:487): skip pre-2003 seasons so
+    # OOF row coverage matches pairwise_v4.csv exactly.
+    seasons = [s for s in seasons if s >= 2003]
     total_pairs = 0
     for season in seasons:
         # Training rows: every season except the held-out one.
@@ -160,12 +183,20 @@ def run_peer_loso(peer: str, out_csv: str | None = None) -> dict:
             top_n_team_ids=train_top_ids,
         )
 
-        # Fill NaN with training-fold median before fitting.
-        if not X_train.empty:
-            train_medians = X_train.median()
-            X_train = X_train.fillna(train_medians)
+        # Mirror v4's guard (enhanced_model_v3.py:516-517): skip degenerate
+        # folds with no training data.
+        if X_train.empty:
+            print(f"  season {season}: skipped (empty training fold)")
+            continue
 
-        model = train_model(X_train, y_train, sample_weight=sample_weight)
+        # Fill NaN with training-fold median before fitting; store medians
+        # for reuse at predict time (mirrors v4 lines 519-522).
+        train_medians = X_train.median()
+        X_train = X_train.fillna(train_medians)
+
+        # Mirror v4's explicit random_seed=42 (enhanced_model_v3.py:524-526).
+        model = train_model(X_train, y_train, sample_weight=sample_weight,
+                            random_seed=42)
 
         # Build the per-team feature lookup for the held-out season.
         season_fm = feature_matrix[feature_matrix["Season"] == season]
@@ -186,6 +217,8 @@ def run_peer_loso(peer: str, out_csv: str | None = None) -> dict:
             feature_lookup=feature_lookup,
             model=model,
             out_csv=out_csv,
+            train_medians=train_medians,
+            peer_cols=peer_cols,
         )
         total_pairs += n
         print(f"  season {season}: {n} pairs (cumulative {total_pairs})")
