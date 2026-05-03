@@ -1,0 +1,47 @@
+{
+  "diagnostic": {
+    "n_played_games": 1449,
+    "ll_v4": 0.4344820591301926,
+    "ll_peer_a": 0.5719531023013056,
+    "ll_peer_b": 0.45661144829226336,
+    "ll_2blend_optimal": 0.45508349298657863,
+    "ll_3blend_optimal": 0.4316186633735017,
+    "w_2blend_optimal": 0.08313235460804236,
+    "w_3blend_optimal": [
+      0.7567446853373955,
+      0.0,
+      0.2432553146626045
+    ],
+    "rho_residual": 0.44692572374289835,
+    "headroom_2blend_vs_v4": -0.02060143385638602,
+    "clauses": {
+      "per_peer_ll_ceiling": {
+        "threshold": 0.025,
+        "ll_v4": 0.4344820591301926,
+        "ll_peer_a": 0.5719531023013056,
+        "ll_peer_b": 0.45661144829226336,
+        "delta_a": 0.13747104317111297,
+        "delta_b": 0.022129389162070745,
+        "pass": false
+      },
+      "residual_correlation": {
+        "threshold": 0.6,
+        "rho": 0.44692572374289835,
+        "pass": true
+      },
+      "blend_headroom": {
+        "threshold": 0.001,
+        "headroom": -0.02060143385638602,
+        "pass": false
+      }
+    }
+  },
+  "gate": {
+    "pass": false,
+    "failed_clauses": [
+      "per_peer_ll_ceiling",
+      "blend_headroom"
+    ],
+    "reason": "failed clauses: ['per_peer_ll_ceiling', 'blend_headroom']"
+  }
+}
