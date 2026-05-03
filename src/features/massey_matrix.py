@@ -90,6 +90,21 @@ def _solve_one_season(games_df: pd.DataFrame, mov_cap: int) -> tuple[dict[int, f
         rhs[li] -= y
         rhs[h_col] += z * y
 
+    # Edge case: zero non-neutral games => h-column/row of (X^T X) is all
+    # zeros, making M rank-deficient. Spec
+    # docs/superpowers/specs/2026-05-03-massey-matrix-feature-design.md
+    # ("Edge cases") prescribes pinning h = 0 and solving the team-only
+    # sub-system. We implement this in-place by replacing the all-zero
+    # h_col row/col with the equation h = 0, which keeps M's shape stable
+    # and leaves the team sub-block (and its sum-to-zero constraint)
+    # untouched.
+    all_neutral = M[h_col, h_col] == 0.0
+    if all_neutral:
+        M[h_col, :] = 0.0
+        M[:, h_col] = 0.0
+        M[h_col, h_col] = 1.0
+        rhs[h_col] = 0.0
+
     cond = np.linalg.cond(M)
     if cond > 1e10:
         logger.warning("Massey normal-equations matrix is ill-conditioned (cond=%.2e); "
@@ -97,7 +112,7 @@ def _solve_one_season(games_df: pd.DataFrame, mov_cap: int) -> tuple[dict[int, f
 
     sol = np.linalg.solve(M, rhs)
     ratings_arr = sol[:n]
-    h_val = float(sol[n])
+    h_val = 0.0 if all_neutral else float(sol[n])
 
     return ({tid: float(ratings_arr[idx[tid]]) for tid in team_ids}, h_val)
 

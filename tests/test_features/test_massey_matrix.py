@@ -107,18 +107,16 @@ def test_mov_cap_clips_blowouts():
     ratings than capping at 100 when a single blowout exists."""
     # Team 1101 plays team 1102 once (100-point blowout) and team 1103
     # plays team 1104 once (3-point game). Two-component schedule.
-    # At least one non-neutral game is required so the home-constant h is
-    # identifiable; otherwise the M matrix is singular.
     rows = [
         {"Season": 2024, "DayNum": 10, "WTeamID": 1101, "WScore": 150, "LTeamID": 1102,
          "LScore": 50, "WLoc": "N", "NumOT": 0},
         {"Season": 2024, "DayNum": 11, "WTeamID": 1103, "WScore": 70, "LTeamID": 1104,
          "LScore": 67, "WLoc": "N", "NumOT": 0},
-        # Connect the two components so the system is solvable; H/A makes h identifiable.
+        # Connect the two components so the system is solvable.
         {"Season": 2024, "DayNum": 12, "WTeamID": 1101, "WScore": 75, "LTeamID": 1103,
-         "LScore": 70, "WLoc": "H", "NumOT": 0},
+         "LScore": 70, "WLoc": "N", "NumOT": 0},
         {"Season": 2024, "DayNum": 13, "WTeamID": 1102, "WScore": 60, "LTeamID": 1104,
-         "LScore": 58, "WLoc": "A", "NumOT": 0},
+         "LScore": 58, "WLoc": "N", "NumOT": 0},
     ]
     games = pd.DataFrame(rows)
 
@@ -134,3 +132,33 @@ def test_mov_cap_clips_blowouts():
     # Sanity: the capped 1101 rating is bounded by mov_cap (its games
     # contributed at most cap=21 each toward the rating in score units).
     assert abs(rating_capped[1101]) < 30.0  # well under the uncapped value
+
+
+def test_solver_handles_all_neutral_games():
+    """All-neutral schedule (no home-court signal) -- solver returns
+    h = 0 and continues rather than crashing on a singular matrix.
+    Spec docs/superpowers/specs/2026-05-03-massey-matrix-feature-design.md
+    'Edge cases' section: 'Zero non-neutral games in a season ... set
+    h = 0 and solve the team-only sub-system.'"""
+    rows = []
+    daynum = 10
+    # Tiny round-robin where 1101 wins by 10 over 1102 and 1102 wins by
+    # 10 over 1103 etc -- everything neutral.
+    for w, l, mov in [(1101, 1102, 10), (1102, 1103, 10), (1103, 1101, 8)]:
+        rows.append({
+            "Season": 2024, "DayNum": daynum,
+            "WTeamID": w, "WScore": 70 + mov, "LTeamID": l, "LScore": 70,
+            "WLoc": "N", "NumOT": 0,
+        })
+        daynum += 1
+    games = pd.DataFrame(rows)
+
+    # Should not raise.
+    df = compute_massey_mov_ratings(games, mov_cap=21)
+    assert len(df) == 3
+    assert df["massey_mov_rating"].sum() == pytest.approx(0.0, abs=1e-8)
+
+    # Inspect h via the private solver.
+    from src.features.massey_matrix import _solve_one_season
+    _ratings, h = _solve_one_season(games, mov_cap=21)
+    assert h == 0.0, f"expected h=0 on all-neutral schedule, got {h}"
