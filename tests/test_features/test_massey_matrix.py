@@ -53,11 +53,19 @@ def _make_round_robin(team_ids, ratings, h, season=2024):
                         z = -1
                         mov = (ri - rj) + h * z
                 wloc = {1: "H", -1: "A", 0: "N"}[z]
+                # Guard: caller chose ratings + h such that the modelled MOV
+                # is at least +1 from W's perspective. Silently clipping a
+                # non-positive mov would make WScore disagree with the
+                # game's true model y = r_W - r_L + h*z.
+                assert mov >= 1, (
+                    f"_make_round_robin: mov={mov} for W={w}, L={l}, z={z}; "
+                    "tighten ratings/h so all matchups produce mov >= 1"
+                )
                 rows.append({
                     "Season": season,
                     "DayNum": daynum,
                     "WTeamID": w,
-                    "WScore": int(50 + max(1, mov)),
+                    "WScore": int(50 + mov),
                     "LTeamID": l,
                     "LScore": 50,
                     "WLoc": wloc,
