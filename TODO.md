@@ -76,30 +76,39 @@
   ensemble_stage1.py, V9_STAGE1_PAIRWISE env var in
   sweep_v9_weights.py). Findings:
   docs/notes/2026-05-02-feature-view-ensemble.md.
+- **Massey-matrix MOV as v4 feature (2026-05-03).** Closed-form
+  least-squares solve over regular-season MOV with home-court
+  estimated jointly and MOV cap=21. Two-clause cheap gate FAILED
+  at clause 1 (non-redundancy): mean |corr| vs `adj_em` = 0.957
+  (threshold 0.95), max 0.973 (threshold 0.97), across 24 seasons
+  of tournament teams. Vs `massey_composite` was 0.946 / 0.965 --
+  passed both thresholds. The redundancy is specifically with our
+  own iterative `adj_em` efficiency loop, which is also opponent-
+  adjusted on margin -- different mechanism (iterative fixed-point
+  vs closed-form least squares), same signal. Clause 2 short-
+  circuited; saved ~10-15 min clause-2 + ~30-90 min full-LOSO
+  compute by gating cheaply. Code retained on branch
+  feat/todo-massey-colley as experiment record:
+  src/features/massey_matrix.py (solver + cached loader, 9 unit
+  tests including all-neutral edge-case fix), src/diagnose_massey_mov.py
+  (two-clause gate runner), allowed_holdouts kwarg added to
+  leave_one_season_out_cv_weighted in src/enhanced_model_v3.py
+  (reusable for any future cheap-subset diagnostic). Wire-in to
+  compute_all_features reverted (Massey does NOT ship). Findings:
+  docs/notes/2026-05-03-massey-mov.md.
 
 ## Active queue
 
-1. **Massey matrix and Colley matrix ranking systems.** Two
-   classical linear-algebraic team-ranking systems with known
-   prior success in March Madness prediction. Massey solves a
-   least-squares system on margin-of-victory data (`M x = b`
-   where `M` encodes opponents and `b` is the score-differential
-   vector); Colley solves `(C - A) x = b` on win/loss only (no
-   margin), with the property that ratings sum to a constant.
-   Computed from raw Kaggle game results -- distinct from the
-   existing `massey_*` features in v4 (which are external
-   composite orderings from massey-ratings.com, not our own
-   Massey-matrix solve). Three potential entry points: (a) add
-   each rating as a new per-team feature in the feature matrix
-   (most likely productive -- sidesteps the ensemble failure
-   modes that closed PRs 11/12/13/14); (b) use rating diff ->
-   sigmoid as a stage-1 alternative or ensemble peer (faces the
-   BT-style standalone-strength bottleneck if ratings are weak);
-   (c) feed both rating outputs to v9-C as features (faces the
-   v9-C-data-thinness bottleneck from BT-as-feature). Worth
-   trying both Massey and Colley as feature additions first --
-   user has used these successfully on March Madness before, so
-   prior on predictive value is high.
+1. **Colley matrix ranking system.** Solves `(C - A) x = b` on
+   win/loss only (no margin), ratings sum to a constant. Distinct
+   from Massey-MOV (rejected 2026-05-03 -- redundant with `adj_em`)
+   because Colley discards margin entirely, so should correlate
+   materially less with `adj_em`. Concrete prediction: `corr(colley,
+   adj_em)` in [0.80, 0.92], clearing the 0.95 mean threshold.
+   Reuses solver-module / diagnostic-runner / allowed_holdouts
+   patterns established in the Massey work. Same two-clause gate,
+   same thresholds. If clause 1 fails on Colley too, falls back to
+   item #2 (hierarchical BT with feature priors).
 2. **Hierarchical Bradley-Terry with feature priors** (`s_team ~
    Normal(beta . v4_features_team, sigma)`). Couples BT back to
    v4 features to gain standalone strength. Risk: residual
