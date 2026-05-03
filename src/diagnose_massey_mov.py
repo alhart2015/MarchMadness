@@ -21,6 +21,13 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 
+# Path setup: when invoked as `python src/diagnose_massey_mov.py`, ensure
+# the project root is on sys.path so `from src.enhanced_model import ...`
+# resolves. Mirrors the pattern in src/enhanced_model_v3.py and others.
+_ROOT = Path(__file__).resolve().parent.parent
+if str(_ROOT) not in sys.path:
+    sys.path.insert(0, str(_ROOT))
+
 logger = logging.getLogger(__name__)
 
 GATE_SUBSET_SEASONS = [2019, 2022, 2024]
