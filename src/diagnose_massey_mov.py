@@ -144,3 +144,48 @@ def clause2_headroom(seasons: list[int] = GATE_SUBSET_SEASONS) -> dict:
         "mean_ll_delta": delta,
         "pass": bool(delta <= LL_HEADROOM_MAX),
     }
+
+
+def main():
+    from src.enhanced_model import load_all_data, compute_all_features
+    logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
+
+    print("=" * 70)
+    print("Massey-MOV gate: clause 1 (non-redundancy)")
+    print("=" * 70)
+
+    data = load_all_data()
+    feature_matrix = compute_all_features(data)
+    c1 = clause1_correlations(feature_matrix)
+    print(json.dumps({k: v for k, v in c1.items() if k != "per_season"}, indent=2))
+    print(f"  CLAUSE 1: {'PASS' if c1['pass'] else 'FAIL'}")
+
+    if not c1["pass"]:
+        result = {"clause1": c1, "clause2": None, "gate_pass": False}
+        Path("output").mkdir(exist_ok=True)
+        Path("output/diag_massey_mov.json").write_text(json.dumps(result, indent=2))
+        print("\nSTOPPING: clause 1 failed; clause 2 not run.")
+        sys.exit(1)
+
+    print()
+    print("=" * 70)
+    print("Massey-MOV gate: clause 2 (LL headroom on 3-season subset)")
+    print("=" * 70)
+    c2 = clause2_headroom()
+    print(json.dumps({k: v for k, v in c2.items() if k != "per_season"}, indent=2))
+    print(f"  CLAUSE 2: {'PASS' if c2['pass'] else 'FAIL'}")
+
+    gate_pass = c1["pass"] and c2["pass"]
+    result = {"clause1": c1, "clause2": c2, "gate_pass": gate_pass}
+    Path("output").mkdir(exist_ok=True)
+    Path("output/diag_massey_mov.json").write_text(json.dumps(result, indent=2))
+
+    print()
+    print("=" * 70)
+    print(f"AGGREGATE GATE: {'PASS -- proceed to full LOSO backtest' if gate_pass else 'FAIL -- stop, write findings'}")
+    print("=" * 70)
+    sys.exit(0 if gate_pass else 1)
+
+
+if __name__ == "__main__":
+    main()
