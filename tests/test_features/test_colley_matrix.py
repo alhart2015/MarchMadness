@@ -175,3 +175,21 @@ def test_real_data_shape_and_rating_range(tmp_path: Path):
     expected_sums = counts / 2.0
     diffs = (sums - expected_sums).abs()
     assert diffs.max() < 1e-6, f"sum-to-(n/2) drift: {diffs.max()}"
+
+
+def test_clause1_pass_when_uncorrelated():
+    """Clause 1 passes when colley_rating is uncorrelated with all three
+    baselines."""
+    from src.diagnose_colley import clause1_correlations
+    rng = np.random.default_rng(0)
+    n = 100
+    fm = pd.DataFrame({
+        "Season": [2024] * n,
+        "TeamID": list(range(1, n + 1)),
+        "colley_rating": rng.standard_normal(n),
+        "adj_em": rng.standard_normal(n),
+        "massey_composite": rng.standard_normal(n),
+        "season_win_pct": rng.standard_normal(n),
+    })
+    out = clause1_correlations(fm)
+    assert out["pass"] is True
