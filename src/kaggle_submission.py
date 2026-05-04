@@ -309,6 +309,15 @@ def compute_conf_strength(conferences_season, eff):
 # BUILD FEATURE MATRIX FOR ALL D1 TEAMS
 # ===============================================================================
 
+# Columns in `data/raw/kaggle/KenPom Barttorvik.csv` populated AFTER NCAA
+# tournament play. Including any of these in `kp_cols` would leak holdout-
+# season tournament outcomes into LOSO test rows. The 2026-05-04 audit
+# (docs/notes/2026-05-04-massey-kenpom-leak-audit.md) verified the file's
+# rating columns are pre-tournament (W/L spot-check matches pre-NCAA records),
+# but `ROUND` is the post-NCAA elimination round. Guarded below.
+_KP_POST_TOURNAMENT_COLUMNS = frozenset({"ROUND"})
+
+
 def build_all_team_features(
     reg_season, seeds, conferences, seasons,
     massey=None, kenpom=None, kp_to_kaggle=None,
@@ -326,6 +335,14 @@ def build_all_team_features(
             "ELITE SOS", "WAB", "EFG%", "EFG%D", "TOV%", "TOV%D",
             "OREB%", "DREB%", "FTR", "FTRD", "K TEMPO",
         ]
+    leaked = set(kp_cols) & _KP_POST_TOURNAMENT_COLUMNS
+    if leaked:
+        raise ValueError(
+            f"kp_cols includes post-tournament leak columns: {sorted(leaked)}. "
+            f"These are populated AFTER NCAA games and must not be used as "
+            f"features in LOSO CV. See "
+            f"docs/notes/2026-05-04-massey-kenpom-leak-audit.md."
+        )
 
     all_rows = []
 
