@@ -19,17 +19,20 @@ the PR 18 merge. Quantified leak: 2024 UConn vegas_avg_margin
 
 ### Recovery plan (5 PRs, in order)
 
-1. **Filter the leak.** PR `feat/v4-vegas-leak-fix`: add
-   `filter_vegas_to_pre_tournament()` and wire it before
+1. **[DONE -- PR 19]** Filter the Vegas leak. Merged 2026-05-04. Added
+   `filter_vegas_to_pre_tournament()` and wired it before
    `compute_vegas_features` and `_build_vegas_team_records_with_dates`.
-   No regen, no eval changes. Spec:
-   `docs/superpowers/specs/2026-05-04-v4-vegas-leak-fix-design.md`.
+   Spec: `docs/superpowers/specs/2026-05-04-v4-vegas-leak-fix-design.md`.
 
-2. **Audit Massey + KenPom inputs for the same class of leak.**
-   `data["massey"]` and the KenPom snapshots are loaded at
-   `load_all_data()`. If either is end-of-season-INCLUDING-tournament
-   ranking, same fix pattern applies. Cheap (~30 min) read-only audit;
-   only opens a fix PR if a leak is found.
+2. **[DONE -- PR <pending>]** Audit Massey + KenPom inputs for the same
+   class of leak. **Verdict: no leak found.** Massey is clean by file
+   construction (max RankingDayNum = 133 = Selection Sunday). KenPom
+   Barttorvik mixes pre-tournament rating columns with one post-tournament
+   label (`ROUND`); the v3 feature pipeline uses an explicit 17-column
+   allowlist that excludes `ROUND`, so no leak today. Defensive guard +
+   unit tests added in `build_all_team_features` so a future change to
+   the allowlist cannot silently regress this property. Findings:
+   `docs/notes/2026-05-04-massey-kenpom-leak-audit.md`.
 
 3. **Regenerate `output/pairwise_v4.csv` via clean LOSO.** Run
    `enhanced_model_v3.py` end-to-end with the fixed feature pipeline.

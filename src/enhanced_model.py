@@ -310,6 +310,13 @@ def compute_all_features(data: dict) -> pd.DataFrame:
                     conf_strength[tid] = conf_avg[conf_abbrev]
 
         # -- 2g: KenPom/Barttorvik season aggregates ---------------------
+        # Allowlist of pre-tournament rating/efficiency columns. The Kaggle
+        # KenPom Barttorvik file also ships post-NCAA-tournament labels --
+        # most importantly `ROUND` (1=champion, 64=R64 loss). Adding any of
+        # these to the list below would silently leak holdout-season
+        # tournament outcomes into LOSO test rows. See guarded twin in
+        # src/kaggle_submission.py:build_all_team_features and
+        # docs/notes/2026-05-04-massey-kenpom-leak-audit.md.
         kp_season = kenpom[kenpom["YEAR"] == season]
         kp_features = {}
         kp_cols = [
