@@ -76,3 +76,61 @@ def test_synthetic_round_robin_recovers_colley_ratings():
         assert rating_by_team[tid] == pytest.approx(expected_r, abs=1e-6), (
             f"Team {tid} expected {expected_r}, got {rating_by_team[tid]}"
         )
+
+
+def test_sum_to_n_over_two_invariant():
+    """Solver enforces sum(ratings) = n/2 by construction."""
+    team_ids = [1101, 1102, 1103, 1104]
+    games = _make_round_robin_wins(team_ids, [6, 4, 2, 0])
+
+    df = compute_colley_ratings(games)
+    n = len(df)
+    assert df["colley_rating"].sum() == pytest.approx(n / 2.0, abs=1e-8)
+
+
+def test_cache_roundtrip(tmp_path: Path):
+    """First call writes parquet + sidecar; second call returns cached frame."""
+    team_ids = [1101, 1102, 1103, 1104]
+    games = _make_round_robin_wins(team_ids, [6, 4, 2, 0])
+
+    df1 = load_colley_ratings(games, cache_dir=tmp_path)
+    parquet_path = tmp_path / "colley_ratings.parquet"
+    meta_path = tmp_path / "colley_ratings.meta.json"
+    assert parquet_path.exists()
+    assert meta_path.exists()
+
+    df2 = load_colley_ratings(games, cache_dir=tmp_path)
+    pd.testing.assert_frame_equal(
+        df1.sort_values(["Season", "TeamID"]).reset_index(drop=True),
+        df2.sort_values(["Season", "TeamID"]).reset_index(drop=True),
+    )
+
+    meta = json.loads(meta_path.read_text())
+    assert meta["producer_version"] == _PRODUCER_VERSION
+    assert meta["n_input_rows"] == len(games)
+    assert "sha_input" in meta
+
+
+def test_cache_invalidates_on_meta_mismatch(tmp_path: Path):
+    """Sidecar producer_version mismatch triggers rebuild."""
+    team_ids = [1101, 1102, 1103, 1104]
+    games = _make_round_robin_wins(team_ids, [6, 4, 2, 0])
+
+    df1 = load_colley_ratings(games, cache_dir=tmp_path)
+    parquet_path = tmp_path / "colley_ratings.parquet"
+    initial_mtime = parquet_path.stat().st_mtime_ns
+
+    meta_path = tmp_path / "colley_ratings.meta.json"
+    meta = json.loads(meta_path.read_text())
+    meta["producer_version"] = "v0-stale"
+    meta_path.write_text(json.dumps(meta))
+
+    df2 = load_colley_ratings(games, cache_dir=tmp_path)
+    new_mtime = parquet_path.stat().st_mtime_ns
+    assert new_mtime > initial_mtime
+    refreshed = json.loads(meta_path.read_text())
+    assert refreshed["producer_version"] == _PRODUCER_VERSION
+    pd.testing.assert_frame_equal(
+        df1.sort_values(["Season", "TeamID"]).reset_index(drop=True),
+        df2.sort_values(["Season", "TeamID"]).reset_index(drop=True),
+    )
