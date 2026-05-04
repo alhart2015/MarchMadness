@@ -1,0 +1,63 @@
+======================================================================
+BASELINE: output/pairwise_v9c_v4_baseline.csv
+======================================================================
+  total_pts: 2713
+
+======================================================================
+CELL  w_v4=0.6  w_bt=0.4
+======================================================================
+loading per-game data from output\pairwise_v4bt_w0.60.csv ...
+  rows: 2,898; seasons: 22
+applying v9-C (W_UPSET=1.25, W_MISS=0.0, feature_set='v9c') -> output\pairwise_v9c_v4bt_w0.60.csv
+  wrote 48,465 rows
+  total_pts: 2657  delta: -56  W/L/T: 5/10/7  biggest_swing: 2006 (-33)  (13.6s)
+
+======================================================================
+CELL  w_v4=0.7  w_bt=0.3
+======================================================================
+loading per-game data from output\pairwise_v4bt_w0.70.csv ...
+  rows: 2,898; seasons: 22
+applying v9-C (W_UPSET=1.25, W_MISS=0.0, feature_set='v9c') -> output\pairwise_v9c_v4bt_w0.70.csv
+  wrote 48,465 rows
+  total_pts: 2654  delta: -59  W/L/T: 7/10/5  biggest_swing: 2025 (+32)  (13.8s)
+
+======================================================================
+CELL  w_v4=0.8  w_bt=0.2
+======================================================================
+loading per-game data from output\pairwise_v4bt_w0.80.csv ...
+  rows: 2,898; seasons: 22
+applying v9-C (W_UPSET=1.25, W_MISS=0.0, feature_set='v9c') -> output\pairwise_v9c_v4bt_w0.80.csv
+  wrote 48,465 rows
+  total_pts: 2646  delta: -67  W/L/T: 6/8/8  biggest_swing: 2006 (-29)  (15.1s)
+
+======================================================================
+CELL  w_v4=0.9  w_bt=0.1
+======================================================================
+loading per-game data from output\pairwise_v4bt_w0.90.csv ...
+  rows: 2,898; seasons: 22
+applying v9-C (W_UPSET=1.25, W_MISS=0.0, feature_set='v9c') -> output\pairwise_v9c_v4bt_w0.90.csv
+  wrote 48,465 rows
+  total_pts: 2684  delta: -29  W/L/T: 5/6/11  biggest_swing: 2003 (-16)  (13.4s)
+
+======================================================================
+CELL  w_v4=0.95  w_bt=0.05
+======================================================================
+loading per-game data from output\pairwise_v4bt_w0.95.csv ...
+  rows: 2,898; seasons: 22
+applying v9-C (W_UPSET=1.25, W_MISS=0.0, feature_set='v9c') -> output\pairwise_v9c_v4bt_w0.95.csv
+  wrote 48,465 rows
+  total_pts: 2665  delta: -48  W/L/T: 5/7/10  biggest_swing: 2003 (-16)  (16.0s)
+
+======================================================================
+CELL  w_v4=1.0  w_bt=0.0
+======================================================================
+loading per-game data from output\pairwise_v4bt_w1.00.csv ...
+  rows: 2,898; seasons: 22
+applying v9-C (W_UPSET=1.25, W_MISS=0.0, feature_set='v9c') -> output\pairwise_v9c_v4bt_w1.00.csv
+  wrote 48,465 rows
+  ANCHOR CHECK: matches=True, max_abs_diff=0.0
+  total_pts: 2713  delta: +0  W/L/T: 0/0/22  biggest_swing: 2003 (+0)  (15.5s)
+
+======================================================================
+VERDICT: NO-GO   best w_v4=1.0   delta=+0
+  saved output/bt_bracket_sweep.json

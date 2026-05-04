@@ -152,6 +152,29 @@
   shared verbatim with plain-BT diagnostic via cross-module
   regression test). Findings + framing-correction postscript:
   docs/notes/2026-05-03-hierarchical-bt.md.
+- **Plain BT bracket-points re-test (2026-05-04).** Tested whether
+  the LL gate's NO-GO on plain BT (PR 12) reflected a metric
+  mismatch: blended `pairwise_v4 + pairwise_bt` at `w_v4` in
+  {0.60, 0.70, 0.80, 0.90, 0.95, 1.00}, ran v9-C on each, scored
+  22-season bracket points head-to-head against the canonical
+  `v4 + v9-C` baseline (2713 brkt pts). **NO-GO.** Every non-anchor
+  cell LOST: best non-anchor delta was `w_v4=0.90` at -29 brkt pts;
+  worst was `w_v4=0.80` at -67. The anchor (`w_v4=1.00`) reproduced
+  the baseline exactly to floating-point precision (max_abs_diff
+  = 0.0 over 48,465 rows). **The LL gate was correct for plain BT
+  specifically**: both the cheap LL diagnostic and the production
+  metric agree. The HBT findings note's framing-correction concern
+  ("LL gate may be filtering on the wrong metric") is falsified
+  for this case. **Generalized lesson:** structural diversity
+  (`r=0.577`) is necessary but not sufficient -- we also need
+  per-disagreement accuracy in the regions where the candidate
+  disagrees with v4. Plain BT was right only 27.9% of the time on
+  v4-disagreements (PR 12 finding), so v9-C cannot extract upset
+  signal from a stage-1 whose disagreements are 72% wrong. Code
+  retained on feat/bt-bracket-points: src/sweep_bt_bracket_points.py
+  (driver + ladder, 6 unit tests), output/bt_bracket_sweep.json
+  (per-(w, season) numbers + verdict), 6 force-added per-cell
+  pairwise CSVs. Findings: docs/notes/2026-05-04-bt-bracket-points.md.
 
 ## Active queue
 
@@ -178,35 +201,34 @@
    Vegas-implied-prob comparison is the cheapest start (Vegas
    data already ingested for the regular season; tournament Vegas
    data exists in The Prediction Tracker per `src/ingest`).
-2. **Re-test plain BT against bracket points (skip the LL gate).**
-   Reuse `output/pairwise_bt.csv` (force-added on PR 12). Blend
-   `pairwise_v4 * w_v4 + pairwise_bt * (1 - w_v4)` at a small grid
-   of weights {0.6, 0.7, 0.8, 0.9, 1.0}, run v9-C on each, score
-   22-season bracket-points head-to-head vs `v4 + v9-C`. Cheap
-   (~1 hour). The HBT findings note explains why the LL gate may
-   have been filtering on the wrong metric -- plain BT's
-   `r=0.577` is genuine residual diversity that v9-C's `W_MISS`
-   sweep already showed contains useful signal.
-3. **External rankings / external data as features (538 / Vegas
-   prop-bet / roster injury, etc.).** Genuinely outside the
-   Kaggle + KenPom + Bart Torvik archive (we already have BPI,
-   Sagarin, KenPom, Bart Torvik, RPI via Massey ordinals).
-   Sourcing question -- which sources are programmatically
-   accessible across 22 seasons.
-4. **Small neural net (MLP) as a stage-1.** Adds PyTorch tooling
+2. **External rankings / external data as features (538 / Vegas
+   prop-bet / roster injury, etc.).** Promoted from #3 after the
+   plain-BT bracket-points re-test was also NO-GO. Genuinely
+   outside the Kaggle + KenPom + Bart Torvik archive (we already
+   have BPI, Sagarin, KenPom, Bart Torvik, RPI via Massey
+   ordinals). Sourcing question -- which sources are
+   programmatically accessible across 22 seasons. Closely related
+   to item #1 (the v4 gap audit can use Vegas-implied probs as
+   one external benchmark).
+3. **Small neural net (MLP) as a stage-1.** Adds PyTorch tooling
    cost; diversity vs XGBoost on the 67-feature tabular space is
    the open question. Lower priority after Massey + Colley + HBT
-   plus the framing correction: more ensemble exploration without
-   first localizing v4's gap is wasted compute.
-5. **Full Bayesian Bradley-Terry with strength + variance per team**
+   + plain-BT-on-bracket-points. The new lesson from the
+   bracket-points re-test (PR 17): same-data peers aren't
+   sufficient even on the production metric -- a stage-1 needs
+   per-disagreement accuracy >= ~45% in the regions where it
+   differs from v4. MLP on the same 67-feature target faces the
+   same risk profile as LR did.
+4. **Full Bayesian Bradley-Terry with strength + variance per team**
    (PyMC / NumPyro / Stan). HBT confirmed prior structure doesn't
-   lift BT-class standalone strength on the LL-blend gate;
-   switching to full posterior won't change that. Deferred until
-   item 1 is settled.
-6. **Roster-level returning-experience.** Player-level data is not
+   lift BT-class standalone strength on the LL-blend gate; the
+   bracket-points re-test (PR 17) confirmed plain BT also doesn't
+   help on the production metric. Switching to full posterior
+   won't change either. Deferred until item 1 is settled.
+5. **Roster-level returning-experience.** Player-level data is not
    in the Kaggle Mania archive; would need an external roster CSV
    per season. Different signal from coach experience. Closely
-   related to #3.
+   related to #2.
 
 ## Done
 
