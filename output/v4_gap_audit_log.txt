@@ -1,0 +1,39 @@
+======================================================================
+v4 vs Vegas TOURNAMENT AUDIT
+======================================================================
+loading v4 pairwise ...
+  48,465 unique (season, a, b) keys
+loading tournament results + seeds + seasons ...
+  2,585 tournament games across 40 seasons
+loading Vegas lines ...
+  95,355 Vegas-line rows in 0.5s
+resolving Vegas team names ...
+  resolved 400 / 405 unique names
+converting Vegas dates to (season, daynum) ...
+  warning: 1 Vegas rows have unparseable dates; dropping
+building Vegas lookup ...
+  94,820 (season, daynum, a, b) entries
+joining v4 + Vegas + tournament outcomes ...
+  1326 games joined
+  coverage: 91.5%
+computing overall + per-bucket metrics ...
+emitting plots ...
+
+======================================================================
+OVERALL
+======================================================================
+  n_games  : 1326
+  ll_v4    : 0.4305
+  ll_vegas : 0.5447
+  acc_v4   : 0.809
+  acc_vegas: 0.706
+  ece_v4   : 0.0254
+  ece_vegas: 0.0295
+
+======================================================================
+WEAK SPOTS (n >= 50, ll_delta >= 0.02)
+======================================================================
+  none -- v4 is at Vegas-tier across all sufficiently-large buckets
+
+  saved output/v4_gap_audit_vegas.json
+  saved 3 PNGs in output/

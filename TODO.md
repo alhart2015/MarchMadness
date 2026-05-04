@@ -175,6 +175,27 @@
   (driver + ladder, 6 unit tests), output/bt_bracket_sweep.json
   (per-(w, season) numbers + verdict), 6 force-added per-cell
   pairwise CSVs. Findings: docs/notes/2026-05-04-bt-bracket-points.md.
+- **v4 gap audit vs Vegas closing-line implied probs (2026-05-04).**
+  Audited v4 stage-1 vs Vegas-implied probs (SIGMA=11) across 1326
+  played 2003-2025 tournament games (91.5% join coverage), bucketed
+  by round, chalk-vs-upset, v4-confidence quintile, seed-diff
+  magnitude. **No weak spots at the n>=50, ll_delta>=+0.02
+  threshold.** v4 BEATS Vegas on every bucket: overall
+  `ll_v4=0.4305` vs `ll_vegas=0.5447` (delta -0.114),
+  `acc_v4=80.9%` vs `acc_vegas=70.6%`. v4 catches 56% of upsets
+  vs Vegas's 17%. ECE comparable (v4 0.025, Vegas 0.030). The audit
+  did its job (produced a per-bucket map) but the verdict is "Vegas
+  is the wrong benchmark to localize v4's headroom" -- 538 audit
+  is now strongly motivated as the immediate next experiment.
+  **Caveat:** SIGMA=11 may be too peaky for tournament games (10pt
+  spread implies 0.82 win-prob but empirical rate is ~0.75-0.78); a
+  larger SIGMA would shrink Vegas's LL toward v4's. Even so, v4's
+  10.3pp accuracy advantage is robust to SIGMA. Code retained on
+  feat/v4-gap-audit-vegas: src/audit_v4_gap_vegas.py (one-shot
+  driver, 10 unit tests), output/v4_gap_audit_vegas.json (per-
+  bucket metrics + weak_spots), 3 calibration PNGs. pyproject.toml
+  adds matplotlib>=3.7. Findings: docs/notes/2026-05-04-v4-gap-
+  audit-vegas.md.
 
 ## Active queue
 
@@ -188,47 +209,51 @@
 > metric corrections are now ahead of more ensemble/architecture
 > exploration.
 
-1. **Localize v4's gap vs an external benchmark.** Pull v4's per-
-   game predictions, diff against an external strong baseline
-   (Vegas closing-line implied probabilities from
-   `data/raw/vegas_lines/`, the Vegas-trend module's source; or
-   public 538 forecasts; or top-quartile public Kaggle predictions
-   if any are recoverable). Bucket by round (R64 .. NCG), seed
-   pair, higher-vs-lower-seed status, and v4-confidence bin. Find
-   where v4 specifically loses -- which rounds, which seed bands,
-   over- vs under-confidence. Without this we keep proposing
-   ensemble add-ons without knowing what they need to fix.
-   Vegas-implied-prob comparison is the cheapest start (Vegas
-   data already ingested for the regular season; tournament Vegas
-   data exists in The Prediction Tracker per `src/ingest`).
-2. **External rankings / external data as features (538 / Vegas
-   prop-bet / roster injury, etc.).** Promoted from #3 after the
-   plain-BT bracket-points re-test was also NO-GO. Genuinely
-   outside the Kaggle + KenPom + Bart Torvik archive (we already
-   have BPI, Sagarin, KenPom, Bart Torvik, RPI via Massey
-   ordinals). Sourcing question -- which sources are
-   programmatically accessible across 22 seasons. Closely related
-   to item #1 (the v4 gap audit can use Vegas-implied probs as
-   one external benchmark).
-3. **Small neural net (MLP) as a stage-1.** Adds PyTorch tooling
+1. **538 v4 gap audit (next benchmark in the audit framework).**
+   Reuse the audit framework from PR 18 (`src/audit_v4_gap_vegas.py`
+   pattern -- bucket-and-compute-metrics, per-cell calibration,
+   weak-spot threshold). Same buckets (round, chalk-vs-upset,
+   v4-confidence quintile, seed-diff magnitude). Difference: 538
+   publishes calibrated tournament-forecast probabilities directly
+   (no SIGMA conversion). 538 is widely regarded as a strong public
+   benchmark; if v4 also beats 538 across the board we have a real
+   "v4 is competitive" finding; if 538 beats v4 in specific buckets,
+   we have weak-spot signatures to engineer against. **Sourcing
+   investigation is the first task** -- 538's tournament-forecast
+   archive: API access? scraping? historical-archive coverage 2014+?
+   Promoted from "next" status in the Vegas-audit findings note.
+2. **Single-season v4 variance check.** The Vegas audit shows v4
+   beats Vegas on the 22-season aggregate. The user's Kaggle finish
+   (2159 / 3462) is a single-season result. Plot per-season v4 LL +
+   ECE; identify any season where v4's calibration is materially
+   worse than the 22-season average. Cheap (~30 min) follow-up
+   audit. Surfaces whether v4's 22-season-average story hides
+   high-variance per-season behavior that hurts on single-season
+   Kaggle scoring.
+3. **External rankings / external data as features (538 / Vegas
+   prop-bet / roster injury, etc.).** Distinct from item #1: that
+   item AUDITS v4 against 538; this item adds 538-derived signals
+   as input features to v4 itself. Sequence: do the audit first,
+   then engineer against the weak spots it surfaces (if any).
+   Sourcing question shared with item #1.
+4. **Small neural net (MLP) as a stage-1.** Adds PyTorch tooling
    cost; diversity vs XGBoost on the 67-feature tabular space is
    the open question. Lower priority after Massey + Colley + HBT
-   + plain-BT-on-bracket-points. The new lesson from the
-   bracket-points re-test (PR 17): same-data peers aren't
-   sufficient even on the production metric -- a stage-1 needs
-   per-disagreement accuracy >= ~45% in the regions where it
-   differs from v4. MLP on the same 67-feature target faces the
-   same risk profile as LR did.
-4. **Full Bayesian Bradley-Terry with strength + variance per team**
+   + plain-BT-on-bracket-points. The lesson from the bracket-points
+   re-test (PR 17): same-data peers aren't sufficient even on the
+   production metric -- a stage-1 needs per-disagreement accuracy
+   >= ~45% in the regions where it differs from v4. MLP on the
+   same 67-feature target faces the same risk profile as LR did.
+5. **Full Bayesian Bradley-Terry with strength + variance per team**
    (PyMC / NumPyro / Stan). HBT confirmed prior structure doesn't
    lift BT-class standalone strength on the LL-blend gate; the
    bracket-points re-test (PR 17) confirmed plain BT also doesn't
    help on the production metric. Switching to full posterior
-   won't change either. Deferred until item 1 is settled.
-5. **Roster-level returning-experience.** Player-level data is not
+   won't change either. Deferred until items 1-3 are settled.
+6. **Roster-level returning-experience.** Player-level data is not
    in the Kaggle Mania archive; would need an external roster CSV
    per season. Different signal from coach experience. Closely
-   related to #2.
+   related to #3.
 
 ## Done
 
