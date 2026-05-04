@@ -1,0 +1,22 @@
+==============================================================================
+HIERARCHICAL BT vs v4 -- SIGMA SWEEP GATE
+==============================================================================
+  v4 standalone LL: 0.4369   acc: 0.805   n_games: 1449
+
+   sigma   r_resid   ll_hbt   w_opt   headroom  c1  c2  c3  verdict
+  -----------------------------------------------------------------
+    0.05     0.448   0.6194    1.00    +0.0000  Y   N   N   FAIL
+    0.10     0.485   0.6305    1.00    +0.0000  Y   N   N   FAIL
+    0.20     0.505   0.6220    0.99    +0.0000  Y   N   N   FAIL
+    0.50     0.507   0.6306    0.99    +0.0000  Y   N   N   FAIL
+    1.00     0.492   0.6507    1.00    +0.0000  Y   N   N   FAIL
+    2.00     0.472   0.6880    1.00    +0.0000  Y   N   N   FAIL
+    5.00     0.448   0.7569    1.00    +0.0000  Y   N   N   FAIL
+
+  Gate thresholds: r < 0.6, w in [0.3, 0.85], headroom > 0.005
+
+=== VERDICT ===
+  ALL CELLS FAILED. v4 stays as stage-1.
+  -> Stop. Write findings note. No v9-C compute.
+
+  saved output/diag_hbt_sweep.json

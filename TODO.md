@@ -124,48 +124,89 @@
   runner -- the 3-baseline pattern is the reusable artifact),
   data/cache/colley_ratings.parquet (gitignored). Wire-in reverted
   in 3b4c374. Findings: docs/notes/2026-05-03-colley.md.
+- **Hierarchical Bradley-Terry with v4 feature priors (2026-05-03,
+  framing corrected 2026-05-04).** Per-season MAP over `(s, beta, h)`
+  of `s_team_i ~ Normal(beta . v4_features_team_i, sigma^2)` swept
+  over sigma in {0.05, 0.10, 0.20, 0.50, 1.00, 2.00, 5.00},
+  sigma_beta=1.0 fixed. **All 7 cells FAILED the LL-blend gate at
+  clauses 2/3** (`w_opt = 0.99-1.00`, `headroom = +0.0000`). Clause 1
+  PASSED at every cell with `r in [0.448, 0.507]` -- even *lower*
+  than plain BT's 0.577 -- but standalone HBT LL was uniformly
+  *worse* than plain BT's 0.565 across the full sigma range (HBT
+  range: 0.619-0.757). **Narrow conclusion:** adding v4 feature
+  priors to BT does not improve its standalone log loss enough to
+  clear the LL-optimal-blend gate at any tested sigma. **The
+  original write-up overclaimed** a "training-data ceiling"
+  generalization; that claim is incompatible with the user's
+  2159 / 3462 Kaggle finish (2/3 of entries beat v4 on the same
+  data), so it has been retracted. The LL gate may also be
+  filtering on the wrong metric -- production scoring is bracket
+  points, where correctly-predicted upsets are weighted heavily,
+  and a weak-but-diverse stage-1 could lift bracket points without
+  lifting LL-blend headroom. Plain-BT's bracket-points re-test is
+  active queue #2. Code retained on feat/hierarchical-bt-priors:
+  src/features/hierarchical_bt.py (L-BFGS solver with analytic
+  gradient, 5 unit tests), src/train_hbt_stage1.py (per-(sigma,
+  season) trainer, 7 unit tests), src/diagnose_hbt_vs_v4.py
+  (per-cell sigma-sweep gate runner, 8 unit tests; thresholds
+  shared verbatim with plain-BT diagnostic via cross-module
+  regression test). Findings + framing-correction postscript:
+  docs/notes/2026-05-03-hierarchical-bt.md.
 
 ## Active queue
 
-1. **Hierarchical Bradley-Terry with feature priors** (`s_team ~
-   Normal(beta . v4_features_team, sigma)`). Couples BT back to
-   v4 features to gain standalone strength. Risk: residual
-   correlation may regress from 0.58 back toward 0.77 as the
-   models re-converge. **Promoted to #1 after Massey + Colley
-   confirmed the "parallel feature" approach is closed at v4 data
-   scale.** This couples ratings TO v4 features through priors
-   rather than competing as a parallel feature -- the structural
-   distinction the prior failures could not exploit.
-2. **External rankings as features (538 / KenPom-public / BPI as
-   net-new sources).** Promoted from item #5 after Massey + Colley.
-   The Colley result clarifies that any new feature must carry
-   information NOT extractable from v4's existing 67-feature
-   joint -- which rules out re-derivations from Kaggle game data
-   (Massey/Colley) but leaves room for genuinely external signals
-   (538's tournament forecast, Vegas prop-bet derived predictions,
-   roster-injury data). Note: we already have BPI, Sagarin, KenPom,
-   Bart Torvik, RPI via Massey ordinals; the "external" here means
-   sources outside the Kaggle archive.
-3. **Small neural net (MLP) as a stage-1.** Adds PyTorch tooling
+> **Re-prioritization 2026-05-04.** v4 finished 2159 / 3462 in a
+> recent Kaggle Mania -- 2/3 of entries beat it on the same data.
+> That falsifies any framing where "Kaggle data is exhausted" or
+> "v4 is near the achievable ceiling." The bottleneck is much more
+> likely to be inside v4 itself (features, calibration, hyperparams,
+> model class) or in how stage-1 errors are scored against the
+> production metric (bracket points, not log loss). Audits and
+> metric corrections are now ahead of more ensemble/architecture
+> exploration.
+
+1. **Localize v4's gap vs an external benchmark.** Pull v4's per-
+   game predictions, diff against an external strong baseline
+   (Vegas closing-line implied probabilities from
+   `data/raw/vegas_lines/`, the Vegas-trend module's source; or
+   public 538 forecasts; or top-quartile public Kaggle predictions
+   if any are recoverable). Bucket by round (R64 .. NCG), seed
+   pair, higher-vs-lower-seed status, and v4-confidence bin. Find
+   where v4 specifically loses -- which rounds, which seed bands,
+   over- vs under-confidence. Without this we keep proposing
+   ensemble add-ons without knowing what they need to fix.
+   Vegas-implied-prob comparison is the cheapest start (Vegas
+   data already ingested for the regular season; tournament Vegas
+   data exists in The Prediction Tracker per `src/ingest`).
+2. **Re-test plain BT against bracket points (skip the LL gate).**
+   Reuse `output/pairwise_bt.csv` (force-added on PR 12). Blend
+   `pairwise_v4 * w_v4 + pairwise_bt * (1 - w_v4)` at a small grid
+   of weights {0.6, 0.7, 0.8, 0.9, 1.0}, run v9-C on each, score
+   22-season bracket-points head-to-head vs `v4 + v9-C`. Cheap
+   (~1 hour). The HBT findings note explains why the LL gate may
+   have been filtering on the wrong metric -- plain BT's
+   `r=0.577` is genuine residual diversity that v9-C's `W_MISS`
+   sweep already showed contains useful signal.
+3. **External rankings / external data as features (538 / Vegas
+   prop-bet / roster injury, etc.).** Genuinely outside the
+   Kaggle + KenPom + Bart Torvik archive (we already have BPI,
+   Sagarin, KenPom, Bart Torvik, RPI via Massey ordinals).
+   Sourcing question -- which sources are programmatically
+   accessible across 22 seasons.
+4. **Small neural net (MLP) as a stage-1.** Adds PyTorch tooling
    cost; diversity vs XGBoost on the 67-feature tabular space is
-   the open question. Same correlated-error caveat as LR if it
-   reuses the same feature matrix. Lower priority after Massey +
-   Colley: same data-scale ceiling likely applies.
-4. **Full Bayesian Bradley-Terry with strength + variance per team**
-   (PyMC / NumPyro / Stan). The TODO's "Architecture Rethink (Tier
-   C)" entry. Lets "consistent vs volatile" teams differentiate.
-   Standalone-strength bottleneck likely persists (full posterior
-   over weak strengths is still a weak point estimate); deferred
-   until items 1-2 are settled.
-5. **External rankings (538, KenPom-public, BPI as features).**
-   Note: we already have BPI, Sagarin, KenPom (POM), Bart Torvik
-   (TRK), RPI via Massey ordinals (config.yaml lines 30-36).
-   Truly external would be 538's tournament forecast or Vegas
-   prop-bet predictions, which need data sourcing outside the
-   Kaggle archive.
+   the open question. Lower priority after Massey + Colley + HBT
+   plus the framing correction: more ensemble exploration without
+   first localizing v4's gap is wasted compute.
+5. **Full Bayesian Bradley-Terry with strength + variance per team**
+   (PyMC / NumPyro / Stan). HBT confirmed prior structure doesn't
+   lift BT-class standalone strength on the LL-blend gate;
+   switching to full posterior won't change that. Deferred until
+   item 1 is settled.
 6. **Roster-level returning-experience.** Player-level data is not
    in the Kaggle Mania archive; would need an external roster CSV
-   per season. Different signal from coach experience.
+   per season. Different signal from coach experience. Closely
+   related to #3.
 
 ## Done
 
