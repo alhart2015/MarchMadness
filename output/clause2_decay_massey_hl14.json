@@ -1,0 +1,33 @@
+{
+  "half_life_days": 14.0,
+  "subset_seasons": [
+    2019,
+    2022,
+    2024
+  ],
+  "per_season": [
+    {
+      "season": 2019,
+      "ll_with": 0.3865696133954736,
+      "ll_without": 0.37457811322603884,
+      "ll_delta": 0.011991500169434732
+    },
+    {
+      "season": 2022,
+      "ll_with": 0.5111100254191303,
+      "ll_without": 0.5041610972918479,
+      "ll_delta": 0.006948928127282428
+    },
+    {
+      "season": 2024,
+      "ll_with": 0.4356794902042999,
+      "ll_without": 0.4376147064598057,
+      "ll_delta": -0.0019352162555058006
+    }
+  ],
+  "mean_ll_with_massey": 0.44445304300630123,
+  "mean_ll_without_massey": 0.4387846389925641,
+  "mean_ll_delta": 0.005668404013737138,
+  "ll_headroom_max": 0.001,
+  "pass": false
+}
