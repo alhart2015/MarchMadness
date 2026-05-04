@@ -2,25 +2,41 @@
 
 **Date:** 2026-05-03
 **Branch:** feat/hierarchical-bt-priors
-**Verdict:** **NO-GO** -- gate FAILED at every sigma cell. v4 stays as stage-1.
+**Verdict:** **NO-GO on the LL-blend gate.** v4 stays as stage-1.
 **Spec:** `docs/superpowers/specs/2026-05-03-hierarchical-bt-feature-priors-design.md`
 **Plan:** `docs/superpowers/plans/2026-05-03-hierarchical-bt-feature-priors.md`
+
+> **Framing correction (2026-05-04):** the original write-up of this
+> experiment (Sections "Why the anchors miss," "The deeper lesson,"
+> "Updated diversity-strength frontier," and "Implications for active
+> queue" below) extrapolated to a "training-data ceiling" -- the claim
+> that no BT-class model trained on regular-season W/L can ever close
+> the gap with v4. That claim is too strong: the user finished
+> 2159 / 3462 in a recent Kaggle Mania, so 2/3 of entries beat v4 on
+> the same data. The data clearly has more in it than v4 extracts.
+> See "What this experiment actually shows" and "What it does NOT
+> show" at the bottom for the corrected interpretation. The numerical
+> results and "Why the anchors miss" diagnoses are correct; only the
+> generalization to "no model can help" was wrong.
 
 ## TL;DR
 
 Per-season hierarchical BT MAP with `s_team_i ~ Normal(beta . v4_features_team_i, sigma^2)`
 was tested across 7 sigma cells {0.05, 0.10, 0.20, 0.50, 1.00, 2.00, 5.00}.
-Every cell FAILED the gate at clauses 2 and 3 (`w_opt = 0.99-1.00`,
-`headroom = 0.0000`). The hypothesis was that priors-from-v4-features
-would lift HBT's standalone strength toward v4's; in practice they
-made standalone log loss **worse** than plain BT's 0.565 across the
-full sigma range (HBT range: 0.619-0.757). Clause 1 (residual
-correlation) passed at every cell with `r in [0.448, 0.507]` -- even
-*lower* than plain BT's 0.577 -- but standalone weakness sinks the
-ensemble at any non-degenerate weight.
+Every cell FAILED the LL-blend gate at clauses 2 and 3 (`w_opt =
+0.99-1.00`, `headroom = 0.0000`). The hypothesis was that priors-from
+-v4-features would lift HBT's standalone strength toward v4's; in
+practice they made standalone log loss **worse** than plain BT's
+0.565 across the full sigma range (HBT range: 0.619-0.757). Clause 1
+(residual correlation) passed at every cell with `r in [0.448,
+0.507]` -- even *lower* than plain BT's 0.577.
 
-The hypothesis "couple BT to v4 features through priors to gain
-standalone strength" is falsified at v4 data scale. Lesson below.
+Narrow conclusion: **adding v4 feature priors to BT does not improve
+its standalone log loss enough to clear the LL-optimal-blend gate,
+across any tested sigma**. Broader extrapolations from this single
+experiment to "no BT-class model can help v4" or "the training data
+is exhausted" are NOT supported -- see the framing-correction note
+above and the corrected interpretation at the bottom.
 
 ## Setup recap
 
@@ -121,61 +137,96 @@ homogenized predictions than plain BT and loses calibration on
 high-confidence games -- standalone LL goes UP, not down.
 
 If we cared, we could sweep `sigma_beta` to recover plain-BT-like
-behavior at the loose end. We don't care, because:
+behavior at the loose end. The HBT result shows priors don't lift
+standalone strength on this scoring rule, so further sigma_beta
+tuning is unlikely to flip the verdict.
 
-### The deeper lesson
+## What this experiment actually shows
 
-The diversity-strength frontier at v4 data scale **isn't a Pareto
-curve with an interior optimum** that we can engineer toward. It's a
-hard ceiling on standalone strength imposed by the training data.
-Any model that trains only on regular-season game outcomes (BT class)
-caps out around LL 0.56-0.62 on tournament prediction, no matter the
-prior. Any model that trains on the same v4 features but with
-*tournament* labels (LR class, XGB class) caps out around LL 0.44-0.50
-but produces errors highly correlated with v4 (because v4 trains on
-the same target).
+- Adding `s ~ Normal(beta . v4_features, sigma^2)` priors to a
+  per-season BT model does NOT improve standalone tournament log
+  loss across sigma in {0.05, ..., 5.00}. HBT is uniformly worse
+  standalone than plain BT.
+- Tested on the LL-optimal-blend gate (cheating ideal-weight search
+  on tournament games), every cell collapses to `w_opt = 0.99-1.00`,
+  meaning the LL-optimal blend is essentially v4 alone.
+- The residual-correlation finding is positive: HBT errors are LESS
+  correlated with v4's than plain BT's were (`r ~0.45-0.51` vs plain
+  BT's 0.577). The diversity is real; the standalone weakness
+  prevents log-loss-blending from exploiting it.
 
-The two failure modes are dual:
-- Train on different data -> low residual correlation, weak standalone -> blend degenerate.
-- Train on same data + same features -> strong standalone, high correlation -> blend degenerate.
+## What this experiment does NOT show
 
-There is no third option that gets both "trained on tournament games"
-AND "structurally different from v4" at v4's scale. Adding feature
-priors to BT moved us in the wrong direction on the strength axis
-(weaker than plain BT) without improving the correlation enough to
-matter.
+- **It does not show that no BT-class model can help v4.** The gate
+  measures log-loss-blend headroom on tournament games. The
+  production metric is bracket points, where correctly-predicted
+  upsets are scored at heavy multipliers. A weak-but-diverse
+  stage-1 that flips a few v4 picks toward true upsets could lift
+  bracket points without lifting log-loss-blend headroom. Plain
+  BT's `r=0.577` represents real diversity that we never tested
+  against the right metric. v9-C's weight sweep (PR 9) already
+  showed the active ingredient was `W_MISS` (residual weighting),
+  consistent with "the BT residual carries some signal v4 doesn't."
+  Re-testing plain BT against bracket points -- skipping the LL
+  gate entirely -- is now active queue item #2.
+- **It does not show that the training data is exhausted.** The
+  user finished 2159 / 3462 in a recent Kaggle Mania, so 2/3 of
+  entries extract more value from this same data than v4 does.
+  Whatever the bottleneck is, it is not "nothing more can be
+  squeezed out of regular-season + tournament outcomes." The
+  bottleneck is far more likely to be inside v4 itself: feature
+  engineering, calibration, hyperparameter tuning, or model-class
+  choices that haven't been audited against the leaderboard.
+- **It does not falsify external data.** External signals (538
+  tournament forecasts, Vegas prop-bet implied probs, roster
+  injury data) can still help -- not as the *only* lever, just as
+  one of several plausible levers we haven't tried.
 
-## Updated diversity-strength frontier
+## Updated diversity-strength snapshot (within the LL-blend gate)
 
 | candidate              | trained on        | residual r vs v4 | standalone LL | optimal w | gate verdict |
 |------------------------|-------------------|------------------|---------------|-----------|--------------|
 | LR (PR 11)             | tournament pairs  | 0.77             | 0.498         | 0.93      | NO-GO        |
-| plain BT (PR 12)       | regular-season W/L| 0.577            | 0.565         | 0.98      | NO-GO        |
+| plain BT (PR 12)       | regular-season W/L| 0.577            | 0.565         | 0.98      | NO-GO (LL-only) |
 | HBT (this branch)      | regular-season W/L + v4-prior | 0.448 (best) | 0.619 (best) | 1.00      | NO-GO        |
 | BT-as-feature (PR 13)  | -- (feature)      | n/a              | n/a           | n/a       | NO-GO        |
 
-Each new corner of the design space is now charted. Nothing closes
-the gap.
+Within the LL-optimal-blend gate, four ensemble corners have failed.
+That is the genuine finding. Whether bracket points tells the same
+story for plain BT specifically is an open question scheduled as
+the next experiment.
 
 ## Implications for active queue
 
-Active queue item #1 (this experiment) is **falsified**. Reorder:
+Active queue item #1 (this experiment) is **falsified on the
+LL-blend gate, narrowly**. New ordering, prioritizing audits over
+more architecture exploration:
 
-1. **External rankings as features** (was #2). Genuinely external
-   data (538's tournament forecast, Vegas prop-bet implied prob,
-   roster injury data) is the only direction that escapes the
-   training-data ceiling. Promotes to #1.
-2. **Small NN (MLP) as stage-1** (was #3). Same data-scale ceiling
-   likely applies; deferred but not falsified.
-3. **Full Bayesian BT with strength + variance per team** (was #4).
-   Standalone-strength ceiling is the bottleneck; switching from MAP
-   to full posterior won't change that. Deferred.
-4. **Roster-level returning-experience** (was #6). External data;
-   could be promoted alongside #1 if a clean roster CSV source is
-   available.
-
-Item "External rankings as features" still subsumes #2 and #5 from
-the prior queue.
+1. **Localize v4's gap.** Diff v4 game-by-game against an external
+   benchmark (top-quartile public Kaggle entry, 538 tournament
+   forecast, or Vegas-line implied probabilities). Bucket by round,
+   seed pair, higher-vs-lower-seed, and confidence bin to find
+   where v4 specifically loses. Without this, we keep testing
+   ensemble add-ons without knowing what gap they would need to
+   close.
+2. **Re-test plain BT against bracket points.** Skip the LL gate.
+   Blend `pairwise_v4` + `pairwise_bt` at uniform weight (or a
+   small grid), run v9-C on the result, score 22-season
+   bracket-points head-to-head. Cheap (~1 hour). Reuses existing
+   `pairwise_bt.csv`. The LL gate may be filtering on the wrong
+   metric.
+3. **External rankings / external data as features** (was #2 in the
+   prior queue). 538 forecast, Vegas prop-bet implied probability,
+   roster injury data. Stays on the queue but no longer the sole
+   non-architectural lever.
+4. **Small NN (MLP) as stage-1.** Lower priority -- same
+   ensemble-with-v4 question we've now stress-tested on four
+   corners.
+5. **Full Bayesian BT with strength + variance per team.** Lower
+   priority -- the HBT result suggests prior structure doesn't
+   move standalone strength on this metric.
+6. **Roster-level returning-experience.** External data; promote
+   alongside #3 if sourcing is easy.
 
 ## Files of record
 
