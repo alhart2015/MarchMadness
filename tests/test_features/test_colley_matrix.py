@@ -134,3 +134,44 @@ def test_cache_invalidates_on_meta_mismatch(tmp_path: Path):
         df1.sort_values(["Season", "TeamID"]).reset_index(drop=True),
         df2.sort_values(["Season", "TeamID"]).reset_index(drop=True),
     )
+
+
+_REG_SEASON_CSV = (
+    Path(__file__).resolve().parents[2]
+    / "data" / "raw" / "march-machine-learning-2026"
+    / "MRegularSeasonCompactResults.csv"
+)
+
+
+@pytest.mark.skipif(not _REG_SEASON_CSV.exists(), reason="raw Kaggle data not available")
+def test_real_data_shape_and_rating_range(tmp_path: Path):
+    """Solver runs on real Kaggle data; sum-to-(n/2) per season.
+
+    Note on rating range: the plan claimed ratings should be in [0, 1]
+    based on Colley's "expected win-rate vs an average opponent"
+    interpretation. That interpretation is approximate -- under
+    severely unbalanced schedules (e.g., a low-major team that loses
+    every game to high-major opponents, or vice versa), the linear
+    Colley solve extrapolates beyond [0, 1]. Empirically across
+    seasons 2003-2026 we see ratings in roughly [-0.12, 1.14] with
+    ~2-3% of team-seasons outside [0, 1]. The test asserts a looser
+    [-0.2, 1.2] bound which catches wild solver failures (NaN/inf,
+    sign-flips) without falsely claiming a mathematical guarantee
+    that does not hold."""
+    reg = pd.read_csv(_REG_SEASON_CSV)
+    reg = reg[reg["Season"] >= 2003]
+    df = load_colley_ratings(reg, cache_dir=tmp_path)
+
+    assert df["colley_rating"].notna().all(), "no NaN ratings"
+    assert np.isfinite(df["colley_rating"]).all(), "no inf ratings"
+    assert df["colley_rating"].min() >= -0.2
+    assert df["colley_rating"].max() <= 1.2
+
+    counts = df.groupby("Season").size()
+    assert (counts >= 300).all(), f"min teams per season: {counts.min()}"
+    assert (counts <= 380).all(), f"max teams per season: {counts.max()}"
+
+    sums = df.groupby("Season")["colley_rating"].sum()
+    expected_sums = counts / 2.0
+    diffs = (sums - expected_sums).abs()
+    assert diffs.max() < 1e-6, f"sum-to-(n/2) drift: {diffs.max()}"
