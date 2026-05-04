@@ -76,6 +76,54 @@
   ensemble_stage1.py, V9_STAGE1_PAIRWISE env var in
   sweep_v9_weights.py). Findings:
   docs/notes/2026-05-02-feature-view-ensemble.md.
+- **Massey-matrix MOV as v4 feature (2026-05-03).** Closed-form
+  least-squares solve over regular-season MOV with home-court
+  estimated jointly and MOV cap=21. Two-clause cheap gate FAILED
+  at clause 1 (non-redundancy): mean |corr| vs `adj_em` = 0.957
+  (threshold 0.95), max 0.973 (threshold 0.97), across 24 seasons
+  of tournament teams. Vs `massey_composite` was 0.946 / 0.965 --
+  passed both thresholds. The redundancy is specifically with our
+  own iterative `adj_em` efficiency loop, which is also opponent-
+  adjusted on margin -- different mechanism (iterative fixed-point
+  vs closed-form least squares), same signal.
+  **Followup: time-decay weighting (REJECTED).** Sweep over
+  half-lives {None, 7, 14, 30, 60, 120}d showed the redundancy
+  gradient is non-monotonic: hl=30d resonates with adj_em (also
+  30d) at mean |corr|=0.979 (worst), shorter half-lives diverge.
+  hl=14d cleared clause 1 (mean 0.931 < 0.95) but FAILED clause 2:
+  delta=+0.0057 LL vs threshold +0.001 on subset {2019, 2022, 2024}.
+  The "different signal" hl=14d captures (last ~2 weeks margin) is
+  already extracted by v4's `late_season`/`trajectory`/`vegas_trend`
+  feature stack -- net contribution is noise + tree-split overhead.
+  Code retained on branch feat/todo-massey-colley:
+  src/features/massey_matrix.py (solver + cached loader + half_life_days
+  kwarg, 9 unit tests including all-neutral edge-case fix),
+  src/diagnose_massey_mov.py (two-clause gate runner),
+  src/sweep_massey_decay.py (half-life sweep),
+  src/clause2_decay_massey.py (parameterized clause-2 runner),
+  allowed_holdouts kwarg added to leave_one_season_out_cv_weighted
+  in src/enhanced_model_v3.py (reusable for any future cheap-subset
+  diagnostic). Wire-in to compute_all_features reverted (Massey
+  does NOT ship). Findings: docs/notes/2026-05-03-massey-mov.md.
+- **Colley-matrix rating as v4 feature (2026-05-03).** Standard
+  Colley `(2I + diag(T) - A) x = b` with +2 Bayesian prior. 3-baseline
+  clause 1 (added `season_win_pct` per the Massey-decay lesson) PASSED
+  on all three: mean |corr| vs adj_em = 0.907, vs massey_composite =
+  0.948 (tight), vs season_win_pct = 0.687 (wide margin). Colley IS
+  structurally distinct from existing features. But clause 2 FAILED:
+  +0.0053 LL on subset {2019, 2022, 2024} vs threshold +0.001
+  (2019 +0.007, 2022 +0.014, 2024 -0.005). Colley's clause-2 delta is
+  near-identical to Massey-decay-14d's +0.0057. **Generalizable
+  lesson:** at v4's data scale (~2898 tourney games for training),
+  individual structural distinctness is necessary but not sufficient.
+  v4's joint 67-feature stack already extracts opponent-adjusted
+  team-strength via different decompositions; adding any single new
+  rating feature provides no marginal value. Code retained on
+  feat/todo-massey-colley: src/features/colley_matrix.py (solver +
+  cache, 6 unit tests), src/diagnose_colley.py (3-baseline gate
+  runner -- the 3-baseline pattern is the reusable artifact),
+  data/cache/colley_ratings.parquet (gitignored). Wire-in reverted
+  in 3b4c374. Findings: docs/notes/2026-05-03-colley.md.
 
 ## Active queue
 
@@ -83,26 +131,39 @@
    Normal(beta . v4_features_team, sigma)`). Couples BT back to
    v4 features to gain standalone strength. Risk: residual
    correlation may regress from 0.58 back toward 0.77 as the
-   models re-converge. With BT-as-feature and feature-view
-   ensemble now both closed, this is the next angle on getting a
-   stronger BT signal that survives ensemble criteria.
-2. **Small neural net (MLP) as a stage-1.** Adds PyTorch tooling
+   models re-converge. **Promoted to #1 after Massey + Colley
+   confirmed the "parallel feature" approach is closed at v4 data
+   scale.** This couples ratings TO v4 features through priors
+   rather than competing as a parallel feature -- the structural
+   distinction the prior failures could not exploit.
+2. **External rankings as features (538 / KenPom-public / BPI as
+   net-new sources).** Promoted from item #5 after Massey + Colley.
+   The Colley result clarifies that any new feature must carry
+   information NOT extractable from v4's existing 67-feature
+   joint -- which rules out re-derivations from Kaggle game data
+   (Massey/Colley) but leaves room for genuinely external signals
+   (538's tournament forecast, Vegas prop-bet derived predictions,
+   roster-injury data). Note: we already have BPI, Sagarin, KenPom,
+   Bart Torvik, RPI via Massey ordinals; the "external" here means
+   sources outside the Kaggle archive.
+3. **Small neural net (MLP) as a stage-1.** Adds PyTorch tooling
    cost; diversity vs XGBoost on the 67-feature tabular space is
    the open question. Same correlated-error caveat as LR if it
-   reuses the same feature matrix.
-3. **Full Bayesian Bradley-Terry with strength + variance per team**
+   reuses the same feature matrix. Lower priority after Massey +
+   Colley: same data-scale ceiling likely applies.
+4. **Full Bayesian Bradley-Terry with strength + variance per team**
    (PyMC / NumPyro / Stan). The TODO's "Architecture Rethink (Tier
    C)" entry. Lets "consistent vs volatile" teams differentiate.
    Standalone-strength bottleneck likely persists (full posterior
    over weak strengths is still a weak point estimate); deferred
-   until item 1 is settled.
-4. **External rankings (538, KenPom-public, BPI as features).**
+   until items 1-2 are settled.
+5. **External rankings (538, KenPom-public, BPI as features).**
    Note: we already have BPI, Sagarin, KenPom (POM), Bart Torvik
    (TRK), RPI via Massey ordinals (config.yaml lines 30-36).
    Truly external would be 538's tournament forecast or Vegas
    prop-bet predictions, which need data sourcing outside the
    Kaggle archive.
-5. **Roster-level returning-experience.** Player-level data is not
+6. **Roster-level returning-experience.** Player-level data is not
    in the Kaggle Mania archive; would need an external roster CSV
    per season. Different signal from coach experience.
 

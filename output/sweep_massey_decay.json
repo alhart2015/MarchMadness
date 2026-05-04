@@ -1,0 +1,764 @@
+[
+  {
+    "n_seasons": 23,
+    "mean_abs_corr_vs_adj_em": 0.9574430409096655,
+    "max_abs_corr_vs_adj_em": 0.9734377547785115,
+    "mean_abs_corr_vs_massey_composite": 0.946255711446697,
+    "max_abs_corr_vs_massey_composite": 0.9654103789612828,
+    "per_season": [
+      {
+        "season": 2003,
+        "corr_vs_adj_em": 0.9636798582558207,
+        "corr_vs_massey_composite": -0.9502326082548473
+      },
+      {
+        "season": 2004,
+        "corr_vs_adj_em": 0.9709045133381059,
+        "corr_vs_massey_composite": -0.9441914542570604
+      },
+      {
+        "season": 2005,
+        "corr_vs_adj_em": 0.9694011793580252,
+        "corr_vs_massey_composite": -0.9287894142189863
+      },
+      {
+        "season": 2006,
+        "corr_vs_adj_em": 0.9438825756516233,
+        "corr_vs_massey_composite": -0.9426617004530933
+      },
+      {
+        "season": 2007,
+        "corr_vs_adj_em": 0.9627239147821771,
+        "corr_vs_massey_composite": -0.9654103789612828
+      },
+      {
+        "season": 2008,
+        "corr_vs_adj_em": 0.9731824699740835,
+        "corr_vs_massey_composite": -0.947072984171241
+      },
+      {
+        "season": 2009,
+        "corr_vs_adj_em": 0.9695368285149446,
+        "corr_vs_massey_composite": -0.9427436253762669
+      },
+      {
+        "season": 2010,
+        "corr_vs_adj_em": 0.9661507440933896,
+        "corr_vs_massey_composite": -0.9561075309442943
+      },
+      {
+        "season": 2011,
+        "corr_vs_adj_em": 0.9590764411980038,
+        "corr_vs_massey_composite": -0.9407204584411192
+      },
+      {
+        "season": 2012,
+        "corr_vs_adj_em": 0.9522377204252483,
+        "corr_vs_massey_composite": -0.9332271015487872
+      },
+      {
+        "season": 2013,
+        "corr_vs_adj_em": 0.9621444317882166,
+        "corr_vs_massey_composite": -0.9443408615272288
+      },
+      {
+        "season": 2014,
+        "corr_vs_adj_em": 0.9501479716679334,
+        "corr_vs_massey_composite": -0.9505604426801274
+      },
+      {
+        "season": 2015,
+        "corr_vs_adj_em": 0.9734377547785115,
+        "corr_vs_massey_composite": -0.9266456452178453
+      },
+      {
+        "season": 2016,
+        "corr_vs_adj_em": 0.966485007620673,
+        "corr_vs_massey_composite": -0.9550632163151614
+      },
+      {
+        "season": 2017,
+        "corr_vs_adj_em": 0.9543810277057508,
+        "corr_vs_massey_composite": -0.9543712651556979
+      },
+      {
+        "season": 2018,
+        "corr_vs_adj_em": 0.9557455411534581,
+        "corr_vs_massey_composite": -0.9491496854683736
+      },
+      {
+        "season": 2019,
+        "corr_vs_adj_em": 0.9471269501336631,
+        "corr_vs_massey_composite": -0.9398247553270435
+      },
+      {
+        "season": 2021,
+        "corr_vs_adj_em": 0.8902545981711205,
+        "corr_vs_massey_composite": -0.9539067585388256
+      },
+      {
+        "season": 2022,
+        "corr_vs_adj_em": 0.9360317401726322,
+        "corr_vs_massey_composite": -0.9484307482434118
+      },
+      {
+        "season": 2023,
+        "corr_vs_adj_em": 0.9633644411476838,
+        "corr_vs_massey_composite": -0.9525271302083657
+      },
+      {
+        "season": 2024,
+        "corr_vs_adj_em": 0.9496275613703294,
+        "corr_vs_massey_composite": -0.9506765428890739
+      },
+      {
+        "season": 2025,
+        "corr_vs_adj_em": 0.9726668800098794,
+        "corr_vs_massey_composite": -0.9426615904790587
+      },
+      {
+        "season": 2026,
+        "corr_vs_adj_em": 0.9689997896110336,
+        "corr_vs_massey_composite": -0.9445654645968397
+      }
+    ],
+    "half_life_days": null,
+    "label": "uniform",
+    "clause1_pass": false
+  },
+  {
+    "n_seasons": 23,
+    "mean_abs_corr_vs_adj_em": 0.7245672502537709,
+    "max_abs_corr_vs_adj_em": 0.8771247313301161,
+    "mean_abs_corr_vs_massey_composite": 0.5924684348336667,
+    "max_abs_corr_vs_massey_composite": 0.769608403649666,
+    "per_season": [
+      {
+        "season": 2003,
+        "corr_vs_adj_em": 0.6513065000014983,
+        "corr_vs_massey_composite": -0.5281318589765043
+      },
+      {
+        "season": 2004,
+        "corr_vs_adj_em": 0.7661405620902766,
+        "corr_vs_massey_composite": -0.7348753436513838
+      },
+      {
+        "season": 2005,
+        "corr_vs_adj_em": 0.6441617981539107,
+        "corr_vs_massey_composite": -0.5637928161059772
+      },
+      {
+        "season": 2006,
+        "corr_vs_adj_em": 0.6225571536131896,
+        "corr_vs_massey_composite": -0.4918027518802639
+      },
+      {
+        "season": 2007,
+        "corr_vs_adj_em": 0.6306534038737179,
+        "corr_vs_massey_composite": -0.4852296262430363
+      },
+      {
+        "season": 2008,
+        "corr_vs_adj_em": 0.6754473935851979,
+        "corr_vs_massey_composite": -0.5935271446012665
+      },
+      {
+        "season": 2009,
+        "corr_vs_adj_em": 0.7753878185081922,
+        "corr_vs_massey_composite": -0.6237066370631358
+      },
+      {
+        "season": 2010,
+        "corr_vs_adj_em": 0.6479800901817022,
+        "corr_vs_massey_composite": -0.5747143521454798
+      },
+      {
+        "season": 2011,
+        "corr_vs_adj_em": 0.6859869492256452,
+        "corr_vs_massey_composite": -0.6053477278358621
+      },
+      {
+        "season": 2012,
+        "corr_vs_adj_em": 0.6999776057944461,
+        "corr_vs_massey_composite": -0.5066530786390994
+      },
+      {
+        "season": 2013,
+        "corr_vs_adj_em": 0.7262783979770046,
+        "corr_vs_massey_composite": -0.613919901861672
+      },
+      {
+        "season": 2014,
+        "corr_vs_adj_em": 0.6300953788863899,
+        "corr_vs_massey_composite": -0.5082765518394078
+      },
+      {
+        "season": 2015,
+        "corr_vs_adj_em": 0.8075687984311748,
+        "corr_vs_massey_composite": -0.6385603791894532
+      },
+      {
+        "season": 2016,
+        "corr_vs_adj_em": 0.8275519134561585,
+        "corr_vs_massey_composite": -0.7132026888012711
+      },
+      {
+        "season": 2017,
+        "corr_vs_adj_em": 0.8771247313301161,
+        "corr_vs_massey_composite": -0.769608403649666
+      },
+      {
+        "season": 2018,
+        "corr_vs_adj_em": 0.7281055772189756,
+        "corr_vs_massey_composite": -0.5799998291155978
+      },
+      {
+        "season": 2019,
+        "corr_vs_adj_em": 0.8303974730030235,
+        "corr_vs_massey_composite": -0.7000425522812398
+      },
+      {
+        "season": 2021,
+        "corr_vs_adj_em": 0.5907602114229423,
+        "corr_vs_massey_composite": -0.43750023553915385
+      },
+      {
+        "season": 2022,
+        "corr_vs_adj_em": 0.7697265392712678,
+        "corr_vs_massey_composite": -0.4918499368409785
+      },
+      {
+        "season": 2023,
+        "corr_vs_adj_em": 0.6632454684045109,
+        "corr_vs_massey_composite": -0.5364691395931338
+      },
+      {
+        "season": 2024,
+        "corr_vs_adj_em": 0.7868312695154652,
+        "corr_vs_massey_composite": -0.6041466216500406
+      },
+      {
+        "season": 2025,
+        "corr_vs_adj_em": 0.8089942418794118,
+        "corr_vs_massey_composite": -0.6580224993031185
+      },
+      {
+        "season": 2026,
+        "corr_vs_adj_em": 0.8187674800125102,
+        "corr_vs_massey_composite": -0.667393924367595
+      }
+    ],
+    "half_life_days": 7.0,
+    "label": "hl=7.0d",
+    "clause1_pass": true
+  },
+  {
+    "n_seasons": 23,
+    "mean_abs_corr_vs_adj_em": 0.9309288921764001,
+    "max_abs_corr_vs_adj_em": 0.9695687726707815,
+    "mean_abs_corr_vs_massey_composite": 0.8212732094260037,
+    "max_abs_corr_vs_massey_composite": 0.8803321525411195,
+    "per_season": [
+      {
+        "season": 2003,
+        "corr_vs_adj_em": 0.9046824859564092,
+        "corr_vs_massey_composite": -0.8039875721670136
+      },
+      {
+        "season": 2004,
+        "corr_vs_adj_em": 0.9470773554683332,
+        "corr_vs_massey_composite": -0.8803321525411195
+      },
+      {
+        "season": 2005,
+        "corr_vs_adj_em": 0.9218595474938643,
+        "corr_vs_massey_composite": -0.846508032563793
+      },
+      {
+        "season": 2006,
+        "corr_vs_adj_em": 0.9152198900324123,
+        "corr_vs_massey_composite": -0.7790614894690298
+      },
+      {
+        "season": 2007,
+        "corr_vs_adj_em": 0.9272861047380354,
+        "corr_vs_massey_composite": -0.8268755803412265
+      },
+      {
+        "season": 2008,
+        "corr_vs_adj_em": 0.9267817557754141,
+        "corr_vs_massey_composite": -0.8465757791490051
+      },
+      {
+        "season": 2009,
+        "corr_vs_adj_em": 0.9414703768862239,
+        "corr_vs_massey_composite": -0.8401112991134376
+      },
+      {
+        "season": 2010,
+        "corr_vs_adj_em": 0.8998286970133005,
+        "corr_vs_massey_composite": -0.8206711377127426
+      },
+      {
+        "season": 2011,
+        "corr_vs_adj_em": 0.9277489475111773,
+        "corr_vs_massey_composite": -0.8214222920948132
+      },
+      {
+        "season": 2012,
+        "corr_vs_adj_em": 0.8956574188177197,
+        "corr_vs_massey_composite": -0.7216020734429717
+      },
+      {
+        "season": 2013,
+        "corr_vs_adj_em": 0.9214066859892645,
+        "corr_vs_massey_composite": -0.8254435401405212
+      },
+      {
+        "season": 2014,
+        "corr_vs_adj_em": 0.9359666260805367,
+        "corr_vs_massey_composite": -0.8251261581627792
+      },
+      {
+        "season": 2015,
+        "corr_vs_adj_em": 0.9588940732879947,
+        "corr_vs_massey_composite": -0.8127356112898535
+      },
+      {
+        "season": 2016,
+        "corr_vs_adj_em": 0.9609590283061228,
+        "corr_vs_massey_composite": -0.8580510424607317
+      },
+      {
+        "season": 2017,
+        "corr_vs_adj_em": 0.9632375351693271,
+        "corr_vs_massey_composite": -0.878342718991384
+      },
+      {
+        "season": 2018,
+        "corr_vs_adj_em": 0.9432490975901868,
+        "corr_vs_massey_composite": -0.8317253441529109
+      },
+      {
+        "season": 2019,
+        "corr_vs_adj_em": 0.9428866502112089,
+        "corr_vs_massey_composite": -0.8286111494759035
+      },
+      {
+        "season": 2021,
+        "corr_vs_adj_em": 0.8001434762265804,
+        "corr_vs_massey_composite": -0.6827404463954799
+      },
+      {
+        "season": 2022,
+        "corr_vs_adj_em": 0.9632983897131139,
+        "corr_vs_massey_composite": -0.8027382127496114
+      },
+      {
+        "season": 2023,
+        "corr_vs_adj_em": 0.9268109800766015,
+        "corr_vs_massey_composite": -0.8231748108364116
+      },
+      {
+        "season": 2024,
+        "corr_vs_adj_em": 0.9591059727375914,
+        "corr_vs_massey_composite": -0.8455156891369243
+      },
+      {
+        "season": 2025,
+        "corr_vs_adj_em": 0.9582246523049963,
+        "corr_vs_massey_composite": -0.845861183811042
+      },
+      {
+        "season": 2026,
+        "corr_vs_adj_em": 0.9695687726707815,
+        "corr_vs_massey_composite": -0.842070500599375
+      }
+    ],
+    "half_life_days": 14.0,
+    "label": "hl=14.0d",
+    "clause1_pass": true
+  },
+  {
+    "n_seasons": 23,
+    "mean_abs_corr_vs_adj_em": 0.9794431476749039,
+    "max_abs_corr_vs_adj_em": 0.9901276078361027,
+    "mean_abs_corr_vs_massey_composite": 0.9140075476208168,
+    "max_abs_corr_vs_massey_composite": 0.9359807951155585,
+    "per_season": [
+      {
+        "season": 2003,
+        "corr_vs_adj_em": 0.9764571131262597,
+        "corr_vs_massey_composite": -0.9140002683070997
+      },
+      {
+        "season": 2004,
+        "corr_vs_adj_em": 0.9851008491294302,
+        "corr_vs_massey_composite": -0.9354905111722731
+      },
+      {
+        "season": 2005,
+        "corr_vs_adj_em": 0.9838570774427828,
+        "corr_vs_massey_composite": -0.920470172338546
+      },
+      {
+        "season": 2006,
+        "corr_vs_adj_em": 0.9811711092449725,
+        "corr_vs_massey_composite": -0.9001903756540888
+      },
+      {
+        "season": 2007,
+        "corr_vs_adj_em": 0.9844275695626011,
+        "corr_vs_massey_composite": -0.9359807951155585
+      },
+      {
+        "season": 2008,
+        "corr_vs_adj_em": 0.9819735508752033,
+        "corr_vs_massey_composite": -0.9209370553354675
+      },
+      {
+        "season": 2009,
+        "corr_vs_adj_em": 0.986575719850375,
+        "corr_vs_massey_composite": -0.9236977716831037
+      },
+      {
+        "season": 2010,
+        "corr_vs_adj_em": 0.9782615167791083,
+        "corr_vs_massey_composite": -0.925425094000545
+      },
+      {
+        "season": 2011,
+        "corr_vs_adj_em": 0.9829101413078336,
+        "corr_vs_massey_composite": -0.913653486809024
+      },
+      {
+        "season": 2012,
+        "corr_vs_adj_em": 0.9790143586181462,
+        "corr_vs_massey_composite": -0.8672478829065644
+      },
+      {
+        "season": 2013,
+        "corr_vs_adj_em": 0.9776837281627445,
+        "corr_vs_massey_composite": -0.9167016978387511
+      },
+      {
+        "season": 2014,
+        "corr_vs_adj_em": 0.9816734714404131,
+        "corr_vs_massey_composite": -0.9219109536379062
+      },
+      {
+        "season": 2015,
+        "corr_vs_adj_em": 0.9876548311547492,
+        "corr_vs_massey_composite": -0.8850220868865395
+      },
+      {
+        "season": 2016,
+        "corr_vs_adj_em": 0.9879431641702744,
+        "corr_vs_massey_composite": -0.9251132690988053
+      },
+      {
+        "season": 2017,
+        "corr_vs_adj_em": 0.9806098232654415,
+        "corr_vs_massey_composite": -0.9290811528714192
+      },
+      {
+        "season": 2018,
+        "corr_vs_adj_em": 0.9829216358357606,
+        "corr_vs_massey_composite": -0.9205252493049688
+      },
+      {
+        "season": 2019,
+        "corr_vs_adj_em": 0.9697670386670738,
+        "corr_vs_massey_composite": -0.8977893344264478
+      },
+      {
+        "season": 2021,
+        "corr_vs_adj_em": 0.9226753488067926,
+        "corr_vs_massey_composite": -0.8946194825105622
+      },
+      {
+        "season": 2022,
+        "corr_vs_adj_em": 0.9777593654582162,
+        "corr_vs_massey_composite": -0.9060109224373953
+      },
+      {
+        "season": 2023,
+        "corr_vs_adj_em": 0.9838386024856587,
+        "corr_vs_massey_composite": -0.9272041405618803
+      },
+      {
+        "season": 2024,
+        "corr_vs_adj_em": 0.9771300344768765,
+        "corr_vs_massey_composite": -0.9216073674787825
+      },
+      {
+        "season": 2025,
+        "corr_vs_adj_em": 0.9876587388259759,
+        "corr_vs_massey_composite": -0.914121935653302
+      },
+      {
+        "season": 2026,
+        "corr_vs_adj_em": 0.9901276078361027,
+        "corr_vs_massey_composite": -0.9053725892497534
+      }
+    ],
+    "half_life_days": 30.0,
+    "label": "hl=30.0d",
+    "clause1_pass": false
+  },
+  {
+    "n_seasons": 23,
+    "mean_abs_corr_vs_adj_em": 0.9756033453749664,
+    "max_abs_corr_vs_adj_em": 0.9861117388750141,
+    "mean_abs_corr_vs_massey_composite": 0.9366763072998059,
+    "max_abs_corr_vs_massey_composite": 0.9580839310481029,
+    "per_season": [
+      {
+        "season": 2003,
+        "corr_vs_adj_em": 0.9803741899087665,
+        "corr_vs_massey_composite": -0.9408189183569979
+      },
+      {
+        "season": 2004,
+        "corr_vs_adj_em": 0.9828654136713861,
+        "corr_vs_massey_composite": -0.9443344888746711
+      },
+      {
+        "season": 2005,
+        "corr_vs_adj_em": 0.983386476686479,
+        "corr_vs_massey_composite": -0.9301327453935063
+      },
+      {
+        "season": 2006,
+        "corr_vs_adj_em": 0.9732579714662681,
+        "corr_vs_massey_composite": -0.9308044552447687
+      },
+      {
+        "season": 2007,
+        "corr_vs_adj_em": 0.9810695064260053,
+        "corr_vs_massey_composite": -0.9580839310481029
+      },
+      {
+        "season": 2008,
+        "corr_vs_adj_em": 0.983309983590506,
+        "corr_vs_massey_composite": -0.9382677428909727
+      },
+      {
+        "season": 2009,
+        "corr_vs_adj_em": 0.9817504831822677,
+        "corr_vs_massey_composite": -0.9367667272586112
+      },
+      {
+        "season": 2010,
+        "corr_vs_adj_em": 0.9801345162536989,
+        "corr_vs_massey_composite": -0.9475237020363555
+      },
+      {
+        "season": 2011,
+        "corr_vs_adj_em": 0.9778236288111756,
+        "corr_vs_massey_composite": -0.9341115070258613
+      },
+      {
+        "season": 2012,
+        "corr_vs_adj_em": 0.9789277338864629,
+        "corr_vs_massey_composite": -0.9120327216441767
+      },
+      {
+        "season": 2013,
+        "corr_vs_adj_em": 0.9780813346176555,
+        "corr_vs_massey_composite": -0.9382823284497068
+      },
+      {
+        "season": 2014,
+        "corr_vs_adj_em": 0.9736898807398437,
+        "corr_vs_massey_composite": -0.943444589076562
+      },
+      {
+        "season": 2015,
+        "corr_vs_adj_em": 0.985430693923214,
+        "corr_vs_massey_composite": -0.9096920279524732
+      },
+      {
+        "season": 2016,
+        "corr_vs_adj_em": 0.9834041476025904,
+        "corr_vs_massey_composite": -0.9461666013069738
+      },
+      {
+        "season": 2017,
+        "corr_vs_adj_em": 0.97387031312046,
+        "corr_vs_massey_composite": -0.9463362436539877
+      },
+      {
+        "season": 2018,
+        "corr_vs_adj_em": 0.9778617285068025,
+        "corr_vs_massey_composite": -0.9426167281575882
+      },
+      {
+        "season": 2019,
+        "corr_vs_adj_em": 0.9648676250319912,
+        "corr_vs_massey_composite": -0.9227741049676229
+      },
+      {
+        "season": 2021,
+        "corr_vs_adj_em": 0.9160644894488934,
+        "corr_vs_massey_composite": -0.9365142452957473
+      },
+      {
+        "season": 2022,
+        "corr_vs_adj_em": 0.9639022923868783,
+        "corr_vs_massey_composite": -0.9338202745084606
+      },
+      {
+        "season": 2023,
+        "corr_vs_adj_em": 0.9796576065975994,
+        "corr_vs_massey_composite": -0.9477899446668293
+      },
+      {
+        "season": 2024,
+        "corr_vs_adj_em": 0.969060589770857,
+        "corr_vs_massey_composite": -0.9419512234001858
+      },
+      {
+        "season": 2025,
+        "corr_vs_adj_em": 0.9861117388750141,
+        "corr_vs_massey_composite": -0.9332099121794403
+      },
+      {
+        "season": 2026,
+        "corr_vs_adj_em": 0.9839745991194085,
+        "corr_vs_massey_composite": -0.9280799045059365
+      }
+    ],
+    "half_life_days": 60.0,
+    "label": "hl=60.0d",
+    "clause1_pass": false
+  },
+  {
+    "n_seasons": 23,
+    "mean_abs_corr_vs_adj_em": 0.968180478437559,
+    "max_abs_corr_vs_adj_em": 0.9809918945633976,
+    "mean_abs_corr_vs_massey_composite": 0.9432129626600942,
+    "max_abs_corr_vs_massey_composite": 0.9636982904319711,
+    "per_season": [
+      {
+        "season": 2003,
+        "corr_vs_adj_em": 0.97458140009307,
+        "corr_vs_massey_composite": -0.9478603776562122
+      },
+      {
+        "season": 2004,
+        "corr_vs_adj_em": 0.9780296418745315,
+        "corr_vs_massey_composite": -0.9453322745764664
+      },
+      {
+        "season": 2005,
+        "corr_vs_adj_em": 0.9778690311434651,
+        "corr_vs_massey_composite": -0.9307152676426698
+      },
+      {
+        "season": 2006,
+        "corr_vs_adj_em": 0.9610620970786449,
+        "corr_vs_massey_composite": -0.9392688491884859
+      },
+      {
+        "season": 2007,
+        "corr_vs_adj_em": 0.9737240255369495,
+        "corr_vs_massey_composite": -0.9636982904319711
+      },
+      {
+        "season": 2008,
+        "corr_vs_adj_em": 0.9796835146649138,
+        "corr_vs_massey_composite": -0.9438586673256807
+      },
+      {
+        "season": 2009,
+        "corr_vs_adj_em": 0.9762587015992102,
+        "corr_vs_massey_composite": -0.9404396211610621
+      },
+      {
+        "season": 2010,
+        "corr_vs_adj_em": 0.9748614106625054,
+        "corr_vs_massey_composite": -0.9534749851938601
+      },
+      {
+        "season": 2011,
+        "corr_vs_adj_em": 0.9697404350872486,
+        "corr_vs_massey_composite": -0.9390655349745934
+      },
+      {
+        "season": 2012,
+        "corr_vs_adj_em": 0.9685312033648263,
+        "corr_vs_massey_composite": -0.9258097735062406
+      },
+      {
+        "season": 2013,
+        "corr_vs_adj_em": 0.9722351516103069,
+        "corr_vs_massey_composite": -0.9435825681930301
+      },
+      {
+        "season": 2014,
+        "corr_vs_adj_em": 0.9636675947496008,
+        "corr_vs_massey_composite": -0.9488550434329047
+      },
+      {
+        "season": 2015,
+        "corr_vs_adj_em": 0.980669402566264,
+        "corr_vs_massey_composite": -0.9193463357601837
+      },
+      {
+        "season": 2016,
+        "corr_vs_adj_em": 0.9765733032539925,
+        "corr_vs_massey_composite": -0.9525131274446202
+      },
+      {
+        "season": 2017,
+        "corr_vs_adj_em": 0.9656437186862834,
+        "corr_vs_massey_composite": -0.9517380906037263
+      },
+      {
+        "season": 2018,
+        "corr_vs_adj_em": 0.9689115181762717,
+        "corr_vs_massey_composite": -0.9479996022716607
+      },
+      {
+        "season": 2019,
+        "corr_vs_adj_em": 0.9575463835624327,
+        "corr_vs_massey_composite": -0.9325452380629318
+      },
+      {
+        "season": 2021,
+        "corr_vs_adj_em": 0.9048586479051821,
+        "corr_vs_massey_composite": -0.947807044900464
+      },
+      {
+        "season": 2022,
+        "corr_vs_adj_em": 0.9517845760910344,
+        "corr_vs_massey_composite": -0.9430945888884162
+      },
+      {
+        "season": 2023,
+        "corr_vs_adj_em": 0.9727947731313662,
+        "corr_vs_massey_composite": -0.9522452656032075
+      },
+      {
+        "season": 2024,
+        "corr_vs_adj_em": 0.9606935712538159,
+        "corr_vs_massey_composite": -0.9479052946435375
+      },
+      {
+        "season": 2025,
+        "corr_vs_adj_em": 0.9809918945633976,
+        "corr_vs_massey_composite": -0.9394731330154809
+      },
+      {
+        "season": 2026,
+        "corr_vs_adj_em": 0.9774390074085403,
+        "corr_vs_massey_composite": -0.9372691667047587
+      }
+    ],
+    "half_life_days": 120.0,
+    "label": "hl=120.0d",
+    "clause1_pass": false
+  }
+]

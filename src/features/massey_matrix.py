@@ -1,0 +1,239 @@
+"""Massey-matrix MOV ratings: per-team-per-season ratings from a
+least-squares solve over regular-season game results with a jointly
+estimated home-court constant and MOV capping.
+
+See docs/superpowers/specs/2026-05-03-massey-matrix-feature-design.md.
+"""
+
+from __future__ import annotations
+
+import hashlib
+import json
+import logging
+from pathlib import Path
+
+import numpy as np
+import pandas as pd
+
+logger = logging.getLogger(__name__)
+
+_PRODUCER_VERSION = "v1"
+
+
+def _solve_one_season(
+    games_df: pd.DataFrame,
+    mov_cap: int,
+    half_life_days: float | None = None,
+) -> tuple[dict[int, float], float]:
+    """Solve Massey-style least squares for one season.
+
+    Parameters
+    ----------
+    games_df : DataFrame
+        Subset of MRegularSeasonCompactResults for a single season.
+        Required columns: WTeamID, LTeamID, WScore, LScore, WLoc.
+        If half_life_days is set, DayNum is also required.
+    mov_cap : int
+        Cap absolute score-margin contributions.
+    half_life_days : float or None
+        If set, weight each game's contribution to (X^T X) and (X^T y) by
+        exp(-ln(2) * (max_daynum - daynum) / half_life_days). Mirrors the
+        recency weighting used in src/features/efficiency.py:adj_em.
+        None (default) = uniform weighting.
+
+    Returns
+    -------
+    (ratings, h) : (dict, float)
+        ratings maps TeamID -> rating; sum of ratings is 0.
+        h is the home-court constant.
+    """
+    if mov_cap <= 0:
+        raise ValueError(f"mov_cap must be positive, got {mov_cap}")
+    if half_life_days is not None and half_life_days <= 0:
+        raise ValueError(f"half_life_days must be positive or None, got {half_life_days}")
+
+    team_ids = sorted(set(games_df["WTeamID"].tolist()) | set(games_df["LTeamID"].tolist()))
+    n = len(team_ids)
+    idx = {tid: i for i, tid in enumerate(team_ids)}
+
+    # Bordered KKT system: (n+2) x (n+2)
+    #   [ X^T X    e ] [ beta   ]   [ X^T y ]
+    #   [   e^T    0 ] [ lambda ] = [   0   ]
+    # where beta = [r_1, ..., r_n, h] and e = [1, ..., 1, 0]^T (ones in
+    # the n team slots, zero in the home-constant slot).
+    M = np.zeros((n + 2, n + 2), dtype=np.float64)
+    rhs = np.zeros(n + 2, dtype=np.float64)
+
+    # Constraint row/col: sum(r) = 0 (does not constrain h).
+    for k in range(n):
+        M[n + 1, k] = 1.0
+        M[k, n + 1] = 1.0
+
+    h_col = n  # column index of home-constant in beta
+
+    # Per-game weights for time-decay.
+    if half_life_days is not None:
+        if "DayNum" not in games_df.columns:
+            raise ValueError("half_life_days set but DayNum not in games_df columns")
+        day_arr = games_df["DayNum"].to_numpy()
+        max_day = int(day_arr.max())
+        decay_rate = np.log(2) / float(half_life_days)
+        weights = np.exp(-decay_rate * (max_day - day_arr))
+    else:
+        weights = np.ones(len(games_df), dtype=np.float64)
+
+    for w, l, ws, ls, wloc, gw in zip(
+        games_df["WTeamID"].to_numpy(),
+        games_df["LTeamID"].to_numpy(),
+        games_df["WScore"].to_numpy(),
+        games_df["LScore"].to_numpy(),
+        games_df["WLoc"].to_numpy(),
+        weights,
+    ):
+        wi = idx[int(w)]
+        li = idx[int(l)]
+        z = 1 if wloc == "H" else (-1 if wloc == "A" else 0)
+        s = int(ws) - int(ls)
+        # Cap. Sign(s) is always +1 here since W beat L; keep abs(s) <= cap.
+        y = min(s, mov_cap)
+
+        # X row for this game has +1 in col wi, -1 in col li, +z in col h_col.
+        # Weighted normal equations: each game's outer product is scaled by gw.
+        # X^T X contributions:
+        M[wi, wi] += gw
+        M[li, li] += gw
+        M[wi, li] -= gw
+        M[li, wi] -= gw
+        M[wi, h_col] += gw * z
+        M[h_col, wi] += gw * z
+        M[li, h_col] -= gw * z
+        M[h_col, li] -= gw * z
+        M[h_col, h_col] += gw * z * z  # gw if non-neutral, 0 if neutral
+
+        # X^T y contributions:
+        rhs[wi] += gw * y
+        rhs[li] -= gw * y
+        rhs[h_col] += gw * z * y
+
+    # Edge case: zero non-neutral games => h-column/row of (X^T X) is all
+    # zeros, making M rank-deficient. Spec
+    # docs/superpowers/specs/2026-05-03-massey-matrix-feature-design.md
+    # ("Edge cases") prescribes pinning h = 0 and solving the team-only
+    # sub-system. We implement this in-place by replacing the all-zero
+    # h_col row/col with the equation h = 0, which keeps M's shape stable
+    # and leaves the team sub-block (and its sum-to-zero constraint)
+    # untouched.
+    all_neutral = M[h_col, h_col] == 0.0
+    if all_neutral:
+        M[h_col, :] = 0.0
+        M[:, h_col] = 0.0
+        M[h_col, h_col] = 1.0
+        rhs[h_col] = 0.0
+
+    cond = np.linalg.cond(M)
+    if cond > 1e10:
+        logger.warning("Massey normal-equations matrix is ill-conditioned (cond=%.2e); "
+                       "season may have a disconnected component", cond)
+
+    sol = np.linalg.solve(M, rhs)
+    ratings_arr = sol[:n]
+    h_val = 0.0 if all_neutral else float(sol[n])
+
+    return ({tid: float(ratings_arr[idx[tid]]) for tid in team_ids}, h_val)
+
+
+def compute_massey_mov_ratings(
+    reg_season: pd.DataFrame,
+    seasons: list[int] | None = None,
+    mov_cap: int = 21,
+    half_life_days: float | None = None,
+) -> pd.DataFrame:
+    """Compute Massey-matrix MOV ratings per (Season, TeamID).
+
+    Parameters
+    ----------
+    reg_season : DataFrame
+        Kaggle MRegularSeasonCompactResults (or DetailedResults superset).
+        Required columns: Season, WTeamID, LTeamID, WScore, LScore, WLoc.
+        If half_life_days is set, DayNum is also required.
+    seasons : list of int or None
+        Restrict to these seasons. None = all seasons present in reg_season.
+    mov_cap : int
+        Cap absolute score-margin (predictive Massey, default 21).
+    half_life_days : float or None
+        Recency weighting: each game contributes exp(-ln(2) * (max_daynum -
+        daynum) / half_life_days). None (default) = uniform weighting.
+
+    Returns
+    -------
+    DataFrame with columns [Season, TeamID, massey_mov_rating],
+    one row per (team, season) where the team appeared in the season's
+    regular-season schedule.
+    """
+    required = {"Season", "WTeamID", "LTeamID", "WScore", "LScore", "WLoc"}
+    missing = required - set(reg_season.columns)
+    if missing:
+        raise ValueError(f"reg_season missing required columns: {sorted(missing)}")
+
+    season_iter = sorted(reg_season["Season"].unique()) if seasons is None else sorted(seasons)
+    rows = []
+    for season in season_iter:
+        games = reg_season[reg_season["Season"] == season]
+        if len(games) == 0:
+            continue
+        ratings, _h = _solve_one_season(games, mov_cap, half_life_days=half_life_days)
+        for tid, r in ratings.items():
+            rows.append({"Season": int(season), "TeamID": int(tid), "massey_mov_rating": r})
+
+    return pd.DataFrame(rows)
+
+
+def _hash_input(reg_season: pd.DataFrame) -> str:
+    """Stable content hash of the relevant columns of the input frame."""
+    cols = ["Season", "DayNum", "WTeamID", "WScore", "LTeamID", "LScore", "WLoc"]
+    h = hashlib.sha256()
+    for c in cols:
+        if c in reg_season.columns:
+            h.update(reg_season[c].astype(str).str.cat(sep="|").encode("ascii", errors="replace"))
+    return h.hexdigest()[:16]
+
+
+def load_massey_mov_ratings(
+    reg_season: pd.DataFrame,
+    mov_cap: int = 21,
+    cache_dir: str | Path = "data/cache",
+) -> pd.DataFrame:
+    """Cached wrapper around compute_massey_mov_ratings.
+
+    Reads from <cache_dir>/massey_mov_ratings.parquet on cache hit.
+    Cache hit requires the sidecar metadata at
+    <cache_dir>/massey_mov_ratings.meta.json to match the current
+    (_PRODUCER_VERSION, mov_cap, n_input_rows, sha_input).
+    """
+    cache_dir = Path(cache_dir)
+    parquet_path = cache_dir / "massey_mov_ratings.parquet"
+    meta_path = cache_dir / "massey_mov_ratings.meta.json"
+
+    expected_meta = {
+        "producer_version": _PRODUCER_VERSION,
+        "mov_cap": int(mov_cap),
+        "n_input_rows": int(len(reg_season)),
+        "sha_input": _hash_input(reg_season),
+    }
+
+    if parquet_path.exists() and meta_path.exists():
+        try:
+            actual_meta = json.loads(meta_path.read_text())
+        except (json.JSONDecodeError, OSError):
+            actual_meta = {}
+        if all(actual_meta.get(k) == expected_meta[k] for k in expected_meta):
+            logger.info("Massey MOV cache hit: %s", parquet_path)
+            return pd.read_parquet(parquet_path)
+        logger.info("Massey MOV cache stale (metadata mismatch); rebuilding")
+
+    df = compute_massey_mov_ratings(reg_season, mov_cap=mov_cap)
+    cache_dir.mkdir(parents=True, exist_ok=True)
+    df.to_parquet(parquet_path, index=False)
+    meta_path.write_text(json.dumps({**expected_meta, "written_at_n_rows": len(df)}, indent=2))
+    logger.info("Massey MOV cache written: %s (%d rows)", parquet_path, len(df))
+    return df
