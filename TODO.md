@@ -124,48 +124,61 @@
   runner -- the 3-baseline pattern is the reusable artifact),
   data/cache/colley_ratings.parquet (gitignored). Wire-in reverted
   in 3b4c374. Findings: docs/notes/2026-05-03-colley.md.
+- **Hierarchical Bradley-Terry with v4 feature priors (2026-05-03).**
+  Per-season MAP over `(s, beta, h)` of `s_team_i ~ Normal(beta .
+  v4_features_team_i, sigma^2)` swept over sigma in {0.05, 0.10,
+  0.20, 0.50, 1.00, 2.00, 5.00}, sigma_beta=1.0 fixed. **All 7 cells
+  FAILED at clauses 2/3** (`w_opt = 0.99-1.00`, `headroom = +0.0000`).
+  Clause 1 PASSED at every cell with `r in [0.448, 0.507]` -- even
+  *lower* than plain BT's 0.577 -- but standalone HBT LL was
+  uniformly *worse* than plain BT's 0.565 across the full sigma
+  range (HBT range: 0.619-0.757 LL). The hypothesis "couple BT to v4
+  features through priors -> lift standalone strength" is falsified.
+  **Generalized lesson:** the diversity-strength frontier at v4
+  data scale is a *training-data ceiling*, not an architectural
+  Pareto curve. Any BT-class model trained on regular-season W/L
+  caps standalone tournament LL around 0.56-0.62 regardless of the
+  prior; any LR/XGB-class model trained on tournament pairs is
+  highly correlated with v4. There is no third option that gets
+  both "trained on tournament games" AND "structurally different
+  from v4" at this scale. Closes item #1 of the active queue and
+  promotes "external data" (item #2 -> #1). Code retained on
+  feat/hierarchical-bt-priors: src/features/hierarchical_bt.py
+  (L-BFGS solver with analytic gradient, 5 unit tests),
+  src/train_hbt_stage1.py (per-(sigma, season) trainer, 7 unit
+  tests), src/diagnose_hbt_vs_v4.py (per-cell sigma-sweep gate
+  runner, 8 unit tests; thresholds shared verbatim with plain-BT
+  diagnostic via cross-module regression test). Findings:
+  docs/notes/2026-05-03-hierarchical-bt.md.
 
 ## Active queue
 
-1. **Hierarchical Bradley-Terry with feature priors** (`s_team ~
-   Normal(beta . v4_features_team, sigma)`). Couples BT back to
-   v4 features to gain standalone strength. Risk: residual
-   correlation may regress from 0.58 back toward 0.77 as the
-   models re-converge. **Promoted to #1 after Massey + Colley
-   confirmed the "parallel feature" approach is closed at v4 data
-   scale.** This couples ratings TO v4 features through priors
-   rather than competing as a parallel feature -- the structural
-   distinction the prior failures could not exploit.
-2. **External rankings as features (538 / KenPom-public / BPI as
-   net-new sources).** Promoted from item #5 after Massey + Colley.
-   The Colley result clarifies that any new feature must carry
-   information NOT extractable from v4's existing 67-feature
-   joint -- which rules out re-derivations from Kaggle game data
-   (Massey/Colley) but leaves room for genuinely external signals
-   (538's tournament forecast, Vegas prop-bet derived predictions,
-   roster-injury data). Note: we already have BPI, Sagarin, KenPom,
-   Bart Torvik, RPI via Massey ordinals; the "external" here means
-   sources outside the Kaggle archive.
-3. **Small neural net (MLP) as a stage-1.** Adds PyTorch tooling
+1. **External rankings / external data as features (538 / Vegas
+   prop-bet / roster injury, etc.).** Promoted from #2 after
+   hierarchical BT was falsified. The HBT result clarifies the
+   diversity-strength frontier as a *training-data ceiling*, not
+   an architectural Pareto curve: any model trained on the same
+   Kaggle game data caps out, regardless of its inductive bias or
+   feature-prior structure. Genuinely external data is the only
+   uncharted direction. Note: we already have BPI, Sagarin, KenPom,
+   Bart Torvik, RPI via Massey ordinals; "external" here means
+   sources outside the Kaggle + KenPom + Bart Torvik archive.
+2. **Small neural net (MLP) as a stage-1.** Adds PyTorch tooling
    cost; diversity vs XGBoost on the 67-feature tabular space is
    the open question. Same correlated-error caveat as LR if it
    reuses the same feature matrix. Lower priority after Massey +
-   Colley: same data-scale ceiling likely applies.
-4. **Full Bayesian Bradley-Terry with strength + variance per team**
+   Colley + HBT: same data-scale ceiling likely applies.
+3. **Full Bayesian Bradley-Terry with strength + variance per team**
    (PyMC / NumPyro / Stan). The TODO's "Architecture Rethink (Tier
    C)" entry. Lets "consistent vs volatile" teams differentiate.
-   Standalone-strength bottleneck likely persists (full posterior
-   over weak strengths is still a weak point estimate); deferred
-   until items 1-2 are settled.
-5. **External rankings (538, KenPom-public, BPI as features).**
-   Note: we already have BPI, Sagarin, KenPom (POM), Bart Torvik
-   (TRK), RPI via Massey ordinals (config.yaml lines 30-36).
-   Truly external would be 538's tournament forecast or Vegas
-   prop-bet predictions, which need data sourcing outside the
-   Kaggle archive.
-6. **Roster-level returning-experience.** Player-level data is not
+   Standalone-strength bottleneck very likely persists (full
+   posterior over weak strengths is still a weak point estimate;
+   HBT confirmed adding feature priors doesn't lift standalone
+   strength either); deferred until item 1 is settled.
+4. **Roster-level returning-experience.** Player-level data is not
    in the Kaggle Mania archive; would need an external roster CSV
-   per season. Different signal from coach experience.
+   per season. Different signal from coach experience. Closely
+   related to #1.
 
 ## Done
 

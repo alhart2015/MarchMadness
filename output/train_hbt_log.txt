@@ -1,0 +1,277 @@
+======================================================================
+HIERARCHICAL BT STAGE-1 TRAINER (v4 feature priors)
+======================================================================
+  sigmas      : [0.05, 0.1, 0.2, 0.5, 1.0, 2.0, 5.0]
+  sigma_beta  : 1.0
+  seasons     : all
+  out_dir     : output/
+
+======================================================================
+STEP 1 -- Loading all data sources
+======================================================================
+  Loading Massey Ordinals (filtering to target systems)...
+  Regular season games : 124,529
+  Tournament games     : 1,449
+  Seeds                : 2,694
+  Teams                : 381
+  Massey (filtered)    : 54,089
+  KenPom/Barttorvik    : 1,215
+  Conference tourney   : 7,093
+  Team-coach rows      : 13,900
+  KenPom->Kaggle map   : 1213 teams mapped
+
+======================================================================
+STEP 2 -- Computing game-level features
+======================================================================
+  Building team ID mapping (KenPom -> Kaggle)...
+  Mapped 1213 KenPom teams to Kaggle IDs
+  Season 2005: 330 teams
+  Season 2010: 347 teams
+  Season 2015: 351 teams
+  Season 2020: 353 teams
+  Season 2025: 364 teams
+  Season 2026: 365 teams
+
+  Full feature matrix : 8,346 rows
+  Tournament teams    : 1,540 rows
+  Feature columns     : 49 total
+  Seasons             : 2003-2026
+
+======================================================================
+STEP 3 -- Loading and computing Vegas line features
+======================================================================
+  Loaded 95,355 Vegas line records across 23 seasons
+  Building Vegas team name -> Kaggle ID mapping...
+  Resolved 400 / 405 unique Vegas team names to Kaggle IDs
+  Games with both teams matched: 95,280 / 95,355
+  Computed Vegas features for 7,124 team-seasons
+  Seasons covered: 2004-2026
+  Teams per season: 310 avg, 233-364 range
+
+======================================================================
+STEP 3a -- Merging Vegas features into feature matrix
+======================================================================
+  Added 6 Vegas feature columns
+  Teams with Vegas data: 1432 / 1540 (93.0%)
+  Vegas feature columns: ['vegas_avg_spread', 'vegas_avg_margin', 'vegas_ats_pct', 'vegas_power_rating', 'vegas_consistency', 'vegas_game_count']
+
+======================================================================
+STEP 3b -- Computing late-season, trajectory, conf tourney, and Vegas trend features
+======================================================================
+  Late-season metrics: 4,214 team-seasons
+  Trajectory features: 7,988 team-seasons
+  Conf tourney features: 7,155 team-seasons
+  Vegas trend features: 4,519 team-seasons
+  Coach features: 1,471 team-seasons
+  New v3 feature columns: ['late_adj_oe', 'late_adj_de', 'late_adj_em', 'late_sos', 'efficiency_trend', 'margin_trend', 'conf_tourney_wins', 'conf_tourney_champ', 'vegas_late_spread_delta', 'coach_career_games', 'coach_career_wins', 'coach_career_winpct', 'coach_career_f4_apps', 'coach_career_champs', 'coach_career_seasons']
+
+  Total feature columns (67):
+    adj_oe, adj_de, adj_em, adj_tempo, off_efg, off_to_rate
+    off_or_rate, off_ft_rate, def_efg, def_to_rate, def_or_rate, def_ft_rate
+    rolling_oe, rolling_de, win_pct_30d, win_pct_last10, avg_mov_last10, scoring_trend
+    season_win_pct, season_avg_mov, massey_POM, massey_SAG, massey_MOR, massey_WOL
+    massey_DOL, massey_COL, massey_RPI, massey_composite, conf_strength, kp_KADJ EM
+    kp_KADJ O, kp_KADJ D, kp_BARTHAG, kp_TALENT, kp_EXP, kp_ELITE SOS
+    kp_WAB, kp_EFG%, kp_EFG%D, kp_TOV%, kp_TOV%D, kp_OREB%
+    kp_DREB%, kp_FTR, kp_FTRD, kp_K TEMPO, vegas_avg_spread, vegas_avg_margin
+    vegas_ats_pct, vegas_power_rating, vegas_consistency, vegas_game_count, late_adj_oe, late_adj_de
+    late_adj_em, late_sos, efficiency_trend, margin_trend, conf_tourney_wins, conf_tourney_champ
+    vegas_late_spread_delta, coach_career_games, coach_career_wins, coach_career_winpct, coach_career_f4_apps, coach_career_champs
+    coach_career_seasons
+
+======================================================================
+STEP 5 -- Building weighted matchup training data
+======================================================================
+  Training samples : 8,464  (tourney: 2898, supplemental: 5566)
+  Features used    : 67
+======================================================================
+  SIGMA = 0.0500  ->  output\pairwise_hbt_sigma_0.05.csv
+======================================================================
+  [2003] teams= 65 games=  247 feat=67 h=+1.347 iter=500 fun=114.4 pairs= 2080 (0.3s)
+  [2004] teams= 65 games=  259 feat=67 h=+0.767 iter=500 fun=134.3 pairs= 2080 (0.3s)
+  [2005] teams= 65 games=  238 feat=67 h=+1.019 iter=500 fun=115.9 pairs= 2080 (0.3s)
+  [2006] teams= 65 games=  257 feat=67 h=+0.767 iter=500 fun=137.2 pairs= 2080 (0.3s)
+  [2007] teams= 65 games=  270 feat=67 h=+0.984 iter=500 fun=139.0 pairs= 2080 (0.3s)
+  [2008] teams= 65 games=  288 feat=67 h=+0.921 iter=500 fun=144.8 pairs= 2080 (0.3s)
+  [2009] teams= 65 games=  292 feat=67 h=+0.834 iter=500 fun=152.8 pairs= 2080 (0.3s)
+  [2010] teams= 65 games=  272 feat=67 h=+1.121 iter=500 fun=132.8 pairs= 2080 (0.3s)
+  [2011] teams= 68 games=  337 feat=67 h=+0.962 iter=500 fun=176.3 pairs= 2278 (0.3s)
+  [2012] teams= 68 games=  317 feat=67 h=+0.979 iter=500 fun=151.8 pairs= 2278 (0.3s)
+  [2013] teams= 68 games=  304 feat=67 h=+1.212 iter=500 fun=152.0 pairs= 2278 (0.3s)
+  [2014] teams= 68 games=  314 feat=67 h=+0.749 iter=500 fun=168.1 pairs= 2278 (0.3s)
+  [2015] teams= 68 games=  309 feat=67 h=+0.697 iter=500 fun=145.7 pairs= 2278 (0.3s)
+  [2016] teams= 68 games=  314 feat=67 h=+1.002 iter=500 fun=157.2 pairs= 2278 (0.3s)
+  [2017] teams= 68 games=  323 feat=67 h=+0.774 iter=500 fun=170.2 pairs= 2278 (0.3s)
+  [2018] teams= 68 games=  317 feat=67 h=+1.014 iter=500 fun=167.8 pairs= 2278 (0.3s)
+  [2019] teams= 68 games=  299 feat=67 h=+0.811 iter=500 fun=160.6 pairs= 2278 (0.3s)
+  [2021] teams= 68 games=  274 feat=67 h=+0.523 iter=500 fun=147.7 pairs= 2211 (0.3s)
+  [2022] teams= 68 games=  291 feat=67 h=+0.867 iter=500 fun=163.4 pairs= 2278 (0.3s)
+  [2023] teams= 68 games=  324 feat=67 h=+1.231 iter=500 fun=162.5 pairs= 2278 (0.3s)
+  [2024] teams= 68 games=  304 feat=67 h=+0.888 iter=500 fun=166.4 pairs= 2278 (0.3s)
+  [2025] teams= 68 games=  362 feat=67 h=+0.755 iter=500 fun=199.7 pairs= 2278 (0.3s)
+  [2026] no tournament field, skipping pairs
+  -- wrote 48,465 pairs in 6.7s
+======================================================================
+  SIGMA = 0.1000  ->  output\pairwise_hbt_sigma_0.10.csv
+======================================================================
+  [2003] teams= 65 games=  247 feat=67 h=+1.372 iter=500 fun=112.5 pairs= 2080 (0.3s)
+  [2004] teams= 65 games=  259 feat=67 h=+0.698 iter=500 fun=131.5 pairs= 2080 (0.3s)
+  [2005] teams= 65 games=  238 feat=67 h=+0.934 iter=500 fun=114.9 pairs= 2080 (0.4s)
+  [2006] teams= 65 games=  257 feat=67 h=+0.727 iter=500 fun=136.4 pairs= 2080 (0.3s)
+  [2007] teams= 65 games=  270 feat=67 h=+0.968 iter=500 fun=136.0 pairs= 2080 (0.4s)
+  [2008] teams= 65 games=  288 feat=67 h=+0.862 iter=500 fun=143.4 pairs= 2080 (0.4s)
+  [2009] teams= 65 games=  292 feat=67 h=+0.934 iter=500 fun=151.8 pairs= 2080 (0.4s)
+  [2010] teams= 65 games=  272 feat=67 h=+1.040 iter=500 fun=128.5 pairs= 2080 (0.4s)
+  [2011] teams= 68 games=  337 feat=67 h=+0.922 iter=500 fun=172.8 pairs= 2278 (0.4s)
+  [2012] teams= 68 games=  317 feat=67 h=+0.849 iter=500 fun=151.3 pairs= 2278 (0.4s)
+  [2013] teams= 68 games=  304 feat=67 h=+1.230 iter=500 fun=150.7 pairs= 2278 (0.3s)
+  [2014] teams= 68 games=  314 feat=67 h=+0.813 iter=500 fun=163.7 pairs= 2278 (0.3s)
+  [2015] teams= 68 games=  309 feat=67 h=+0.677 iter=500 fun=142.2 pairs= 2278 (0.3s)
+  [2016] teams= 68 games=  314 feat=67 h=+1.075 iter=500 fun=154.6 pairs= 2278 (0.3s)
+  [2017] teams= 68 games=  323 feat=67 h=+0.687 iter=500 fun=167.9 pairs= 2278 (0.3s)
+  [2018] teams= 68 games=  317 feat=67 h=+1.002 iter=500 fun=165.5 pairs= 2278 (0.3s)
+  [2019] teams= 68 games=  299 feat=67 h=+0.749 iter=500 fun=154.6 pairs= 2278 (0.3s)
+  [2021] teams= 68 games=  274 feat=67 h=+0.794 iter=500 fun=144.9 pairs= 2211 (0.3s)
+  [2022] teams= 68 games=  291 feat=67 h=+0.849 iter=500 fun=161.4 pairs= 2278 (0.3s)
+  [2023] teams= 68 games=  324 feat=67 h=+1.212 iter=500 fun=160.3 pairs= 2278 (0.3s)
+  [2024] teams= 68 games=  304 feat=67 h=+0.910 iter=500 fun=165.1 pairs= 2278 (0.3s)
+  [2025] teams= 68 games=  362 feat=67 h=+0.562 iter=500 fun=194.1 pairs= 2278 (0.3s)
+  [2026] no tournament field, skipping pairs
+  -- wrote 48,465 pairs in 7.5s
+======================================================================
+  SIGMA = 0.2000  ->  output\pairwise_hbt_sigma_0.20.csv
+======================================================================
+  [2003] teams= 65 games=  247 feat=67 h=+1.432 iter=500 fun=111.3 pairs= 2080 (0.3s)
+  [2004] teams= 65 games=  259 feat=67 h=+0.678 iter=500 fun=129.9 pairs= 2080 (0.3s)
+  [2005] teams= 65 games=  238 feat=67 h=+0.889 iter=500 fun=114.1 pairs= 2080 (0.4s)
+  [2006] teams= 65 games=  257 feat=67 h=+0.726 iter=500 fun=135.8 pairs= 2080 (0.3s)
+  [2007] teams= 65 games=  270 feat=67 h=+0.965 iter=500 fun=135.1 pairs= 2080 (0.3s)
+  [2008] teams= 65 games=  288 feat=67 h=+0.865 iter=500 fun=143.0 pairs= 2080 (0.4s)
+  [2009] teams= 65 games=  292 feat=67 h=+0.880 iter=500 fun=150.1 pairs= 2080 (0.3s)
+  [2010] teams= 65 games=  272 feat=67 h=+1.039 iter=500 fun=127.9 pairs= 2080 (0.3s)
+  [2011] teams= 68 games=  337 feat=67 h=+0.851 iter=500 fun=170.7 pairs= 2278 (0.3s)
+  [2012] teams= 68 games=  317 feat=67 h=+0.844 iter=500 fun=150.0 pairs= 2278 (0.3s)
+  [2013] teams= 68 games=  304 feat=67 h=+1.208 iter=500 fun=149.8 pairs= 2278 (0.3s)
+  [2014] teams= 68 games=  314 feat=67 h=+0.774 iter=500 fun=162.3 pairs= 2278 (0.3s)
+  [2015] teams= 68 games=  309 feat=67 h=+0.677 iter=500 fun=140.1 pairs= 2278 (0.3s)
+  [2016] teams= 68 games=  314 feat=67 h=+0.978 iter=500 fun=153.0 pairs= 2278 (0.3s)
+  [2017] teams= 68 games=  323 feat=67 h=+0.693 iter=500 fun=165.4 pairs= 2278 (0.3s)
+  [2018] teams= 68 games=  317 feat=67 h=+0.907 iter=500 fun=164.1 pairs= 2278 (0.4s)
+  [2019] teams= 68 games=  299 feat=67 h=+0.676 iter=500 fun=151.7 pairs= 2278 (0.4s)
+  [2021] teams= 68 games=  274 feat=67 h=+0.691 iter=500 fun=141.9 pairs= 2211 (0.4s)
+  [2022] teams= 68 games=  291 feat=67 h=+0.898 iter=500 fun=158.5 pairs= 2278 (0.5s)
+  [2023] teams= 68 games=  324 feat=67 h=+1.240 iter=500 fun=159.5 pairs= 2278 (0.4s)
+  [2024] teams= 68 games=  304 feat=67 h=+0.880 iter=500 fun=162.8 pairs= 2278 (0.4s)
+  [2025] teams= 68 games=  362 feat=67 h=+0.588 iter=500 fun=192.3 pairs= 2278 (0.3s)
+  [2026] no tournament field, skipping pairs
+  -- wrote 48,465 pairs in 8.3s
+======================================================================
+  SIGMA = 0.5000  ->  output\pairwise_hbt_sigma_0.50.csv
+======================================================================
+  [2003] teams= 65 games=  247 feat=67 h=+1.443 iter=500 fun=110.0 pairs= 2080 (0.3s)
+  [2004] teams= 65 games=  259 feat=67 h=+0.668 iter=500 fun=128.2 pairs= 2080 (0.3s)
+  [2005] teams= 65 games=  238 feat=67 h=+0.905 iter=500 fun=112.7 pairs= 2080 (0.4s)
+  [2006] teams= 65 games=  257 feat=67 h=+0.732 iter=500 fun=134.8 pairs= 2080 (0.4s)
+  [2007] teams= 65 games=  270 feat=67 h=+0.982 iter=500 fun=133.6 pairs= 2080 (0.4s)
+  [2008] teams= 65 games=  288 feat=67 h=+0.875 iter=500 fun=142.3 pairs= 2080 (0.3s)
+  [2009] teams= 65 games=  292 feat=67 h=+0.887 iter=491 fun=148.7 pairs= 2080 (0.3s)
+  [2010] teams= 65 games=  272 feat=67 h=+1.046 iter=500 fun=126.8 pairs= 2080 (0.3s)
+  [2011] teams= 68 games=  337 feat=67 h=+0.851 iter=500 fun=169.4 pairs= 2278 (0.3s)
+  [2012] teams= 68 games=  317 feat=67 h=+0.837 iter=500 fun=149.2 pairs= 2278 (0.3s)
+  [2013] teams= 68 games=  304 feat=67 h=+1.213 iter=500 fun=148.6 pairs= 2278 (0.3s)
+  [2014] teams= 68 games=  314 feat=67 h=+0.769 iter=500 fun=161.3 pairs= 2278 (0.4s)
+  [2015] teams= 68 games=  309 feat=67 h=+0.682 iter=500 fun=138.7 pairs= 2278 (0.3s)
+  [2016] teams= 68 games=  314 feat=67 h=+0.990 iter=500 fun=151.9 pairs= 2278 (0.3s)
+  [2017] teams= 68 games=  323 feat=67 h=+0.688 iter=500 fun=163.9 pairs= 2278 (0.4s)
+  [2018] teams= 68 games=  317 feat=67 h=+0.918 iter=500 fun=162.8 pairs= 2278 (0.4s)
+  [2019] teams= 68 games=  299 feat=67 h=+0.658 iter=500 fun=149.9 pairs= 2278 (0.4s)
+  [2021] teams= 68 games=  274 feat=67 h=+0.671 iter=500 fun=140.5 pairs= 2211 (0.3s)
+  [2022] teams= 68 games=  291 feat=67 h=+0.861 iter=500 fun=156.8 pairs= 2278 (0.3s)
+  [2023] teams= 68 games=  324 feat=67 h=+1.240 iter=500 fun=158.5 pairs= 2278 (0.3s)
+  [2024] teams= 68 games=  304 feat=67 h=+0.875 iter=500 fun=161.3 pairs= 2278 (0.3s)
+  [2025] teams= 68 games=  362 feat=67 h=+0.587 iter=500 fun=191.3 pairs= 2278 (0.3s)
+  [2026] no tournament field, skipping pairs
+  -- wrote 48,465 pairs in 7.9s
+======================================================================
+  SIGMA = 1.0000  ->  output\pairwise_hbt_sigma_1.00.csv
+======================================================================
+  [2003] teams= 65 games=  247 feat=67 h=+1.474 iter=353 fun=107.9 pairs= 2080 (0.2s)
+  [2004] teams= 65 games=  259 feat=67 h=+0.657 iter=368 fun=126.2 pairs= 2080 (0.2s)
+  [2005] teams= 65 games=  238 feat=67 h=+0.926 iter=378 fun=110.2 pairs= 2080 (0.2s)
+  [2006] teams= 65 games=  257 feat=67 h=+0.739 iter=347 fun=133.2 pairs= 2080 (0.2s)
+  [2007] teams= 65 games=  270 feat=67 h=+1.008 iter=341 fun=131.2 pairs= 2080 (0.2s)
+  [2008] teams= 65 games=  288 feat=67 h=+0.876 iter=308 fun=141.0 pairs= 2080 (0.2s)
+  [2009] teams= 65 games=  292 feat=67 h=+0.898 iter=343 fun=146.7 pairs= 2080 (0.2s)
+  [2010] teams= 65 games=  272 feat=67 h=+1.061 iter=358 fun=125.3 pairs= 2080 (0.3s)
+  [2011] teams= 68 games=  337 feat=67 h=+0.856 iter=364 fun=167.5 pairs= 2278 (0.2s)
+  [2012] teams= 68 games=  317 feat=67 h=+0.828 iter=352 fun=147.9 pairs= 2278 (0.2s)
+  [2013] teams= 68 games=  304 feat=67 h=+1.230 iter=304 fun=146.7 pairs= 2278 (0.2s)
+  [2014] teams= 68 games=  314 feat=67 h=+0.774 iter=368 fun=160.0 pairs= 2278 (0.2s)
+  [2015] teams= 68 games=  309 feat=67 h=+0.693 iter=339 fun=136.2 pairs= 2278 (0.2s)
+  [2016] teams= 68 games=  314 feat=67 h=+1.001 iter=361 fun=150.6 pairs= 2278 (0.2s)
+  [2017] teams= 68 games=  323 feat=67 h=+0.693 iter=455 fun=161.8 pairs= 2278 (0.3s)
+  [2018] teams= 68 games=  317 feat=67 h=+0.930 iter=398 fun=160.6 pairs= 2278 (0.2s)
+  [2019] teams= 68 games=  299 feat=67 h=+0.662 iter=500 fun=147.8 pairs= 2278 (0.3s)
+  [2021] teams= 68 games=  274 feat=67 h=+0.659 iter=476 fun=139.0 pairs= 2211 (0.3s)
+  [2022] teams= 68 games=  291 feat=67 h=+0.858 iter=500 fun=155.4 pairs= 2278 (0.3s)
+  [2023] teams= 68 games=  324 feat=67 h=+1.244 iter=434 fun=156.8 pairs= 2278 (0.3s)
+  [2024] teams= 68 games=  304 feat=67 h=+0.874 iter=410 fun=160.1 pairs= 2278 (0.3s)
+  [2025] teams= 68 games=  362 feat=67 h=+0.588 iter=480 fun=189.5 pairs= 2278 (0.3s)
+  [2026] no tournament field, skipping pairs
+  -- wrote 48,465 pairs in 5.8s
+======================================================================
+  SIGMA = 2.0000  ->  output\pairwise_hbt_sigma_2.00.csv
+======================================================================
+  [2003] teams= 65 games=  247 feat=67 h=+1.537 iter=264 fun=104.8 pairs= 2080 (0.2s)
+  [2004] teams= 65 games=  259 feat=67 h=+0.652 iter=255 fun=123.4 pairs= 2080 (0.2s)
+  [2005] teams= 65 games=  238 feat=67 h=+0.958 iter=253 fun=106.9 pairs= 2080 (0.2s)
+  [2006] teams= 65 games=  257 feat=67 h=+0.753 iter=207 fun=130.9 pairs= 2080 (0.2s)
+  [2007] teams= 65 games=  270 feat=67 h=+1.041 iter=226 fun=128.4 pairs= 2080 (0.1s)
+  [2008] teams= 65 games=  288 feat=67 h=+0.880 iter=173 fun=139.1 pairs= 2080 (0.1s)
+  [2009] teams= 65 games=  292 feat=67 h=+0.917 iter=212 fun=144.3 pairs= 2080 (0.2s)
+  [2010] teams= 65 games=  272 feat=67 h=+1.080 iter=234 fun=123.4 pairs= 2080 (0.2s)
+  [2011] teams= 68 games=  337 feat=67 h=+0.862 iter=251 fun=165.2 pairs= 2278 (0.2s)
+  [2012] teams= 68 games=  317 feat=67 h=+0.821 iter=207 fun=146.1 pairs= 2278 (0.2s)
+  [2013] teams= 68 games=  304 feat=67 h=+1.252 iter=217 fun=144.7 pairs= 2278 (0.2s)
+  [2014] teams= 68 games=  314 feat=67 h=+0.781 iter=210 fun=158.4 pairs= 2278 (0.2s)
+  [2015] teams= 68 games=  309 feat=67 h=+0.720 iter=220 fun=132.7 pairs= 2278 (0.2s)
+  [2016] teams= 68 games=  314 feat=67 h=+1.017 iter=288 fun=149.0 pairs= 2278 (0.2s)
+  [2017] teams= 68 games=  323 feat=67 h=+0.703 iter=278 fun=159.1 pairs= 2278 (0.2s)
+  [2018] teams= 68 games=  317 feat=67 h=+0.950 iter=254 fun=157.7 pairs= 2278 (0.2s)
+  [2019] teams= 68 games=  299 feat=67 h=+0.671 iter=278 fun=145.0 pairs= 2278 (0.2s)
+  [2021] teams= 68 games=  274 feat=67 h=+0.647 iter=359 fun=137.0 pairs= 2211 (0.2s)
+  [2022] teams= 68 games=  291 feat=67 h=+0.865 iter=429 fun=154.0 pairs= 2278 (0.2s)
+  [2023] teams= 68 games=  324 feat=67 h=+1.245 iter=271 fun=154.8 pairs= 2278 (0.2s)
+  [2024] teams= 68 games=  304 feat=67 h=+0.875 iter=267 fun=158.3 pairs= 2278 (0.2s)
+  [2025] teams= 68 games=  362 feat=67 h=+0.591 iter=351 fun=187.0 pairs= 2278 (0.3s)
+  [2026] no tournament field, skipping pairs
+  -- wrote 48,465 pairs in 4.6s
+======================================================================
+  SIGMA = 5.0000  ->  output\pairwise_hbt_sigma_5.00.csv
+======================================================================
+  [2003] teams= 65 games=  247 feat=67 h=+1.624 iter=130 fun=101.6 pairs= 2080 (0.1s)
+  [2004] teams= 65 games=  259 feat=67 h=+0.654 iter=165 fun=120.6 pairs= 2080 (0.1s)
+  [2005] teams= 65 games=  238 feat=67 h=+0.998 iter=171 fun=103.3 pairs= 2080 (0.1s)
+  [2006] teams= 65 games=  257 feat=67 h=+0.767 iter=162 fun=128.6 pairs= 2080 (0.2s)
+  [2007] teams= 65 games=  270 feat=67 h=+1.067 iter=156 fun=125.8 pairs= 2080 (0.1s)
+  [2008] teams= 65 games=  288 feat=67 h=+0.884 iter=165 fun=136.9 pairs= 2080 (0.1s)
+  [2009] teams= 65 games=  292 feat=67 h=+0.939 iter=144 fun=141.8 pairs= 2080 (0.1s)
+  [2010] teams= 65 games=  272 feat=67 h=+1.095 iter=139 fun=121.5 pairs= 2080 (0.1s)
+  [2011] teams= 68 games=  337 feat=67 h=+0.868 iter=210 fun=162.8 pairs= 2278 (0.1s)
+  [2012] teams= 68 games=  317 feat=67 h=+0.814 iter=149 fun=144.2 pairs= 2278 (0.1s)
+  [2013] teams= 68 games=  304 feat=67 h=+1.268 iter=132 fun=143.0 pairs= 2278 (0.1s)
+  [2014] teams= 68 games=  314 feat=67 h=+0.786 iter=148 fun=156.6 pairs= 2278 (0.1s)
+  [2015] teams= 68 games=  309 feat=67 h=+0.758 iter=158 fun=128.9 pairs= 2278 (0.2s)
+  [2016] teams= 68 games=  314 feat=67 h=+1.033 iter=213 fun=147.4 pairs= 2278 (0.2s)
+  [2017] teams= 68 games=  323 feat=67 h=+0.717 iter=158 fun=156.4 pairs= 2278 (0.1s)
+  [2018] teams= 68 games=  317 feat=67 h=+0.974 iter=191 fun=154.4 pairs= 2278 (0.1s)
+  [2019] teams= 68 games=  299 feat=67 h=+0.683 iter=186 fun=142.2 pairs= 2278 (0.2s)
+  [2021] teams= 68 games=  274 feat=67 h=+0.636 iter=211 fun=134.8 pairs= 2211 (0.1s)
+  [2022] teams= 68 games=  291 feat=67 h=+0.875 iter=217 fun=152.6 pairs= 2278 (0.1s)
+  [2023] teams= 68 games=  324 feat=67 h=+1.242 iter=139 fun=152.7 pairs= 2278 (0.1s)
+  [2024] teams= 68 games=  304 feat=67 h=+0.877 iter=212 fun=156.0 pairs= 2278 (0.1s)
+  [2025] teams= 68 games=  362 feat=67 h=+0.592 iter=283 fun=184.3 pairs= 2278 (0.2s)
+  [2026] no tournament field, skipping pairs
+  -- wrote 48,465 pairs in 3.3s
+
+DONE in 248.9s
