@@ -20,7 +20,11 @@ logger = logging.getLogger(__name__)
 _PRODUCER_VERSION = "v1"
 
 
-def _solve_one_season(games_df: pd.DataFrame, mov_cap: int) -> tuple[dict[int, float], float]:
+def _solve_one_season(
+    games_df: pd.DataFrame,
+    mov_cap: int,
+    half_life_days: float | None = None,
+) -> tuple[dict[int, float], float]:
     """Solve Massey-style least squares for one season.
 
     Parameters
@@ -28,8 +32,14 @@ def _solve_one_season(games_df: pd.DataFrame, mov_cap: int) -> tuple[dict[int, f
     games_df : DataFrame
         Subset of MRegularSeasonCompactResults for a single season.
         Required columns: WTeamID, LTeamID, WScore, LScore, WLoc.
+        If half_life_days is set, DayNum is also required.
     mov_cap : int
         Cap absolute score-margin contributions.
+    half_life_days : float or None
+        If set, weight each game's contribution to (X^T X) and (X^T y) by
+        exp(-ln(2) * (max_daynum - daynum) / half_life_days). Mirrors the
+        recency weighting used in src/features/efficiency.py:adj_em.
+        None (default) = uniform weighting.
 
     Returns
     -------
@@ -39,6 +49,8 @@ def _solve_one_season(games_df: pd.DataFrame, mov_cap: int) -> tuple[dict[int, f
     """
     if mov_cap <= 0:
         raise ValueError(f"mov_cap must be positive, got {mov_cap}")
+    if half_life_days is not None and half_life_days <= 0:
+        raise ValueError(f"half_life_days must be positive or None, got {half_life_days}")
 
     team_ids = sorted(set(games_df["WTeamID"].tolist()) | set(games_df["LTeamID"].tolist()))
     n = len(team_ids)
@@ -59,12 +71,24 @@ def _solve_one_season(games_df: pd.DataFrame, mov_cap: int) -> tuple[dict[int, f
 
     h_col = n  # column index of home-constant in beta
 
-    for w, l, ws, ls, wloc in zip(
+    # Per-game weights for time-decay.
+    if half_life_days is not None:
+        if "DayNum" not in games_df.columns:
+            raise ValueError("half_life_days set but DayNum not in games_df columns")
+        day_arr = games_df["DayNum"].to_numpy()
+        max_day = int(day_arr.max())
+        decay_rate = np.log(2) / float(half_life_days)
+        weights = np.exp(-decay_rate * (max_day - day_arr))
+    else:
+        weights = np.ones(len(games_df), dtype=np.float64)
+
+    for w, l, ws, ls, wloc, gw in zip(
         games_df["WTeamID"].to_numpy(),
         games_df["LTeamID"].to_numpy(),
         games_df["WScore"].to_numpy(),
         games_df["LScore"].to_numpy(),
         games_df["WLoc"].to_numpy(),
+        weights,
     ):
         wi = idx[int(w)]
         li = idx[int(l)]
@@ -74,21 +98,22 @@ def _solve_one_season(games_df: pd.DataFrame, mov_cap: int) -> tuple[dict[int, f
         y = min(s, mov_cap)
 
         # X row for this game has +1 in col wi, -1 in col li, +z in col h_col.
+        # Weighted normal equations: each game's outer product is scaled by gw.
         # X^T X contributions:
-        M[wi, wi] += 1.0
-        M[li, li] += 1.0
-        M[wi, li] -= 1.0
-        M[li, wi] -= 1.0
-        M[wi, h_col] += z
-        M[h_col, wi] += z
-        M[li, h_col] -= z
-        M[h_col, li] -= z
-        M[h_col, h_col] += z * z  # 1 if non-neutral, 0 if neutral
+        M[wi, wi] += gw
+        M[li, li] += gw
+        M[wi, li] -= gw
+        M[li, wi] -= gw
+        M[wi, h_col] += gw * z
+        M[h_col, wi] += gw * z
+        M[li, h_col] -= gw * z
+        M[h_col, li] -= gw * z
+        M[h_col, h_col] += gw * z * z  # gw if non-neutral, 0 if neutral
 
         # X^T y contributions:
-        rhs[wi] += y
-        rhs[li] -= y
-        rhs[h_col] += z * y
+        rhs[wi] += gw * y
+        rhs[li] -= gw * y
+        rhs[h_col] += gw * z * y
 
     # Edge case: zero non-neutral games => h-column/row of (X^T X) is all
     # zeros, making M rank-deficient. Spec
@@ -121,6 +146,7 @@ def compute_massey_mov_ratings(
     reg_season: pd.DataFrame,
     seasons: list[int] | None = None,
     mov_cap: int = 21,
+    half_life_days: float | None = None,
 ) -> pd.DataFrame:
     """Compute Massey-matrix MOV ratings per (Season, TeamID).
 
@@ -129,10 +155,14 @@ def compute_massey_mov_ratings(
     reg_season : DataFrame
         Kaggle MRegularSeasonCompactResults (or DetailedResults superset).
         Required columns: Season, WTeamID, LTeamID, WScore, LScore, WLoc.
+        If half_life_days is set, DayNum is also required.
     seasons : list of int or None
         Restrict to these seasons. None = all seasons present in reg_season.
     mov_cap : int
         Cap absolute score-margin (predictive Massey, default 21).
+    half_life_days : float or None
+        Recency weighting: each game contributes exp(-ln(2) * (max_daynum -
+        daynum) / half_life_days). None (default) = uniform weighting.
 
     Returns
     -------
@@ -151,7 +181,7 @@ def compute_massey_mov_ratings(
         games = reg_season[reg_season["Season"] == season]
         if len(games) == 0:
             continue
-        ratings, _h = _solve_one_season(games, mov_cap)
+        ratings, _h = _solve_one_season(games, mov_cap, half_life_days=half_life_days)
         for tid, r in ratings.items():
             rows.append({"Season": int(season), "TeamID": int(tid), "massey_mov_rating": r})
 
