@@ -968,18 +968,25 @@ def main():
         if col in fm_filled.columns:
             fm_filled[col] = fm_filled[col].fillna(fm_filled[col].median())
 
-    cv_default = leave_one_season_out_cv_weighted(
-        fm_filled, tourney_filtered, data["reg_season"], feature_cols,
-        top_n_team_ids_by_season=top_80_by_season,
-        random_seed=42,
-        supplemental_weight=0.25,
-    )
+    import os as _os_step6
+    if _os_step6.environ.get("MM_SKIP_DEFAULT_LOSO"):
+        # Default-params LOSO is a sanity-check baseline only; its pairwise
+        # rows are dedup'd away (keep="last") by every downstream consumer
+        # of pairwise_v4.csv. Skipping it ~halves clean-regen runtime.
+        print("  MM_SKIP_DEFAULT_LOSO set -- skipping default-params LOSO.")
+    else:
+        cv_default = leave_one_season_out_cv_weighted(
+            fm_filled, tourney_filtered, data["reg_season"], feature_cols,
+            top_n_team_ids_by_season=top_80_by_season,
+            random_seed=42,
+            supplemental_weight=0.25,
+        )
 
-    print(f"\n  Default params CV results (weighted):")
-    print(f"  Mean Log Loss  : {cv_default['mean_log_loss']:.4f}")
-    print(f"  Mean Brier     : {cv_default['mean_brier_score']:.4f}")
-    print(f"  Mean Accuracy  : {cv_default['mean_accuracy']:.3f}")
-    print(f"  Mean AUC       : {cv_default['mean_auc']:.4f}")
+        print(f"\n  Default params CV results (weighted):")
+        print(f"  Mean Log Loss  : {cv_default['mean_log_loss']:.4f}")
+        print(f"  Mean Brier     : {cv_default['mean_brier_score']:.4f}")
+        print(f"  Mean Accuracy  : {cv_default['mean_accuracy']:.3f}")
+        print(f"  Mean AUC       : {cv_default['mean_auc']:.4f}")
 
     # -- Step 7: Optuna hyperparameter tuning ------------------------------
     print("\n" + "=" * 70)
@@ -1304,6 +1311,14 @@ def main():
     print(f"    Accuracy  : {cv_tuned['mean_accuracy']:.3f}  (v2 baseline: {baseline_v2_acc:.3f})")
     print(f"    Brier     : {cv_tuned['mean_brier_score']:.4f}")
     print(f"    AUC       : {cv_tuned['mean_auc']:.4f}")
+    # Reconstruct summary locals from inputs (these were locals of the old
+    # monolithic main() before prepare_loso_inputs() was extracted; the
+    # extraction kept the artifacts addressable via the returned dict).
+    _v3_prefixes = ("late_", "efficiency_trend", "margin_trend", "conf_tourney_",
+                    "vegas_late_spread_delta", "coach_")
+    new_feature_names = [c for c in feature_cols if c.startswith(_v3_prefixes)]
+    n_tourney = int((weights_all >= 1.0).sum())
+    n_supplemental = int((weights_all < 1.0).sum())
     print(f"\n  Features used: {len(feature_cols)}")
     print(f"  New v3 features: {new_feature_names}")
     print(f"  Vegas features: {[c for c in feature_cols if c.startswith('vegas_')]}")

@@ -17,8 +17,14 @@ def test_score_v4_returns_known_shape():
     assert isinstance(result["per_season_pts"], dict)
     # 22 seasons (2003-2024 typical), give or take 2.
     assert 18 <= len(result["per_season_pts"]) <= 25
-    # v4's known mean is ~121 -- total across 22 seasons should be in range.
-    assert 2000 <= result["total_pts"] <= 3500
+    # v4 chalk bracket: pick v4's favorite at every slot, score with config
+    # weights [1,2,4,8,16,32]. Clean-pipeline (post Vegas-leak fix, PRs 19/21)
+    # mean is ~89 pts/season (1955 over 22 seasons). Pre-fix leaky mean was
+    # ~121 pts/season (~2713 over 22) -- the upper end of this range
+    # corresponds to the leaky baseline and is intentionally retained as a
+    # ceiling to catch any future regression that re-inflates v4 by leaking
+    # tournament outcomes back into features.
+    assert 1800 <= result["total_pts"] <= 3500
 
 
 def test_missing_pairwise_path_raises():

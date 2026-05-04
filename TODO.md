@@ -8,14 +8,19 @@
 the full Vegas dataset INCLUDING NCAA tournament games. In LOSO CV,
 this leaks the holdout season's tournament outcomes into the test
 feature row for season S. v4's reported LOSO accuracy of ~80.4% per-
-season and the PR 18 finding "v4 beats Vegas everywhere" cannot be
-trusted at face value. Falsified by the user's actual Kaggle finish
-of 2159 / 3462 -- a model that genuinely beats Vegas in every
-bucket does not finish in the bottom half of a real prediction
-contest. Discovery thread: 2026-05-04 chat investigation following
-the PR 18 merge. Quantified leak: 2024 UConn vegas_avg_margin
-+1.98 above regular-season-only; 2024 Purdue +1.98; 2018 Virginia
--0.83. Leak correlates with tournament success.
+season (pre-fix) and the PR 18 finding "v4 beats Vegas everywhere"
+cannot be trusted at face value. Falsified by the user's actual
+Kaggle finish of 2159 / 3462 -- a model that genuinely beats Vegas
+in every bucket does not finish in the bottom half of a real
+prediction contest. Discovery thread: 2026-05-04 chat investigation
+following the PR 18 merge. Quantified leak: 2024 UConn
+vegas_avg_margin +1.98 above regular-season-only; 2024 Purdue
++1.98; 2018 Virginia -0.83. Leak correlates with tournament
+success. **Clean-baseline measurement (PR <pending>, recovery step
+3): 22-season mean LL 0.4370 (pre-fix) -> 0.5588 (clean), delta
++0.122. Mean accuracy 80.4% (pre-fix) -> 70.7% (clean), delta
+-9.7pp. Verdict pass-and-flag: leak is much bigger than the spec's
+0.45-0.47 LL anchor band.**
 
 ### Recovery plan (5 PRs, in order)
 
@@ -34,16 +39,32 @@ the PR 18 merge. Quantified leak: 2024 UConn vegas_avg_margin
    the allowlist cannot silently regress this property. Findings:
    `docs/notes/2026-05-04-massey-kenpom-leak-audit.md`.
 
-3. **Regenerate `output/pairwise_v4.csv` via clean LOSO.** Run
-   `enhanced_model_v3.py` end-to-end with the fixed feature pipeline.
-   Capture per-season LL + accuracy. Compare to current numbers in
-   `output/cv_per_season_v3.csv`. Document the shift.
+3. **[DONE -- PR <pending>]** Regenerate `output/pairwise_v4.csv` via
+   clean LOSO. Mean LL 0.4370 -> 0.5588 (+0.122); mean acc 80.4% ->
+   70.7% (-9.7pp). 21/22 seasons worse on LL; 20/22 worse on acc.
+   Largest per-season shifts: 2017 (+0.190 LL, -14.2pp), 2010 (+0.179),
+   2024 (+0.177). Verdict pass-and-flag (clean LL > 0.50 spec
+   threshold). New canonical `pairwise_v4.csv` is the single
+   tuned-pass output (48,465 rows; downstream consumers all dedup
+   with `keep="last"` so the row count change is invisible to them).
+   Procedure-side: added `MM_SKIP_DEFAULT_LOSO` env-var gate to
+   `enhanced_model_v3.py` to halve regen runtime; reused leaky-run
+   tuned XGB hyperparameters via `MM_TUNED_PARAMS_V3` (documented
+   confound; expected effect <0.02 LL); fixed pre-existing
+   `NameError` in v3 final-summary block (`new_feature_names` /
+   `n_tourney` / `n_supplemental` orphaned by the
+   `prepare_loso_inputs()` extraction). Findings:
+   `docs/notes/2026-05-04-v4-clean-loso-regen.md`.
 
 4. **Re-run the v4-vs-Vegas audit.** `python src/audit_v4_gap_vegas.py`
    against the regenerated `pairwise_v4.csv`. Update findings note
    `docs/notes/2026-05-04-v4-gap-audit-vegas.md` with the corrected
-   numbers and retract the "no weak spots" verdict if appropriate.
-   The 538 audit (currently active queue #1) stays queued.
+   numbers and retract the "no weak spots" verdict (which is
+   already known to be wrong: clean v4 mean LL 0.5588 is 0.014
+   *worse* than the audit's Vegas LL of 0.5447 over the same
+   1326-game tournament population, before per-bucket breakdown).
+   The 538 audit (currently active queue #1) stays queued. **Now
+   the immediate next PR.**
 
 5. **Re-run the swap-decided / swap-candidate evaluations against
    the clean baseline.** Priority order:
@@ -55,7 +76,12 @@ the PR 18 merge. Quantified leak: 2024 UConn vegas_avg_margin
      -0.0015 LL; v9 weight-sweep family at +18 to +20 pts).
    Big-magnitude rejections (-93 quality wins, -105 LR ensemble,
    +0.0057 Massey-decay clause-2 fail, etc.) do not need re-eval --
-   a baseline shift of 0.02-0.05 LL won't flip them.
+   a baseline shift of 0.02-0.05 LL won't flip them. With the leak
+   shift now measured at +0.122 LL (vs the 0.02-0.05 estimate when
+   this section was first written), the redo-or-skip cutoff for
+   "marginal" experiments should be re-checked: at +0.122, even
+   the v9 weight-sweep +18 to +20 brkt pts wins fall well within
+   the leak's noise floor.
 
 ### What's NOT contaminated
 
