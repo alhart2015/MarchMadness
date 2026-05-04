@@ -65,6 +65,58 @@ the underlying redundancy with `adj_em` (which has no such cap and
 shows a slightly *higher* correlation in absolute magnitude in 22 of
 24 seasons -- the cap is not what's making them similar).
 
+## Followup attempted: time-decay weighting (also REJECTED)
+
+The first failure suggested time-decay might rescue the experiment by
+giving Massey "different signal" than `adj_em`. Sweep over half-lives
+{None, 7, 14, 30, 60, 120}d revealed the redundancy gradient is
+non-monotonic:
+
+| half_life | mean \|corr\| vs adj_em | clause 1 |
+|-----------|-------------------------|----------|
+| uniform   | 0.957                   | FAIL     |
+| 7d        | 0.725                   | PASS     |
+| 14d       | 0.931                   | PASS     |
+| **30d**   | **0.979 (worst)**       | FAIL     |
+| 60d       | 0.976                   | FAIL     |
+| 120d      | 0.968                   | FAIL     |
+
+Why 30d is worst: `adj_em` itself uses 30-day half-life decay
+(`src/features/efficiency.py:19`), so Massey at 30d sees identical
+effective game weighting + identical input data, producing maximum
+correlation. Shorter half-lives diverge from this resonance.
+
+So weighting CAN reduce clause-1 correlation below 0.95 -- the spec's
+prediction "weighting won't help" was wrong on that narrow point.
+
+But hl=14d (the strongest passing candidate) **failed clause 2**:
+
+| season | ll_with | ll_without | delta |
+|--------|---------|------------|-------|
+| 2019   | 0.3866  | 0.3746     | +0.012 (hurt) |
+| 2022   | 0.5111  | 0.5042     | +0.007 (hurt) |
+| 2024   | 0.4357  | 0.4376     | -0.002 (marginal help) |
+| **mean** | **0.4445** | **0.4388** | **+0.0057 vs threshold +0.001 -- FAIL** |
+
+The "different signal" hl=14d captures (last ~2 weeks margin) is
+already extracted by v4's late-season feature stack: `late_season`
+(last 30 days vs top-100 opponents), `trajectory` (efficiency/margin
+trend slopes), `vegas_trend` (late-season Vegas spread delta). Net
+contribution to v4 is noise plus tree-split overhead, not new
+information.
+
+Code retained as experiment record:
+- `half_life_days` kwarg on `compute_massey_mov_ratings`
+- `src/sweep_massey_decay.py` -- correlation sweep across half-lives
+- `src/clause2_decay_massey.py` -- clause-2 runner parameterized on
+  half_life_days
+- `output/sweep_massey_decay.json`, `output/clause2_decay_massey_hl14.json`
+
+Did not try hl=7d on clause 2: lower-correlation than hl=14d but
+3-4 games per team in the window would be noise-dominated. Did not
+try hl=21d: between 14 and 30 means it would inherit hl=14's clause-2
+failure mode without gaining margin on clause 1.
+
 ## Lessons for Colley (TODO #1, separate work item)
 
 The Massey failure does NOT directly indict Colley. Colley solves

@@ -85,17 +85,26 @@
   passed both thresholds. The redundancy is specifically with our
   own iterative `adj_em` efficiency loop, which is also opponent-
   adjusted on margin -- different mechanism (iterative fixed-point
-  vs closed-form least squares), same signal. Clause 2 short-
-  circuited; saved ~10-15 min clause-2 + ~30-90 min full-LOSO
-  compute by gating cheaply. Code retained on branch
-  feat/todo-massey-colley as experiment record:
-  src/features/massey_matrix.py (solver + cached loader, 9 unit
-  tests including all-neutral edge-case fix), src/diagnose_massey_mov.py
-  (two-clause gate runner), allowed_holdouts kwarg added to
-  leave_one_season_out_cv_weighted in src/enhanced_model_v3.py
-  (reusable for any future cheap-subset diagnostic). Wire-in to
-  compute_all_features reverted (Massey does NOT ship). Findings:
-  docs/notes/2026-05-03-massey-mov.md.
+  vs closed-form least squares), same signal.
+  **Followup: time-decay weighting (REJECTED).** Sweep over
+  half-lives {None, 7, 14, 30, 60, 120}d showed the redundancy
+  gradient is non-monotonic: hl=30d resonates with adj_em (also
+  30d) at mean |corr|=0.979 (worst), shorter half-lives diverge.
+  hl=14d cleared clause 1 (mean 0.931 < 0.95) but FAILED clause 2:
+  delta=+0.0057 LL vs threshold +0.001 on subset {2019, 2022, 2024}.
+  The "different signal" hl=14d captures (last ~2 weeks margin) is
+  already extracted by v4's `late_season`/`trajectory`/`vegas_trend`
+  feature stack -- net contribution is noise + tree-split overhead.
+  Code retained on branch feat/todo-massey-colley:
+  src/features/massey_matrix.py (solver + cached loader + half_life_days
+  kwarg, 9 unit tests including all-neutral edge-case fix),
+  src/diagnose_massey_mov.py (two-clause gate runner),
+  src/sweep_massey_decay.py (half-life sweep),
+  src/clause2_decay_massey.py (parameterized clause-2 runner),
+  allowed_holdouts kwarg added to leave_one_season_out_cv_weighted
+  in src/enhanced_model_v3.py (reusable for any future cheap-subset
+  diagnostic). Wire-in to compute_all_features reverted (Massey
+  does NOT ship). Findings: docs/notes/2026-05-03-massey-mov.md.
 
 ## Active queue
 
