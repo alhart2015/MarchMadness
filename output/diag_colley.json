@@ -1,0 +1,206 @@
+{
+  "clause1": {
+    "per_season": [
+      {
+        "season": 2003,
+        "n_teams": 65,
+        "corr_vs_adj_em": 0.8997323206243957,
+        "corr_vs_massey_composite": -0.9470768126725215,
+        "corr_vs_season_win_pct": 0.6458289012124544
+      },
+      {
+        "season": 2004,
+        "n_teams": 65,
+        "corr_vs_adj_em": 0.9484013456908722,
+        "corr_vs_massey_composite": -0.9617061992385629,
+        "corr_vs_season_win_pct": 0.7179517551015261
+      },
+      {
+        "season": 2005,
+        "n_teams": 65,
+        "corr_vs_adj_em": 0.9058920311663063,
+        "corr_vs_massey_composite": -0.9426213542215286,
+        "corr_vs_season_win_pct": 0.7439649480045795
+      },
+      {
+        "season": 2006,
+        "n_teams": 65,
+        "corr_vs_adj_em": 0.8993325455633222,
+        "corr_vs_massey_composite": -0.9560853157067656,
+        "corr_vs_season_win_pct": 0.6828047698876207
+      },
+      {
+        "season": 2007,
+        "n_teams": 65,
+        "corr_vs_adj_em": 0.9198056082425072,
+        "corr_vs_massey_composite": -0.9569758702016872,
+        "corr_vs_season_win_pct": 0.6204105130304939
+      },
+      {
+        "season": 2008,
+        "n_teams": 65,
+        "corr_vs_adj_em": 0.9281265576778427,
+        "corr_vs_massey_composite": -0.9269114367722191,
+        "corr_vs_season_win_pct": 0.8089923949128034
+      },
+      {
+        "season": 2009,
+        "n_teams": 65,
+        "corr_vs_adj_em": 0.9143214220656339,
+        "corr_vs_massey_composite": -0.9604494832709671,
+        "corr_vs_season_win_pct": 0.697093381465526
+      },
+      {
+        "season": 2010,
+        "n_teams": 65,
+        "corr_vs_adj_em": 0.905162249709298,
+        "corr_vs_massey_composite": -0.9490147284116017,
+        "corr_vs_season_win_pct": 0.7096113087903986
+      },
+      {
+        "season": 2011,
+        "n_teams": 68,
+        "corr_vs_adj_em": 0.9185417269098218,
+        "corr_vs_massey_composite": -0.9410425879206425,
+        "corr_vs_season_win_pct": 0.7572434333393365
+      },
+      {
+        "season": 2012,
+        "n_teams": 68,
+        "corr_vs_adj_em": 0.8658381384611281,
+        "corr_vs_massey_composite": -0.922689777167892,
+        "corr_vs_season_win_pct": 0.6293420636480275
+      },
+      {
+        "season": 2013,
+        "n_teams": 68,
+        "corr_vs_adj_em": 0.9164547066469758,
+        "corr_vs_massey_composite": -0.9679547786524796,
+        "corr_vs_season_win_pct": 0.7642246638609528
+      },
+      {
+        "season": 2014,
+        "n_teams": 68,
+        "corr_vs_adj_em": 0.8950340678987669,
+        "corr_vs_massey_composite": -0.9635528295690637,
+        "corr_vs_season_win_pct": 0.7344905823822058
+      },
+      {
+        "season": 2015,
+        "n_teams": 68,
+        "corr_vs_adj_em": 0.931025030737605,
+        "corr_vs_massey_composite": -0.931274685951264,
+        "corr_vs_season_win_pct": 0.7223862520246073
+      },
+      {
+        "season": 2016,
+        "n_teams": 68,
+        "corr_vs_adj_em": 0.8993219007001185,
+        "corr_vs_massey_composite": -0.9532043776004897,
+        "corr_vs_season_win_pct": 0.6817600533074588
+      },
+      {
+        "season": 2017,
+        "n_teams": 68,
+        "corr_vs_adj_em": 0.905750609577895,
+        "corr_vs_massey_composite": -0.9627154700988338,
+        "corr_vs_season_win_pct": 0.6498859255884099
+      },
+      {
+        "season": 2018,
+        "n_teams": 68,
+        "corr_vs_adj_em": 0.9297543607795965,
+        "corr_vs_massey_composite": -0.9550860735119822,
+        "corr_vs_season_win_pct": 0.6558583302932357
+      },
+      {
+        "season": 2019,
+        "n_teams": 68,
+        "corr_vs_adj_em": 0.9134487482459367,
+        "corr_vs_massey_composite": -0.9493096514886977,
+        "corr_vs_season_win_pct": 0.6564104274556439
+      },
+      {
+        "season": 2021,
+        "n_teams": 68,
+        "corr_vs_adj_em": 0.8241304693628233,
+        "corr_vs_massey_composite": -0.9132976787192504,
+        "corr_vs_season_win_pct": 0.5577670471961124
+      },
+      {
+        "season": 2022,
+        "n_teams": 68,
+        "corr_vs_adj_em": 0.8455208155644567,
+        "corr_vs_massey_composite": -0.9523261926550326,
+        "corr_vs_season_win_pct": 0.5975811563027185
+      },
+      {
+        "season": 2023,
+        "n_teams": 68,
+        "corr_vs_adj_em": 0.9389870649470434,
+        "corr_vs_massey_composite": -0.9501969474153003,
+        "corr_vs_season_win_pct": 0.6711748196602155
+      },
+      {
+        "season": 2024,
+        "n_teams": 68,
+        "corr_vs_adj_em": 0.8978078621393693,
+        "corr_vs_massey_composite": -0.9626340461067463,
+        "corr_vs_season_win_pct": 0.7208310625508747
+      },
+      {
+        "season": 2025,
+        "n_teams": 68,
+        "corr_vs_adj_em": 0.9211712095476755,
+        "corr_vs_massey_composite": -0.9430245700650174,
+        "corr_vs_season_win_pct": 0.6502056592552877
+      },
+      {
+        "season": 2026,
+        "n_teams": 68,
+        "corr_vs_adj_em": 0.9280020625854944,
+        "corr_vs_massey_composite": -0.9358093628736832,
+        "corr_vs_season_win_pct": 0.7155508715758107
+      }
+    ],
+    "mean_abs_corr_vs_adj_em": 0.906589689341082,
+    "max_abs_corr_vs_adj_em": 0.9484013456908722,
+    "mean_abs_corr_vs_massey_composite": 0.9480417491431403,
+    "max_abs_corr_vs_massey_composite": 0.9679547786524796,
+    "mean_abs_corr_vs_season_win_pct": 0.6865813182976652,
+    "max_abs_corr_vs_season_win_pct": 0.8089923949128034,
+    "pass": true
+  },
+  "clause2": {
+    "subset_seasons": [
+      2019,
+      2022,
+      2024
+    ],
+    "per_season": [
+      {
+        "season": 2019,
+        "ll_with": 0.3819139592334201,
+        "ll_without": 0.37457811322603884,
+        "ll_delta": 0.0073358460073812415
+      },
+      {
+        "season": 2022,
+        "ll_with": 0.5176866281355827,
+        "ll_without": 0.5041610972918479,
+        "ll_delta": 0.013525530843734868
+      },
+      {
+        "season": 2024,
+        "ll_with": 0.43252717181078554,
+        "ll_without": 0.4376147064598057,
+        "ll_delta": -0.005087534649020176
+      }
+    ],
+    "mean_ll_with_colley": 0.44404258639326283,
+    "mean_ll_without_colley": 0.4387846389925641,
+    "mean_ll_delta": 0.005257947400698737,
+    "pass": false
+  },
+  "gate_pass": false
+}

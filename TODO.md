@@ -105,30 +105,52 @@
   in src/enhanced_model_v3.py (reusable for any future cheap-subset
   diagnostic). Wire-in to compute_all_features reverted (Massey
   does NOT ship). Findings: docs/notes/2026-05-03-massey-mov.md.
+- **Colley-matrix rating as v4 feature (2026-05-03).** Standard
+  Colley `(2I + diag(T) - A) x = b` with +2 Bayesian prior. 3-baseline
+  clause 1 (added `season_win_pct` per the Massey-decay lesson) PASSED
+  on all three: mean |corr| vs adj_em = 0.907, vs massey_composite =
+  0.948 (tight), vs season_win_pct = 0.687 (wide margin). Colley IS
+  structurally distinct from existing features. But clause 2 FAILED:
+  +0.0053 LL on subset {2019, 2022, 2024} vs threshold +0.001
+  (2019 +0.007, 2022 +0.014, 2024 -0.005). Colley's clause-2 delta is
+  near-identical to Massey-decay-14d's +0.0057. **Generalizable
+  lesson:** at v4's data scale (~2898 tourney games for training),
+  individual structural distinctness is necessary but not sufficient.
+  v4's joint 67-feature stack already extracts opponent-adjusted
+  team-strength via different decompositions; adding any single new
+  rating feature provides no marginal value. Code retained on
+  feat/todo-massey-colley: src/features/colley_matrix.py (solver +
+  cache, 6 unit tests), src/diagnose_colley.py (3-baseline gate
+  runner -- the 3-baseline pattern is the reusable artifact),
+  data/cache/colley_ratings.parquet (gitignored). Wire-in reverted
+  in 3b4c374. Findings: docs/notes/2026-05-03-colley.md.
 
 ## Active queue
 
-1. **Colley matrix ranking system.** Solves `(C - A) x = b` on
-   win/loss only (no margin), ratings sum to a constant. Distinct
-   from Massey-MOV (rejected 2026-05-03 -- redundant with `adj_em`)
-   because Colley discards margin entirely, so should correlate
-   materially less with `adj_em`. Concrete prediction: `corr(colley,
-   adj_em)` in [0.80, 0.92], clearing the 0.95 mean threshold.
-   Reuses solver-module / diagnostic-runner / allowed_holdouts
-   patterns established in the Massey work. Same two-clause gate,
-   same thresholds. If clause 1 fails on Colley too, falls back to
-   item #2 (hierarchical BT with feature priors).
-2. **Hierarchical Bradley-Terry with feature priors** (`s_team ~
+1. **Hierarchical Bradley-Terry with feature priors** (`s_team ~
    Normal(beta . v4_features_team, sigma)`). Couples BT back to
    v4 features to gain standalone strength. Risk: residual
    correlation may regress from 0.58 back toward 0.77 as the
-   models re-converge. With BT-as-feature and feature-view
-   ensemble now both closed, this is the next angle on getting a
-   stronger BT signal that survives ensemble criteria.
+   models re-converge. **Promoted to #1 after Massey + Colley
+   confirmed the "parallel feature" approach is closed at v4 data
+   scale.** This couples ratings TO v4 features through priors
+   rather than competing as a parallel feature -- the structural
+   distinction the prior failures could not exploit.
+2. **External rankings as features (538 / KenPom-public / BPI as
+   net-new sources).** Promoted from item #5 after Massey + Colley.
+   The Colley result clarifies that any new feature must carry
+   information NOT extractable from v4's existing 67-feature
+   joint -- which rules out re-derivations from Kaggle game data
+   (Massey/Colley) but leaves room for genuinely external signals
+   (538's tournament forecast, Vegas prop-bet derived predictions,
+   roster-injury data). Note: we already have BPI, Sagarin, KenPom,
+   Bart Torvik, RPI via Massey ordinals; the "external" here means
+   sources outside the Kaggle archive.
 3. **Small neural net (MLP) as a stage-1.** Adds PyTorch tooling
    cost; diversity vs XGBoost on the 67-feature tabular space is
    the open question. Same correlated-error caveat as LR if it
-   reuses the same feature matrix.
+   reuses the same feature matrix. Lower priority after Massey +
+   Colley: same data-scale ceiling likely applies.
 4. **Full Bayesian Bradley-Terry with strength + variance per team**
    (PyMC / NumPyro / Stan). The TODO's "Architecture Rethink (Tier
    C)" entry. Lets "consistent vs volatile" teams differentiate.
