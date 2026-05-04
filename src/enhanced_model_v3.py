@@ -20,6 +20,7 @@ import sys
 import time
 import warnings
 from collections import defaultdict
+from datetime import datetime
 from pathlib import Path
 from typing import Dict
 
@@ -188,6 +189,70 @@ def _vegas_file_to_season(filename: str) -> int:
         return 0
     yy = int(match.group(1))
     return 2000 + yy + 1
+
+
+def filter_vegas_to_pre_tournament(
+    vegas_df: pd.DataFrame,
+    seasons_csv_path: Path | None = None,
+) -> pd.DataFrame:
+    """Drop rows whose daynum (date - DayZero[season]) is >= 134.
+
+    134 is the First Four day in Kaggle's DayNum convention. Anything
+    from the First Four onward is NCAA tournament and must NOT feed
+    into v4's per-team-per-season Vegas aggregates -- otherwise it
+    leaks tournament outcomes into LOSO test features.
+
+    Returns a copy with the same schema as `vegas_df`. Rows whose
+    season is missing from MSeasons.csv or whose date is unparseable
+    are KEPT (defensive: a data hiccup must not silently delete
+    legitimate regular-season rows). Both cases emit a warning.
+
+    Spec: docs/superpowers/specs/2026-05-04-v4-vegas-leak-fix-design.md
+    """
+    if seasons_csv_path is None:
+        seasons_csv_path = MANIA_DIR / "MSeasons.csv"
+
+    if vegas_df.empty:
+        return vegas_df.copy()
+
+    seasons = pd.read_csv(seasons_csv_path)
+    day_zero: dict[int, datetime] = {}
+    for _, r in seasons.iterrows():
+        try:
+            day_zero[int(r["Season"])] = datetime.strptime(
+                str(r["DayZero"]).strip(), "%m/%d/%Y"
+            )
+        except (ValueError, TypeError):
+            continue
+
+    out_mask = []
+    n_unknown_season = 0
+    n_unparseable_date = 0
+    for season, date_str in zip(vegas_df["season"], vegas_df["date"]):
+        dz = day_zero.get(int(season))
+        if dz is None:
+            n_unknown_season += 1
+            out_mask.append(True)
+            continue
+        try:
+            d = datetime.strptime(str(date_str).strip(), "%m/%d/%Y")
+        except (ValueError, TypeError):
+            n_unparseable_date += 1
+            out_mask.append(True)
+            continue
+        daynum = (d - dz).days
+        out_mask.append(daynum < 134)
+
+    if n_unknown_season:
+        unknown_seasons = sorted({int(s) for s in vegas_df["season"]
+                                   if int(s) not in day_zero})
+        print(f"  warning: {n_unknown_season} Vegas rows have unknown "
+              f"DayZero (seasons {unknown_seasons}); keeping them")
+    if n_unparseable_date:
+        print(f"  warning: {n_unparseable_date} Vegas rows have "
+              f"unparseable dates; keeping them")
+
+    return vegas_df.loc[pd.Series(out_mask, index=vegas_df.index)].copy()
 
 
 def load_vegas_lines() -> pd.DataFrame:
@@ -648,8 +713,17 @@ def prepare_loso_inputs() -> dict:
     vegas_df = load_vegas_lines()
     print(f"  Loaded {len(vegas_df):,} Vegas line records across {vegas_df['season'].nunique()} seasons")
 
+    # Drop NCAA tournament games before per-team-per-season aggregation.
+    # Otherwise season S tournament outcomes leak into season S feature
+    # rows at LOSO test time. Keep `vegas_df` (full) for the R64 line-
+    # blending consumer downstream, which intentionally uses tournament
+    # lines. Spec: docs/superpowers/specs/2026-05-04-v4-vegas-leak-fix-design.md
+    vegas_df_pre_tourney = filter_vegas_to_pre_tournament(vegas_df)
+    print(f"  Filtered to {len(vegas_df_pre_tourney):,} pre-tournament rows "
+          f"({len(vegas_df) - len(vegas_df_pre_tourney):,} tournament rows dropped)")
+
     vegas_features, name_resolution = compute_vegas_features(
-        vegas_df, data["teams"], data["spellings"]
+        vegas_df_pre_tourney, data["teams"], data["spellings"]
     )
 
     # -- Step 3a: Merge Vegas features into feature matrix -----------------
@@ -678,8 +752,9 @@ def prepare_loso_inputs() -> dict:
     print("STEP 3b -- Computing late-season, trajectory, conf tourney, and Vegas trend features")
     print("=" * 70)
 
-    # Build Vegas team records with dates for the trend computation
-    vegas_team_records = _build_vegas_team_records_with_dates(vegas_df, name_resolution)
+    # Build Vegas team records with dates for the trend computation.
+    # Use the pre-tournament-filtered df for the same reason as above.
+    vegas_team_records = _build_vegas_team_records_with_dates(vegas_df_pre_tourney, name_resolution)
 
     seasons = sorted(feature_matrix["Season"].unique())
     all_late_season = []
@@ -1298,9 +1373,13 @@ def _regenerate_kaggle_submission(data, feature_matrix, feature_cols, fm_filled,
         gender="M",
     )
 
-    # Load Vegas features and merge
+    # Load Vegas features and merge. Filter NCAA tournament games out
+    # before per-team-per-season aggregation -- otherwise season S
+    # tournament outcomes leak into season S feature rows. Spec:
+    # docs/superpowers/specs/2026-05-04-v4-vegas-leak-fix-design.md
     vegas_df = load_vegas_lines()
-    vegas_features, _ = compute_vegas_features(vegas_df, m_teams, m_spellings)
+    vegas_df_pre_tourney = filter_vegas_to_pre_tournament(vegas_df)
+    vegas_features, _ = compute_vegas_features(vegas_df_pre_tourney, m_teams, m_spellings)
     men_fm = men_fm.merge(vegas_features, on=["TeamID", "Season"], how="left")
 
     men_feature_cols = ks_get_feature_cols(men_fm)

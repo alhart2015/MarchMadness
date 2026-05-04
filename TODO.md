@@ -1,5 +1,72 @@
 # Future Work
 
+## CONTAMINATION DISCOVERED 2026-05-04 (active recovery)
+
+**TL;DR.** v4's Vegas-derived per-team-per-season features
+(`vegas_avg_*`, `vegas_ats_pct`, `vegas_power_rating`,
+`vegas_consistency`, `vegas_late_spread_delta`) were computed over
+the full Vegas dataset INCLUDING NCAA tournament games. In LOSO CV,
+this leaks the holdout season's tournament outcomes into the test
+feature row for season S. v4's reported LOSO accuracy of ~80.4% per-
+season and the PR 18 finding "v4 beats Vegas everywhere" cannot be
+trusted at face value. Falsified by the user's actual Kaggle finish
+of 2159 / 3462 -- a model that genuinely beats Vegas in every
+bucket does not finish in the bottom half of a real prediction
+contest. Discovery thread: 2026-05-04 chat investigation following
+the PR 18 merge. Quantified leak: 2024 UConn vegas_avg_margin
++1.98 above regular-season-only; 2024 Purdue +1.98; 2018 Virginia
+-0.83. Leak correlates with tournament success.
+
+### Recovery plan (5 PRs, in order)
+
+1. **Filter the leak.** PR `feat/v4-vegas-leak-fix`: add
+   `filter_vegas_to_pre_tournament()` and wire it before
+   `compute_vegas_features` and `_build_vegas_team_records_with_dates`.
+   No regen, no eval changes. Spec:
+   `docs/superpowers/specs/2026-05-04-v4-vegas-leak-fix-design.md`.
+
+2. **Audit Massey + KenPom inputs for the same class of leak.**
+   `data["massey"]` and the KenPom snapshots are loaded at
+   `load_all_data()`. If either is end-of-season-INCLUDING-tournament
+   ranking, same fix pattern applies. Cheap (~30 min) read-only audit;
+   only opens a fix PR if a leak is found.
+
+3. **Regenerate `output/pairwise_v4.csv` via clean LOSO.** Run
+   `enhanced_model_v3.py` end-to-end with the fixed feature pipeline.
+   Capture per-season LL + accuracy. Compare to current numbers in
+   `output/cv_per_season_v3.csv`. Document the shift.
+
+4. **Re-run the v4-vs-Vegas audit.** `python src/audit_v4_gap_vegas.py`
+   against the regenerated `pairwise_v4.csv`. Update findings note
+   `docs/notes/2026-05-04-v4-gap-audit-vegas.md` with the corrected
+   numbers and retract the "no weak spots" verdict if appropriate.
+   The 538 audit (currently active queue #1) stays queued.
+
+5. **Re-run the swap-decided / swap-candidate evaluations against
+   the clean baseline.** Priority order:
+   - **v9-C production swap** (currently deployed -- top priority).
+   - **v8 vs v9-C** bracket-points head-to-head.
+   - **Plain BT bracket-points** (PR 17 finding).
+   - The "marginal" rejections in `Tried and rejected` whose deltas
+     were within ~0.05 LL or ~30 brkt pts of v4 (BT-as-feature at
+     -0.0015 LL; v9 weight-sweep family at +18 to +20 pts).
+   Big-magnitude rejections (-93 quality wins, -105 LR ensemble,
+   +0.0057 Massey-decay clause-2 fail, etc.) do not need re-eval --
+   a baseline shift of 0.02-0.05 LL won't flip them.
+
+### What's NOT contaminated
+
+- Diagnostics computed within a season across teams (e.g. Massey-
+  vs-adj_em correlation = 0.957) -- the leak shifts both sides
+  similarly within a season; redundancy verdicts stand.
+- Anchor-equality checks (e.g. "weights (1.0, 0.0) reproduces
+  pairwise_v4 byte-equal") -- these test plumbing, not signal.
+- Selection of non-v4 models against absolute thresholds (e.g.
+  Plain BT standalone LL=0.565 vs v4's 0.437 -- the gap survives
+  any plausible shift in v4).
+- The PR 18 audit's *framework* (per-bucket LL/acc/ECE), only the
+  numerical verdict.
+
 ## Tried and rejected
 
 - **Quality-wins-vs-tournament-field (v5):** -93 pts vs v4 over 22 LOSO
