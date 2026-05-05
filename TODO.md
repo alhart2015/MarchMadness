@@ -123,20 +123,27 @@ success. **Clean-baseline measurement (PR <pending>, recovery step
    - The "marginal" rejections in `Tried and rejected` whose deltas
      were within the +0.122 LL leak noise floor of v4. Two named in
      the original roadmap (BT-as-feature at -0.0015 LL; v9 weight-
-     sweep family at +18 to +20 pts). **Four still standing on the v9-C
-     re-eval (recovery step 5 item 1) findings list (one was closed
-     this PR):**
-       - Plain BT standalone (PR 12): **CLOSED this PR.** Standalone
+     sweep family at +18 to +20 pts). **Three still standing on the v9-C
+     re-eval (recovery step 5 item 1) findings list (two closed across
+     PR 24 + this PR):**
+       - Plain BT standalone (PR 12): **CLOSED in PR 24.** Standalone
          LL 0.565 was ~tied with clean v4 0.5588 -- gate clauses 2/3
          flipped PASS as predicted, but clause 1 (residual correlation)
-         flipped FAIL. Robust NO-GO; see DONE entry above.
-       - Feature-view ensemble PEER_A/B (PR 14): PEER_A delta vs v4
-         was +0.1375 vs leaky; +0.013 vs clean (within 5x clause-1
-         tolerance); clause 1 likely flips PASS. **NEXT IMMEDIATE PR.**
+         flipped FAIL (r=0.577 -> 0.868). Robust NO-GO.
+       - Feature-view ensemble PEER_A/B (PR 14): **CLOSED this PR.**
+         All 3 clauses FAIL on clean baseline. PEER_A's clause 1
+         individually flipped PASS (delta_a +0.0140) as predicted, but
+         PEER_B individually flipped FAIL (delta_b +0.0277); clause 2
+         flipped FAIL with rho=0.45 -> 0.726 (matches PR 24's BT-vs-v4
+         residual-correlation jump direction); clause 3 stayed FAIL
+         (headroom -0.0084). Robust NO-GO.
        - HBT (PR 16): standalone LL 0.619-0.757; gap to clean v4
-         shrinks but HBT still weaker. Note: the plain-BT re-eval's
-         residual-correlation finding (jump from 0.577 to 0.868)
-         predicts HBT's clause 1 may also flip FAIL on clean v4.
+         shrinks but HBT still weaker. **NEXT IMMEDIATE PR** (~5 min
+         compute). Note: PR 24 + this PR both showed residual-
+         correlation jumps to r ~0.7-0.87 on the clean baseline, which
+         strongly predicts HBT's clause 2 also flips FAIL. HBT re-eval
+         is mostly closing the marginal-rejections list cleanly rather
+         than expecting a flip.
        - Colley (PR 15): clause-2 delta +0.0053 LL.
        - Massey-decay hl=14d (PR 15): clause-2 delta +0.0057 LL.
    - **NEW:** Regenerate v4's 2026 stage-1 predictions. The current
@@ -497,6 +504,39 @@ success. **Clean-baseline measurement (PR <pending>, recovery step
   `docs/superpowers/specs/2026-05-01-v9c-production-swap-design.md`.
 
 
+
+## Engineering follow-ups (deferred)
+
+- **Test-suite hygiene: 10 tests fail on a fresh clone / fresh worktree
+  until `tar -xzf data/training_data.tar.gz -C data/raw/` is run.** Has
+  bitten us on every data wipe (2026-05-02, 2026-05-04, again at the
+  PR 25 worktree setup on 2026-05-05). The unzipped Kaggle CSVs are
+  gitignored; only the tarball is tracked. Three clusters of failures
+  with different fix paths:
+    - **Cluster 1: 6 bracket-walk tests in `tests/test_upset_model.py`**
+      (`test_build_pair_round_lookup_*`, `test_build_v9_pairwise_uses_real_round_at_apply`).
+      Use real 2024 `MNCAATourneySlots.csv` / `MNCAATourneySeeds.csv`
+      purely as a fixture; the assertions ("1v16 in same region -> R1",
+      etc.) are about `build_pair_round_lookup`'s logic, not 2024
+      specifically. **Replace with a hardcoded toy bracket fixture
+      (~40 lines)**; closes 6 of 10 with no value loss.
+    - **Cluster 2: scoring/range smoke (2 tests in
+      `test_score_chalk_brackets.py`, `test_sweep_bt_bracket_points.py`).**
+      `test_score_v4_returns_known_shape` asserts brkt pts in [1800, 3500]
+      -- this is a real regression sentinel (clean ~1955, leaky ~2713).
+      Both tests already have skip guards on missing pairwise CSVs but
+      bypass them when the CSV exists and only the underlying tournament
+      data is missing. **Add `skipif` guard on
+      `data/raw/march-machine-learning-2026/MNCAATourneySeeds.csv`
+      presence with a "needs Kaggle data" message**; keeps value when
+      data is present.
+    - **Cluster 3: `test_prepare_loso_inputs.py` (1 test).** Builds the
+      full v3/v4 feature matrix end-to-end as a contract pin. Hard to
+      dummy without mocking every loader. **Same `skipif` guard fix.**
+  Total effort: ~30 min. Net: 10 fragile tests -> 6 robust + 4 cleanly-
+  skipped. Surfaced during the PR 25 (feature-view ensemble clean
+  re-eval) data-wipe recovery on 2026-05-05; not blocking but recurs
+  on every fresh worktree setup.
 
 ## Architecture Rethink (Tier C)
 Consider an ensemble approach or second-stage model that adjusts first-stage
