@@ -505,6 +505,39 @@ success. **Clean-baseline measurement (PR <pending>, recovery step
 
 
 
+## Engineering follow-ups (deferred)
+
+- **Test-suite hygiene: 10 tests fail on a fresh clone / fresh worktree
+  until `tar -xzf data/training_data.tar.gz -C data/raw/` is run.** Has
+  bitten us on every data wipe (2026-05-02, 2026-05-04, again at the
+  PR 25 worktree setup on 2026-05-05). The unzipped Kaggle CSVs are
+  gitignored; only the tarball is tracked. Three clusters of failures
+  with different fix paths:
+    - **Cluster 1: 6 bracket-walk tests in `tests/test_upset_model.py`**
+      (`test_build_pair_round_lookup_*`, `test_build_v9_pairwise_uses_real_round_at_apply`).
+      Use real 2024 `MNCAATourneySlots.csv` / `MNCAATourneySeeds.csv`
+      purely as a fixture; the assertions ("1v16 in same region -> R1",
+      etc.) are about `build_pair_round_lookup`'s logic, not 2024
+      specifically. **Replace with a hardcoded toy bracket fixture
+      (~40 lines)**; closes 6 of 10 with no value loss.
+    - **Cluster 2: scoring/range smoke (2 tests in
+      `test_score_chalk_brackets.py`, `test_sweep_bt_bracket_points.py`).**
+      `test_score_v4_returns_known_shape` asserts brkt pts in [1800, 3500]
+      -- this is a real regression sentinel (clean ~1955, leaky ~2713).
+      Both tests already have skip guards on missing pairwise CSVs but
+      bypass them when the CSV exists and only the underlying tournament
+      data is missing. **Add `skipif` guard on
+      `data/raw/march-machine-learning-2026/MNCAATourneySeeds.csv`
+      presence with a "needs Kaggle data" message**; keeps value when
+      data is present.
+    - **Cluster 3: `test_prepare_loso_inputs.py` (1 test).** Builds the
+      full v3/v4 feature matrix end-to-end as a contract pin. Hard to
+      dummy without mocking every loader. **Same `skipif` guard fix.**
+  Total effort: ~30 min. Net: 10 fragile tests -> 6 robust + 4 cleanly-
+  skipped. Surfaced during the PR 25 (feature-view ensemble clean
+  re-eval) data-wipe recovery on 2026-05-05; not blocking but recurs
+  on every fresh worktree setup.
+
 ## Architecture Rethink (Tier C)
 Consider an ensemble approach or second-stage model that adjusts first-stage
 probabilities based on matchup context. Ideas:
