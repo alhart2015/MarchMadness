@@ -123,9 +123,9 @@ success. **Clean-baseline measurement (PR <pending>, recovery step
    - The "marginal" rejections in `Tried and rejected` whose deltas
      were within the +0.122 LL leak noise floor of v4. Two named in
      the original roadmap (BT-as-feature at -0.0015 LL; v9 weight-
-     sweep family at +18 to +20 pts). **Two still standing on the v9-C
-     re-eval (recovery step 5 item 1) findings list (three closed
-     across PR 24, PR 25, and this PR):**
+     sweep family at +18 to +20 pts). **All five named items addressed
+     across PR 24, PR 25, PR 26, and this PR -- four closed; Colley
+     advanced to full LOSO backtest queue (see new sub-priority below):**
        - Plain BT standalone (PR 12): **CLOSED in PR 24.** Standalone
          LL 0.565 was ~tied with clean v4 0.5588 -- gate clauses 2/3
          flipped PASS as predicted, but clause 1 (residual correlation)
@@ -137,7 +137,7 @@ success. **Clean-baseline measurement (PR <pending>, recovery step
          flipped FAIL with rho=0.45 -> 0.726 (matches PR 24's BT-vs-v4
          residual-correlation jump direction); clause 3 stayed FAIL
          (headroom -0.0084). Robust NO-GO.
-       - HBT (PR 16): **CLOSED this PR.** All 7 sigma cells FAIL on
+       - HBT (PR 16): **CLOSED in PR 26.** All 7 sigma cells FAIL on
          clean baseline -- with a *flipped* failure mode vs PR 16.
          PR 16 had every cell PASS clause 1 (r in [0.448, 0.507]) and
          FAIL clauses 2/3 (w_opt 0.99-1.00, headroom +0.0000); this PR
@@ -158,8 +158,38 @@ success. **Clean-baseline measurement (PR <pending>, recovery step
          LL-gate failure transfers to the production metric for
          r > 0.60 candidates). Findings:
          `docs/notes/2026-05-05-hbt-clean-rerun.md`.
-       - Colley (PR 15): clause-2 delta +0.0053 LL.
-       - Massey-decay hl=14d (PR 15): clause-2 delta +0.0057 LL.
+       - Colley (PR 15): **CLAUSE 2 PASSED in this PR.** Clean delta
+         -0.0100 vs leaky +0.0053 -- a -0.0153 LL swing. All three
+         subset seasons help under clean v4 (2019 -0.0166, 2022 -0.0074,
+         2024 -0.0059); 2019 and 2022 fully flipped from hurt to help.
+         Pre-registered "redundancy is structural, not threshold-tight"
+         prediction REFUTED -- the redundancy was specifically against
+         vegas-inflated adj_em/efficiency loops, not against the clean
+         stack. Promoted to "Colley full LOSO backtest" sub-priority
+         below. Findings: `docs/notes/2026-05-05-colley-massey-clean-rerun.md`.
+       - Massey-decay hl=14d (PR 15): **CLOSED in this PR.** Clean
+         clause-2 delta +0.0018 vs threshold +0.001 -- shrunk from leaky
+         +0.0057 but still FAIL. Mixed per-season pattern: 2019 helped
+         (-0.0121, similar magnitude to Colley's 2019 swing), 2022 still
+         hurt slightly (+0.0046), 2024 hurt the most (+0.0131 --
+         inverted from leaky -0.002). Robust NO-GO across both leaky
+         and clean baselines. Different failure mechanism per baseline:
+         leaky failure was redundancy with vegas-inflated adj_em; clean
+         failure is redundancy with clean non-vegas late-season features
+         (`late_adj_em`, `late_sos`, `efficiency_trend`, `margin_trend`).
+         Half-life sweep NOT re-opened (rest of curve was already
+         filtered out at clause 1 in PR 15). Findings:
+         `docs/notes/2026-05-05-colley-massey-clean-rerun.md`.
+   - **Colley full LOSO backtest -- NOW THE IMMEDIATE NEXT PR.** Wire
+     `colley_rating` back into `compute_all_features` (inverse of
+     commit 3b4c374), regenerate `output/pairwise_v4.csv` with the new
+     feature, score 22-season LOSO + bracket points head-to-head
+     against clean v4 + v9-C baseline (1929 brkt pts on v9-C / 2069 on
+     clean v8 per PR 24). ~3 hours compute. Per the original Colley
+     spec's if-pass branch
+     (`docs/superpowers/specs/2026-05-03-colley-matrix-feature-design.md`).
+     If the bracket-points delta clears the spec's swap-in threshold
+     (+10 brkt pts), Colley becomes a v4 feature-add candidate.
    - **NEW:** Regenerate v4's 2026 stage-1 predictions. The current
      production `pairwise_probs.json` is clean v8 stage-2 over LEAKY
      2026 stage-1 (`output/pairwise_probs_v4.json` is Apr 28). Trace
