@@ -98,19 +98,45 @@ success. **Clean-baseline measurement (PR <pending>, recovery step
      wiped worktree); this PR re-ran PR 21's regen procedure and
      force-added the result. Same with `pairwise_v8.csv`. New runbook:
      `docs/data_recovery.md`.
-   - **Plain BT bracket-points** (PR 17 finding) -- still pending.
+   - **[DONE -- PR <pending>]** Plain BT standalone re-eval. **GATE
+     FAILED** under clean baseline -- with a *flipped* failure mode.
+     PR 12 failed clauses 2 and 3 (degenerate w_v4=0.98, headroom +0.0000)
+     while passing clause 1 (r=0.577). This PR PASSES clauses 2 and 3
+     (w_v4=0.58, headroom +0.0058) but FAILS clause 1 (r=0.868, well
+     above the 0.60 threshold). When v4 lost its tournament-leak signal,
+     its errors became much more similar to BT's errors -- both models
+     now miss the same "hard regular-season-information" games.
+     Robust NO-GO across both leaky and clean baselines. Plain BT
+     closed as a stage-1 ensemble peer; bracket-points re-test
+     (PR 17 redo) skipped per spec decision matrix (LL-gate failure
+     across both baselines is sufficient). Standalone metrics: clean
+     v4 LL 0.5579 / acc 70.2%; BT LL 0.5650 / acc 69.8% (delta -0.0071
+     LL, +0.4pp acc). Disagreement rate 13.6% (was 24.0% under leaky);
+     when they disagree, BT is right 48.7% (was 27.9%). Findings:
+     `docs/notes/2026-05-05-plain-bt-clean-rerun.md`. Procedure-side
+     change: added `--curve-out` flag to `diagnose_bt_vs_v4.py` that
+     persists the full LL(w) blend curve as a 2-column CSV.
+   - **Plain BT bracket-points** (PR 17 finding) -- DROPPED. LL-gate
+     failure across both leaky and clean baselines closes plain BT
+     as a stage-1 ensemble peer; bracket-points re-test no longer
+     load-bearing.
    - The "marginal" rejections in `Tried and rejected` whose deltas
      were within the +0.122 LL leak noise floor of v4. Two named in
      the original roadmap (BT-as-feature at -0.0015 LL; v9 weight-
-     sweep family at +18 to +20 pts). **Five more added by the v9-C
-     re-eval (recovery step 5 item 1) findings:**
-       - Plain BT standalone (PR 12): standalone LL 0.565 = ~tied
-         with clean v4 0.5588; LL-blend gate likely flips PASS.
+     sweep family at +18 to +20 pts). **Four still standing on the v9-C
+     re-eval (recovery step 5 item 1) findings list (one was closed
+     this PR):**
+       - Plain BT standalone (PR 12): **CLOSED this PR.** Standalone
+         LL 0.565 was ~tied with clean v4 0.5588 -- gate clauses 2/3
+         flipped PASS as predicted, but clause 1 (residual correlation)
+         flipped FAIL. Robust NO-GO; see DONE entry above.
        - Feature-view ensemble PEER_A/B (PR 14): PEER_A delta vs v4
          was +0.1375 vs leaky; +0.013 vs clean (within 5x clause-1
-         tolerance); clause 1 likely flips PASS.
+         tolerance); clause 1 likely flips PASS. **NEXT IMMEDIATE PR.**
        - HBT (PR 16): standalone LL 0.619-0.757; gap to clean v4
-         shrinks but HBT still weaker.
+         shrinks but HBT still weaker. Note: the plain-BT re-eval's
+         residual-correlation finding (jump from 0.577 to 0.868)
+         predicts HBT's clause 1 may also flip FAIL on clean v4.
        - Colley (PR 15): clause-2 delta +0.0053 LL.
        - Massey-decay hl=14d (PR 15): clause-2 delta +0.0057 LL.
    - **NEW:** Regenerate v4's 2026 stage-1 predictions. The current
