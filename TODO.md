@@ -29,7 +29,7 @@ success. **Clean-baseline measurement (PR <pending>, recovery step
    `compute_vegas_features` and `_build_vegas_team_records_with_dates`.
    Spec: `docs/superpowers/specs/2026-05-04-v4-vegas-leak-fix-design.md`.
 
-2. **[DONE -- PR <pending>]** Audit Massey + KenPom inputs for the same
+2. **[DONE -- PR 20]** Audit Massey + KenPom inputs for the same
    class of leak. **Verdict: no leak found.** Massey is clean by file
    construction (max RankingDayNum = 133 = Selection Sunday). KenPom
    Barttorvik mixes pre-tournament rating columns with one post-tournament
@@ -39,7 +39,7 @@ success. **Clean-baseline measurement (PR <pending>, recovery step
    the allowlist cannot silently regress this property. Findings:
    `docs/notes/2026-05-04-massey-kenpom-leak-audit.md`.
 
-3. **[DONE -- PR <pending>]** Regenerate `output/pairwise_v4.csv` via
+3. **[DONE -- PR 21]** Regenerate `output/pairwise_v4.csv` via
    clean LOSO. Mean LL 0.4370 -> 0.5588 (+0.122); mean acc 80.4% ->
    70.7% (-9.7pp). 21/22 seasons worse on LL; 20/22 worse on acc.
    Largest per-season shifts: 2017 (+0.190 LL, -14.2pp), 2010 (+0.179),
@@ -56,18 +56,31 @@ success. **Clean-baseline measurement (PR <pending>, recovery step
    `prepare_loso_inputs()` extraction). Findings:
    `docs/notes/2026-05-04-v4-clean-loso-regen.md`.
 
-4. **Re-run the v4-vs-Vegas audit.** `python src/audit_v4_gap_vegas.py`
-   against the regenerated `pairwise_v4.csv`. Update findings note
-   `docs/notes/2026-05-04-v4-gap-audit-vegas.md` with the corrected
-   numbers and retract the "no weak spots" verdict (which is
-   already known to be wrong: clean v4 mean LL 0.5588 is 0.014
-   *worse* than the audit's Vegas LL of 0.5447 over the same
-   1326-game tournament population, before per-bucket breakdown).
-   The 538 audit (currently active queue #1) stays queued. **Now
-   the immediate next PR.**
+4. **[DONE -- PR <pending>]** Re-run the v4-vs-Vegas audit. Ran
+   `python src/audit_v4_gap_vegas.py` against the regenerated
+   `pairwise_v4.csv`. **Verdict: "no weak spots" RETRACTED.**
+   Overall: clean v4 LL 0.5595 vs Vegas 0.5447 (delta +0.0148, Vegas
+   wins); acc v4 69.9% vs Vegas 70.6% (-0.7pp); ECE v4 0.037 vs
+   Vegas 0.029. **Six bucket-level weak spots** at the n>=50,
+   ll_delta>=+0.02 threshold: round=E8 (+0.055), chalk_won=upset
+   (+0.054), round=S16 (+0.027), seed_diff=6-9 (+0.026),
+   v4_confidence=0.80-0.90 (+0.025), seed_diff=10-15 (+0.021).
+   Two big collapses vs the contaminated baseline: (1) v4's
+   upset-detection edge over Vegas (originally 56% vs 17%) is
+   fully gone -- clean v4 catches 15.3% of upsets vs Vegas's 17.5%;
+   (2) v4's 0.90-1.00 confidence bucket on tournament games is now
+   EMPTY (was n=413 pre-fix), confirming the leak was inflating
+   v4's confidence by peeking at within-season tournament outcomes.
+   Recovery framing changes: 538 audit is still useful but no
+   longer the only path to localize headroom -- Vegas has surfaced
+   six concrete weak spots to engineer against. Findings:
+   `docs/notes/2026-05-04-v4-gap-audit-vegas.md` (rewritten with
+   clean numbers; original contaminated tables preserved as an
+   appendix). The PR 18 audit's framework code is unchanged
+   (`src/audit_v4_gap_vegas.py`, `tests/test_audit_v4_gap_vegas.py`).
 
 5. **Re-run the swap-decided / swap-candidate evaluations against
-   the clean baseline.** Priority order:
+   the clean baseline.** **Now the immediate next PR.** Priority order:
    - **v9-C production swap** (currently deployed -- top priority).
    - **v8 vs v9-C** bracket-points head-to-head.
    - **Plain BT bracket-points** (PR 17 finding).
@@ -81,7 +94,13 @@ success. **Clean-baseline measurement (PR <pending>, recovery step
    this section was first written), the redo-or-skip cutoff for
    "marginal" experiments should be re-checked: at +0.122, even
    the v9 weight-sweep +18 to +20 brkt pts wins fall well within
-   the leak's noise floor.
+   the leak's noise floor. **Additional motivation from the audit
+   rerun (step 4):** v4's upset-detection edge (the headline
+   evidence used to justify v9-C's upset-aware stage-2) was the
+   leak speaking. The clean v4 catches 15.3% of upsets vs Vegas's
+   17.5%, so v9-C's stage-2 may have been correcting noise rather
+   than signal. Re-eval is now load-bearing for whether v9-C
+   stays in production.
 
 ### What's NOT contaminated
 
