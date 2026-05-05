@@ -23,12 +23,28 @@ import pandas as pd
 
 DATA = Path("data/raw/march-machine-learning-2026")
 DEFAULT_DIAGNOSTIC_OUT = "output/diag_bt_vs_v4.json"
+DEFAULT_CURVE_OUT = "output/diag_bt_vs_v4_curve.csv"
 
 # Gate thresholds (from spec).
 GATE_R_MAX = 0.60
 GATE_W_LOW = 0.30
 GATE_W_HIGH = 0.85
 GATE_HEADROOM_MIN = 0.005
+
+
+def _write_curve(path: str, ll_at_w: list) -> None:
+    """Write the LL(w) blend curve to a 2-column CSV.
+
+    Format: header `w,ll_blend`; 101 data rows for w in [0.00, 1.00] step
+    0.01. Both columns formatted to 6 decimals. Used by the findings doc
+    to characterize blend shape across the full w range.
+    """
+    ws = np.linspace(0.0, 1.0, 101)
+    Path(path).parent.mkdir(parents=True, exist_ok=True)
+    with open(path, "w") as f:
+        f.write("w,ll_blend\n")
+        for w, ll in zip(ws, ll_at_w):
+            f.write(f"{w:.6f},{ll:.6f}\n")
 
 
 def _load_pairwise_lookup(path: str) -> dict:
@@ -185,11 +201,16 @@ def main(argv=None) -> int:
     parser.add_argument("--pairwise-v4", default="output/pairwise_v4.csv")
     parser.add_argument("--pairwise-bt", default="output/pairwise_bt.csv")
     parser.add_argument("--out-json", default=DEFAULT_DIAGNOSTIC_OUT)
+    parser.add_argument("--curve-out", default=DEFAULT_CURVE_OUT,
+                        help="Where to write the LL(w) blend curve (CSV)")
     args = parser.parse_args(argv)
 
     diag = compute_diagnostic(args.pairwise_v4, args.pairwise_bt)
     gate = check_gate(diag)
     print_report(diag, gate)
+
+    _write_curve(args.curve_out, diag["ll_at_w"])
+    print(f"\n  saved {args.curve_out}")
 
     Path(args.out_json).parent.mkdir(parents=True, exist_ok=True)
     with open(args.out_json, "w") as f:
@@ -197,7 +218,7 @@ def main(argv=None) -> int:
         # the headline numbers.
         slim = {k: v for k, v in diag.items() if k != "ll_at_w"}
         json.dump({"diagnostic": slim, "gate": gate}, f, indent=2)
-    print(f"\n  saved {args.out_json}")
+    print(f"  saved {args.out_json}")
     return 0 if gate["pass"] else 1
 
 
