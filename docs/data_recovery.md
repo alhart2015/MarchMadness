@@ -236,7 +236,72 @@ Step 1.
 | Date       | Trigger | Recovery time | Notes |
 |------------|---------|---------------|-------|
 | 2026-05-02 | PowerShell `(Get-Item "$wt\data").Delete()` on a `<wt>\data` junction during feature-view-ensemble worktree cleanup | ~10 min | Tracked files surfaced via `git status`. Recovered via `git checkout HEAD -- data/` + tarball extract. |
-| 2026-05-04 | Suspected non-git cleanup of orphan worktree dirs (`feat-v4-clean-loso-regen`, `feat+v4-gap-audit-vegas`) whose data junctions were still live; mtime alignment at 19:54 across dirs and data subdirs | ~5 min | Tracked files survived (junctions were at `data/raw/<subdir>` level, not `data/`). Detected by Phase 0 of v9-C clean-rerun PR (subagent reported empty source dir during junction setup).
+| 2026-05-04 | Suspected non-git cleanup of orphan worktree dirs (`feat-v4-clean-loso-regen`, `feat+v4-gap-audit-vegas`) whose data junctions were still live; mtime alignment at 19:54 across dirs and data subdirs | ~5 min for raw data; ~3 hours for `pairwise_v4.csv` regen | Tracked files in `data/` survived (junctions were at `data/raw/<subdir>` level, not `data/`). Detected by Phase 0 of v9-C clean-rerun PR (subagent reported empty source dir during junction setup). **Compounding loss:** PR 21's clean `output/pairwise_v4.csv` was also wiped along with the data. That file was gitignored and lived only in the wiped worktree; PR 21's findings note (which IS tracked) reported the clean LL numbers, but the actual canonical artifact never made it to git. Discovered when Phase 2 of the v9-C re-run produced byte-identical leaky v8 (Phase 2 commit was reverted). Fix going forward: force-add `pairwise_v4.csv` and `pairwise_v8.csv` whenever they are regenerated.
+
+## Canonical pairwise artifacts: tracked vs. should-be-tracked
+
+`output/` is gitignored. Specific named files are force-added (`git add -f`)
+as canonical artifacts that downstream consumers depend on. **Anything in
+`output/` that is the result of a long compute (>5 min) and is consumed by
+another script SHOULD be force-added** -- otherwise it lives only in the
+working tree and dies with any wipe.
+
+**Tracked today (force-added):**
+
+| File | Producer | Consumer(s) |
+|---|---|---|
+| `output/pairwise_probs.json` | `predict_2026_v9c.py` (or `predict_2026_stage2.py` if v9-C reverted) | `postmortem_full.py`, `bracket_scorecard.py`, `alternate_bracket.py`, `iowa_impact.py`, `blend_sweep.py` |
+| `output/pairwise_v9.csv` | `sweep_v9_weights.py` (winning cell) | downstream backtest scripts |
+| `output/pairwise_bt.csv` | `train_bt_stage1.py` | v9-D BT-as-feature path |
+| `output/pairwise_ensemble.csv` | `ensemble_stage1.py` | feature-view ensemble work |
+| `output/pairwise_hbt_sigma_*.csv` (7 files) | `train_hbt_stage1.py` | HBT diagnostic |
+| `output/pairwise_lr.csv` | `train_lr_stage1.py` | LR ensemble experiment |
+| `output/pairwise_peer_a.csv`, `output/pairwise_peer_b.csv` | `train_peer_stage1.py` | feature-view ensemble |
+| `output/pairwise_v4bt_w*.csv` (6 files) | `sweep_bt_bracket_points.py` | BT bracket-points sweep |
+| `output/pairwise_v9c_*.csv` (8 files) | various v9-C variants | per-variant backtests |
+
+**SHOULD be tracked but isn't (load-bearing gap that caused PR 21's loss
+on 2026-05-04):**
+
+| File | Producer | Consumer(s) | Compute cost |
+|---|---|---|---|
+| `output/pairwise_v4.csv` | `enhanced_model_v3.py` (under `MM_PAIRWISE_OUT`) | `train_stage2.py`, `train_upset_model.py`, `sweep_v9_weights.py`, `train_bt_stage1.py`, every diagnose_*.py that needs v4 LOSO | **~3 hours** |
+| `output/pairwise_v8.csv` | `train_stage2.py` | `sweep_v9_weights.py` (v8 baseline gate), `predict_2026_stage2.py` | ~3 minutes |
+
+When you regenerate either of these (e.g., as part of the recovery-step
+work or any future v4 retraining), **immediately force-add the result
+to git** with a `data(...)` commit so the next data wipe does not consume
+it. Append-mode writers (`enhanced_model_v3.py:629` writes
+`pairwise_v4.csv` with `mode="a"`) are particularly fragile: if the
+existing file is leaky-baseline content, the regen appends clean rows
+under it and `keep="last"`-dedup masks the leak from downstream readers
+-- but if the file is wiped between regen and the next consumer run, the
+recovery cost is the full 3-hour regen.
+
+**Append-mode caveat for `pairwise_v4.csv`.** Before re-running the
+regen, **delete any existing `output/pairwise_v4.csv` first** (it is
+written in append mode, line 629 of `enhanced_model_v3.py`) -- otherwise
+the file ends up with leaky rows from the prior content followed by
+clean rows from the regen. Dedup-by-last hides the staleness but the
+file size doubles on each rerun. Always start from an absent file:
+
+```bash
+rm -f output/pairwise_v4.csv
+MM_PAIRWISE_OUT=output/pairwise_v4.csv MM_SKIP_DEFAULT_LOSO=1 \
+MM_TUNED_PARAMS_V3='{"n_estimators": 424, "max_depth": 4, "learning_rate": 0.013940346079873234, "subsample": 0.8736932106048627, "colsample_bytree": 0.7760609974958406}' \
+python -u src/enhanced_model_v3.py > output/regen_clean_log.txt 2>&1
+```
+
+After the run completes (~3 hours):
+
+```bash
+wc -l output/pairwise_v4.csv  # expect 48,466 (header + 48,465 single-orientation rows)
+git add -f output/pairwise_v4.csv
+git commit -m "data(<branch>): force-add canonical pairwise_v4.csv (clean baseline)"
+```
+
+(MM_TUNED_PARAMS_V3 reuses leaky-run hyperparameters per PR 21's
+documented confound; expected effect <0.02 LL on the clean baseline.)
 
 ## Related files
 
@@ -245,6 +310,12 @@ Step 1.
 - `data/training_data.tar.gz` -- the recovery archive itself (tracked).
 - `src/enhanced_model_v3.py:181-190` -- vegas_lines filename-to-season
   mapping (`ncaabbYY.csv` -> Kaggle Season YY+1).
+- `src/enhanced_model_v3.py:606-630` -- `MM_PAIRWISE_OUT` writer
+  (append mode); see "Append-mode caveat" above before re-running.
+- `src/enhanced_model_v3.py:972-976` -- `MM_SKIP_DEFAULT_LOSO` env
+  gate (skips Step 6's untuned default LOSO; halves regen runtime).
+- `src/enhanced_model_v3.py:997-1006` -- `MM_TUNED_PARAMS_V3` env
+  gate (reuses tuned hyperparameters as JSON; saves an Optuna pass).
 - `src/ingest/` -- ingest scripts for live (non-recovery) data flows.
   `kaggle2026_loader.py`, `kaggle_loader.py`, `cbbd_loader.py`,
   `massey_loader.py`. None of these load `vegas_lines/` (it has no
