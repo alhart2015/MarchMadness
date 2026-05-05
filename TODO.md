@@ -80,27 +80,50 @@ success. **Clean-baseline measurement (PR <pending>, recovery step
    (`src/audit_v4_gap_vegas.py`, `tests/test_audit_v4_gap_vegas.py`).
 
 5. **Re-run the swap-decided / swap-candidate evaluations against
-   the clean baseline.** **Now the immediate next PR.** Priority order:
-   - **v9-C production swap** (currently deployed -- top priority).
-   - **v8 vs v9-C** bracket-points head-to-head.
-   - **Plain BT bracket-points** (PR 17 finding).
+   the clean baseline.** Priority order:
+   - **[DONE -- PR <pending>]** v9-C production swap re-eval. **REVERTED
+     to v8.** Best v9-C cell (W_UPSET=1.0, W_MISS=0.5) at 1929 brkt pts
+     vs clean v8 baseline 2069 -- delta -140 over 22 LOSO seasons.
+     PR 9's winning cell (W_UPSET=1.25, W_MISS=0.0) at 1753 -- delta
+     -316. Every cell in the 15-cell sweep loses; higher W_UPSET loses
+     more (the upset signal v9-C amplified was leak speech).
+     `output/pairwise_probs.json` restored via `predict_2026_stage2.py`
+     (clean-v8 stage-2 over leaky 2026 v4 stage-1; full cleanliness
+     pending v4 2026 stage-1 regen -- see new follow-up below).
+     Per-season W/L for the winning cell: 8W-10L-4T; biggest single-
+     season v8 wins 2015 (-54), 2017 (-40), 2019 (-57), 2022 (-23).
+     Findings: `docs/notes/2026-05-04-v9c-clean-rerun.md`.
+     **Compounding work:** PR 21's clean `pairwise_v4.csv` was lost
+     in the 2026-05-04 data wipe (gitignored, lived only in the
+     wiped worktree); this PR re-ran PR 21's regen procedure and
+     force-added the result. Same with `pairwise_v8.csv`. New runbook:
+     `docs/data_recovery.md`.
+   - **Plain BT bracket-points** (PR 17 finding) -- still pending.
    - The "marginal" rejections in `Tried and rejected` whose deltas
-     were within ~0.05 LL or ~30 brkt pts of v4 (BT-as-feature at
-     -0.0015 LL; v9 weight-sweep family at +18 to +20 pts).
-   Big-magnitude rejections (-93 quality wins, -105 LR ensemble,
-   +0.0057 Massey-decay clause-2 fail, etc.) do not need re-eval --
-   a baseline shift of 0.02-0.05 LL won't flip them. With the leak
-   shift now measured at +0.122 LL (vs the 0.02-0.05 estimate when
-   this section was first written), the redo-or-skip cutoff for
-   "marginal" experiments should be re-checked: at +0.122, even
-   the v9 weight-sweep +18 to +20 brkt pts wins fall well within
-   the leak's noise floor. **Additional motivation from the audit
-   rerun (step 4):** v4's upset-detection edge (the headline
-   evidence used to justify v9-C's upset-aware stage-2) was the
-   leak speaking. The clean v4 catches 15.3% of upsets vs Vegas's
-   17.5%, so v9-C's stage-2 may have been correcting noise rather
-   than signal. Re-eval is now load-bearing for whether v9-C
-   stays in production.
+     were within the +0.122 LL leak noise floor of v4. Two named in
+     the original roadmap (BT-as-feature at -0.0015 LL; v9 weight-
+     sweep family at +18 to +20 pts). **Five more added by the v9-C
+     re-eval (recovery step 5 item 1) findings:**
+       - Plain BT standalone (PR 12): standalone LL 0.565 = ~tied
+         with clean v4 0.5588; LL-blend gate likely flips PASS.
+       - Feature-view ensemble PEER_A/B (PR 14): PEER_A delta vs v4
+         was +0.1375 vs leaky; +0.013 vs clean (within 5x clause-1
+         tolerance); clause 1 likely flips PASS.
+       - HBT (PR 16): standalone LL 0.619-0.757; gap to clean v4
+         shrinks but HBT still weaker.
+       - Colley (PR 15): clause-2 delta +0.0053 LL.
+       - Massey-decay hl=14d (PR 15): clause-2 delta +0.0057 LL.
+   - **NEW:** Regenerate v4's 2026 stage-1 predictions. The current
+     production `pairwise_probs.json` is clean v8 stage-2 over LEAKY
+     2026 stage-1 (`output/pairwise_probs_v4.json` is Apr 28). Trace
+     the script that produced it, re-run on clean-trained v4, force-add
+     the JSON (yet another gitignored canonical artifact gap).
+   Big-magnitude rejections (-93 quality wins, -105 LR ensemble) do
+   not need re-eval -- a leak shift of +0.122 LL won't flip them.
+   With the leak shift now measured at +0.122 LL (vs the 0.02-0.05
+   estimate when this section was first written), the redo-or-skip
+   cutoff for "marginal" experiments was re-checked in the v9-C
+   re-eval and the marginal-rejections list expanded above.
 
 ### What's NOT contaminated
 
