@@ -123,20 +123,27 @@ success. **Clean-baseline measurement (PR <pending>, recovery step
    - The "marginal" rejections in `Tried and rejected` whose deltas
      were within the +0.122 LL leak noise floor of v4. Two named in
      the original roadmap (BT-as-feature at -0.0015 LL; v9 weight-
-     sweep family at +18 to +20 pts). **Four still standing on the v9-C
-     re-eval (recovery step 5 item 1) findings list (one was closed
-     this PR):**
-       - Plain BT standalone (PR 12): **CLOSED this PR.** Standalone
+     sweep family at +18 to +20 pts). **Three still standing on the v9-C
+     re-eval (recovery step 5 item 1) findings list (two closed across
+     PR 24 + this PR):**
+       - Plain BT standalone (PR 12): **CLOSED in PR 24.** Standalone
          LL 0.565 was ~tied with clean v4 0.5588 -- gate clauses 2/3
          flipped PASS as predicted, but clause 1 (residual correlation)
-         flipped FAIL. Robust NO-GO; see DONE entry above.
-       - Feature-view ensemble PEER_A/B (PR 14): PEER_A delta vs v4
-         was +0.1375 vs leaky; +0.013 vs clean (within 5x clause-1
-         tolerance); clause 1 likely flips PASS. **NEXT IMMEDIATE PR.**
+         flipped FAIL (r=0.577 -> 0.868). Robust NO-GO.
+       - Feature-view ensemble PEER_A/B (PR 14): **CLOSED this PR.**
+         All 3 clauses FAIL on clean baseline. PEER_A's clause 1
+         individually flipped PASS (delta_a +0.0140) as predicted, but
+         PEER_B individually flipped FAIL (delta_b +0.0277); clause 2
+         flipped FAIL with rho=0.45 -> 0.726 (matches PR 24's BT-vs-v4
+         residual-correlation jump direction); clause 3 stayed FAIL
+         (headroom -0.0084). Robust NO-GO.
        - HBT (PR 16): standalone LL 0.619-0.757; gap to clean v4
-         shrinks but HBT still weaker. Note: the plain-BT re-eval's
-         residual-correlation finding (jump from 0.577 to 0.868)
-         predicts HBT's clause 1 may also flip FAIL on clean v4.
+         shrinks but HBT still weaker. **NEXT IMMEDIATE PR** (~5 min
+         compute). Note: PR 24 + this PR both showed residual-
+         correlation jumps to r ~0.7-0.87 on the clean baseline, which
+         strongly predicts HBT's clause 2 also flips FAIL. HBT re-eval
+         is mostly closing the marginal-rejections list cleanly rather
+         than expecting a flip.
        - Colley (PR 15): clause-2 delta +0.0053 LL.
        - Massey-decay hl=14d (PR 15): clause-2 delta +0.0057 LL.
    - **NEW:** Regenerate v4's 2026 stage-1 predictions. The current
