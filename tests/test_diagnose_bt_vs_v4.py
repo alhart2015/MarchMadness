@@ -91,3 +91,37 @@ def test_gate_logic_each_clause():
     diag = dict(base, headroom=0.001)
     assert check_gate(diag)["pass"] is False
     assert "headroom" in check_gate(diag)["reason"].lower()
+
+
+def test_curve_csv_written_with_101_rows_matching_optimum(tmp_path):
+    """`_write_curve` writes a 2-column CSV: 101 rows of (w, ll_blend),
+    monotonic w from 0.00 to 1.00, value at the optimum row equals
+    optimal_ll from the diagnostic to 1e-6."""
+    from src.diagnose_bt_vs_v4 import compute_diagnostic, _write_curve
+
+    pw_a = tmp_path / "v4.csv"
+    pw_b = tmp_path / "bt.csv"
+    _write_pairwise(pw_a, [
+        (2003, 1100 + i, 1200 + i, 0.85) for i in range(10)
+    ])
+    _write_pairwise(pw_b, [
+        (2003, 1100 + i, 1200 + i, 0.55) for i in range(10)
+    ])
+    results = pd.DataFrame([
+        {"Season": 2003, "WTeamID": 1100 + i, "LTeamID": 1200 + i, "DayNum": 136}
+        for i in range(10)
+    ])
+
+    diag = compute_diagnostic(str(pw_a), str(pw_b), results_df=results)
+    out_curve = tmp_path / "curve.csv"
+    _write_curve(str(out_curve), diag["ll_at_w"])
+
+    df = pd.read_csv(out_curve)
+    assert list(df.columns) == ["w", "ll_blend"]
+    assert len(df) == 101
+    assert df["w"].iloc[0] == pytest.approx(0.0)
+    assert df["w"].iloc[-1] == pytest.approx(1.0)
+    opt_row_idx = round(diag["optimal_w"] * 100)
+    assert df["ll_blend"].iloc[opt_row_idx] == pytest.approx(
+        diag["optimal_ll"], abs=1e-6
+    )
