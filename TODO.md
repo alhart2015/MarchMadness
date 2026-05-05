@@ -123,27 +123,41 @@ success. **Clean-baseline measurement (PR <pending>, recovery step
    - The "marginal" rejections in `Tried and rejected` whose deltas
      were within the +0.122 LL leak noise floor of v4. Two named in
      the original roadmap (BT-as-feature at -0.0015 LL; v9 weight-
-     sweep family at +18 to +20 pts). **Three still standing on the v9-C
-     re-eval (recovery step 5 item 1) findings list (two closed across
-     PR 24 + this PR):**
+     sweep family at +18 to +20 pts). **Two still standing on the v9-C
+     re-eval (recovery step 5 item 1) findings list (three closed
+     across PR 24, PR 25, and this PR):**
        - Plain BT standalone (PR 12): **CLOSED in PR 24.** Standalone
          LL 0.565 was ~tied with clean v4 0.5588 -- gate clauses 2/3
          flipped PASS as predicted, but clause 1 (residual correlation)
          flipped FAIL (r=0.577 -> 0.868). Robust NO-GO.
-       - Feature-view ensemble PEER_A/B (PR 14): **CLOSED this PR.**
+       - Feature-view ensemble PEER_A/B (PR 14): **CLOSED in PR 25.**
          All 3 clauses FAIL on clean baseline. PEER_A's clause 1
          individually flipped PASS (delta_a +0.0140) as predicted, but
          PEER_B individually flipped FAIL (delta_b +0.0277); clause 2
          flipped FAIL with rho=0.45 -> 0.726 (matches PR 24's BT-vs-v4
          residual-correlation jump direction); clause 3 stayed FAIL
          (headroom -0.0084). Robust NO-GO.
-       - HBT (PR 16): standalone LL 0.619-0.757; gap to clean v4
-         shrinks but HBT still weaker. **NEXT IMMEDIATE PR** (~5 min
-         compute). Note: PR 24 + this PR both showed residual-
-         correlation jumps to r ~0.7-0.87 on the clean baseline, which
-         strongly predicts HBT's clause 2 also flips FAIL. HBT re-eval
-         is mostly closing the marginal-rejections list cleanly rather
-         than expecting a flip.
+       - HBT (PR 16): **CLOSED this PR.** All 7 sigma cells FAIL on
+         clean baseline -- with a *flipped* failure mode vs PR 16.
+         PR 16 had every cell PASS clause 1 (r in [0.448, 0.507]) and
+         FAIL clauses 2/3 (w_opt 0.99-1.00, headroom +0.0000); this PR
+         has every cell FAIL clause 1 (r in [0.678, 0.767], jump of
+         +0.21 to +0.27 on every cell), two cells (sigma=0.20, 0.50)
+         PASS clause 2 (w_opt 0.83, 0.84), but every cell still FAIL
+         clause 3 (headroom +0.0009 to +0.0021, all below the +0.005
+         threshold). Standalone HBT LL barely shifted (per-cell delta
+         in [-0.0065, +0.0022]) -- regular-season-W/L data dominates
+         the prior at every swept sigma -- so the residual-correlation
+         jump comes entirely from clean v4 getting weaker. Third
+         independent confirmation of PR 24's "same-data-peer residual
+         ceiling" hypothesis (BT model class, XGB feature-view model
+         class, hierarchical BT model class -- all show the same r
+         jump). Robust NO-GO across both leaky and clean baselines.
+         v9-C correction + bracket-points backtest skipped per spec
+         decision matrix (PR 17's re-test on plain BT already showed
+         LL-gate failure transfers to the production metric for
+         r > 0.60 candidates). Findings:
+         `docs/notes/2026-05-05-hbt-clean-rerun.md`.
        - Colley (PR 15): clause-2 delta +0.0053 LL.
        - Massey-decay hl=14d (PR 15): clause-2 delta +0.0057 LL.
    - **NEW:** Regenerate v4's 2026 stage-1 predictions. The current
