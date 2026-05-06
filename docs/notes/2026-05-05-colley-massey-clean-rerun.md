@@ -14,6 +14,7 @@
 **Verdict:**
 - **Colley clause 2: PASS** under clean v4 baseline (mean delta -0.0100 vs threshold +0.001). Flipped from PR 15 leaky FAIL (+0.0053). All three subset seasons help.
 - **Massey-decay-14d clause 2: FAIL** (mean delta +0.0018 vs threshold +0.001). Marginal -- shrunk from PR 15 leaky +0.0057 but still above the bar. Mixed per-season pattern.
+- **Diagnostic, uniform Massey clause 2 (forced past clause-1 FAIL): PASS-marginal** at -0.0024 LL. Decomposes the Colley-vs-Massey-14d gap into two compounding ~0.006 LL effects -- W/L-vs-margin and full-season-vs-14-day-window -- both load-bearing. See "Diagnostic" section below. Doesn't change the production verdict because clause 1 (corr 0.957 vs adj_em) is robustly FAIL across both baselines.
 
 ## TL;DR
 
@@ -198,6 +199,60 @@ clean shift is most likely to make it MORE negative, not less); the
 v9 weight-sweep family is also unaffected (different metric --
 bracket points -- which was already validated under PR 17).
 
+## Diagnostic: uniform Massey decomposes the divergence
+
+PR review surfaced a reasonable objection to the verdict asymmetry:
+"Aren't Colley and Massey fundamentally the same algorithm? Why polar
+opposite results?" The original write-up's response was a hand-wavy
+"different signals overlap differently with v4's stack." To pin it down
+empirically, ran a third candidate (`src/clause2_uniform_massey.py`,
+NEW; force-added below) -- uniform Massey, no decay (the variant PR 15
+rejected at clause 1 with mean |corr| 0.957 vs adj_em). Clause 1 is
+intentionally skipped here; uniform Massey would still FAIL clause 1
+on the clean baseline (intra-season correlations are leak-invariant
+per TODO line 178). This is a diagnostic, not a gate.
+
+Three-way clause-2 on the same 3-season subset, same byte-identical
+`mean_ll_without` (0.5907361657 in all three runs):
+
+| candidate | signal | window | 2019 | 2022 | 2024 | mean | clause 2 |
+|---|---|---|---|---|---|---|---|
+| Colley                  | W/L only | full season  | -0.0166 | -0.0074 | -0.0059 | **-0.0100** | PASS |
+| Massey uniform (hl=None)| margin (cap=21) | full season | -0.0163 | +0.0072 | +0.0019 | **-0.0024** | PASS (marginal) |
+| Massey hl=14d           | margin (cap=21) | last ~2wks  | -0.0121 | +0.0046 | +0.0131 | **+0.0018** | FAIL |
+
+Two separable effects, both real and both load-bearing:
+
+- **Time-window effect (~0.0042 LL).** Uniform Massey -> Massey hl=14d:
+  same margin signal, narrower time window. Goes from PASS-marginal to
+  FAIL. Damage is almost entirely 2024 (+0.0019 -> +0.0131). Confirms
+  the "14-day window overlaps v4's late-season feature stack
+  (`late_adj_em`, `efficiency_trend`, `margin_trend`,
+  `vegas_late_spread_delta`)" hypothesis from the previous section.
+- **Signal-type effect (~0.0076 LL).** Colley -> Uniform Massey: same
+  full-season window, W/L-only signal vs margin signal. Goes from
+  PASS-clean to PASS-marginal. Damage is 2022 (-0.0074 -> +0.0072) and
+  2024 (-0.0059 -> +0.0019). 2019 is essentially identical between
+  Colley and uniform Massey (-0.0166 vs -0.0163), suggesting the 2019
+  "clean v4 cliff" is filled by any reasonable opponent-adjusted
+  rating regardless of signal type.
+- **Combined** Colley -> Massey hl=14d: ~0.012 LL gap, enough to flip
+  the verdict cleanly. The original "polar opposite" framing was off
+  because the implementations differ on BOTH axes (signal type AND
+  time window), and each axis is independently load-bearing.
+
+**Implications for the verdict.** Colley's PASS is reinforced -- its
+W/L-only full-season signal is empirically uncorrelated-with-v4 along
+both axes that hurt Massey-14d. Massey-decay-14d's FAIL is also
+reinforced -- the bulk of its damage (-0.0042 LL of the +0.012 gap to
+Colley) comes from the time-window choice that PR 15 made for clause-1
+reasons, not from any deep property of margin information. Uniform
+Massey's marginal PASS at -0.0024 LL is interesting but doesn't change
+the verdict: clause 1 still robustly FAILs (corr 0.957 vs adj_em),
+which on a 22-season backtest will dominate the small clause-2 PASS
+margin -- highly correlated features add noise more than signal at
+v4's data scale.
+
 ## Verdict + recommendation
 
 **Colley:** PASS clause 2 cleanly. Promote to recovery step 5's
@@ -230,7 +285,12 @@ queue). The list is fully unwound at the cheap-gate layer.
 **Created on this branch:**
 - `src/clause2_colley.py` -- standalone clause-2 runner (mirrors
   `src/clause2_decay_massey.py`).
+- `src/clause2_uniform_massey.py` -- diagnostic-only standalone clause-2
+  runner with `half_life_days=None` (decomposition diagnostic; clause 1
+  intentionally skipped because it is leak-invariant FAIL).
 - `output/diag_clause2_colley.json` -- new canonical artifact
+  (force-added).
+- `output/diag_clause2_uniform_massey.json` -- new canonical artifact
   (force-added).
 - `docs/notes/2026-05-05-colley-massey-clean-rerun.md` (this file).
 - `docs/superpowers/specs/2026-05-05-colley-massey-clean-rerun-design.md`.
