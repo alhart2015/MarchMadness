@@ -197,6 +197,10 @@ def compute_all_features(data: dict) -> pd.DataFrame:
     # Only process seasons where we have detailed results (2003+)
     seasons = [s for s in seasons if s >= 2003]
 
+    # -- Colley-matrix ratings (cached) -----------------------------------
+    from src.features.colley_matrix import load_colley_ratings
+    colley_full = load_colley_ratings(reg)
+
     # -- Build KenPom -> Kaggle ID mapping --------------------------------
     print("  Building team ID mapping (KenPom -> Kaggle)...")
     kp_to_kaggle = build_kenpom_to_kaggle_map(kenpom, teams, spellings)
@@ -341,6 +345,10 @@ def compute_all_features(data: dict) -> pd.DataFrame:
         for _, row in season_seeds.iterrows():
             seed_map[int(row["TeamID"])] = _parse_seed_number(row["Seed"])
 
+        # -- 2j: Colley rating ---------------------------------------------
+        season_colley_df = colley_full[colley_full["Season"] == season]
+        colley_map = dict(zip(season_colley_df["TeamID"], season_colley_df["colley_rating"]))
+
         # -- Assemble features for each team in this season ---------------
         all_team_ids = set()
         all_team_ids.update(eff["TeamID"].values if not eff.empty else [])
@@ -379,6 +387,10 @@ def compute_all_features(data: dict) -> pd.DataFrame:
             # Massey ordinals
             if tid in massey_features:
                 row_data.update(massey_features[tid])
+
+            # Colley rating
+            if tid in colley_map:
+                row_data["colley_rating"] = colley_map[tid]
 
             # Conference strength
             if tid in conf_strength:
