@@ -180,16 +180,22 @@ success. **Clean-baseline measurement (PR <pending>, recovery step
          Half-life sweep NOT re-opened (rest of curve was already
          filtered out at clause 1 in PR 15). Findings:
          `docs/notes/2026-05-05-colley-massey-clean-rerun.md`.
-   - **Colley full LOSO backtest -- NOW THE IMMEDIATE NEXT PR.** Wire
-     `colley_rating` back into `compute_all_features` (inverse of
-     commit 3b4c374), regenerate `output/pairwise_v4.csv` with the new
-     feature, score 22-season LOSO + bracket points head-to-head
-     against clean v4 + v9-C baseline (1929 brkt pts on v9-C / 2069 on
-     clean v8 per PR 24). ~3 hours compute. Per the original Colley
-     spec's if-pass branch
-     (`docs/superpowers/specs/2026-05-03-colley-matrix-feature-design.md`).
-     If the bracket-points delta clears the spec's swap-in threshold
-     (+10 brkt pts), Colley becomes a v4 feature-add candidate.
+   - **[DONE -- PR <pending>] Colley full LOSO backtest REJECTed.**
+     LL_delta=-0.0003 LL on 22-season aggregate (Marginal band:
+     in (-0.005, +0.001), did NOT trigger Reject on LL); brkt_delta=
+     -24 brkt pts vs clean v8 baseline (2069), which DOES trigger
+     Reject (<= +10 bar). Acc_delta=+0.47pp (10/22 seasons help on
+     acc); seasons help/hurt on bracket points 10/10 (worst hurts
+     2009 -33, 2015 -30, 2019 -28). Wire-in REVERTED on this branch.
+     Closes Colley as v4-stack feature. **Generalized lesson:** the
+     3-season clause-2 PASS in PR 27 over-represented Colley-helpful
+     seasons on LL; W/L-only opponent-adjusted strength produces a
+     small LL improvement on the 22-season aggregate but the
+     probability shifts flip enough chalk picks in the upper rounds
+     that the bracket-points score regresses materially. The clause-2
+     gate's LL-on-3-seasons signal does not translate to bracket-points
+     headroom under v4's existing feature stack. Findings:
+     `docs/notes/2026-05-05-colley-full-loso-backtest.md`.
    - **NEW:** Regenerate v4's 2026 stage-1 predictions. The current
      production `pairwise_probs.json` is clean v8 stage-2 over LEAKY
      2026 stage-1 (`output/pairwise_probs_v4.json` is Apr 28). Trace
