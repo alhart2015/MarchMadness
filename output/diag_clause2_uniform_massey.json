@@ -1,0 +1,34 @@
+{
+  "half_life_days": null,
+  "subset_seasons": [
+    2019,
+    2022,
+    2024
+  ],
+  "per_season": [
+    {
+      "season": 2019,
+      "ll_with": 0.5229836553612961,
+      "ll_without": 0.5392994897780184,
+      "ll_delta": -0.016315834416722352
+    },
+    {
+      "season": 2022,
+      "ll_with": 0.6450840298572835,
+      "ll_without": 0.6378450381397901,
+      "ll_delta": 0.007238991717493426
+    },
+    {
+      "season": 2024,
+      "ll_with": 0.5969823789452686,
+      "ll_without": 0.5950639691829948,
+      "ll_delta": 0.001918409762273865
+    }
+  ],
+  "mean_ll_with_massey": 0.5883500213879495,
+  "mean_ll_without_massey": 0.5907361657002678,
+  "mean_ll_delta": -0.002386144312318317,
+  "ll_headroom_max": 0.001,
+  "pass_clause2": true,
+  "note": "Diagnostic only -- clause 1 still FAILs (corr ~0.957 vs adj_em, leak-invariant). Run to disambiguate the colley-massey-clean-rerun finding."
+}
