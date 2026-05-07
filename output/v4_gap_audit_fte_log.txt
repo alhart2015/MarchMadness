@@ -1,0 +1,38 @@
+======================================================================
+v4 vs 538 TOURNAMENT AUDIT (7 seasons via Wayback Machine)
+======================================================================
+loading v4 pairwise ...
+  48,465 unique (season, a, b) keys
+loading 538 forecasts ...
+  448 (season, team) rows across 7 seasons
+resolving 538 team names to Kaggle TeamIDs ...
+  resolved 448 of 448 rows
+loading tournament results + seeds ...
+  2,585 tournament games across 40 seasons
+joining v4 + 538 + outcomes ...
+  428 games joined
+  coverage: 99.1% (428 / 432)
+computing overall + per-bucket metrics ...
+emitting plots ...
+
+======================================================================
+OVERALL
+======================================================================
+  n_games : 428
+  ll_v4   : 0.5799
+  ll_fte  : 0.6011
+  acc_v4  : 0.692
+  acc_fte : 0.710
+  ece_v4  : 0.0414
+  ece_fte : 0.0881
+
+ANCHOR R64 rd2_win sum-to-1:
+  {'r64_rd2_sum_min': 1.0, 'r64_rd2_sum_max': 1.0, 'r64_rd2_sum_mean': 1.0, 'n_sampled': 50}
+
+======================================================================
+WEAK SPOTS (n >= 50, ll_delta >= +0.02)
+======================================================================
+  chalk_won=         chalk  n= 298  ll_v4=0.3219  ll_fte=0.2465  delta=+0.0754  mean(p_v4 - p_fte)=+0.001
+
+  saved output/v4_gap_audit_fte.json
+  saved 3 PNGs in output/

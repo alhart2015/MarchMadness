@@ -420,30 +420,19 @@ success. **Clean-baseline measurement (PR <pending>, recovery step
 
 ## Active queue
 
-> **Re-prioritization 2026-05-04.** v4 finished 2159 / 3462 in a
-> recent Kaggle Mania -- 2/3 of entries beat it on the same data.
-> That falsifies any framing where "Kaggle data is exhausted" or
-> "v4 is near the achievable ceiling." The bottleneck is much more
-> likely to be inside v4 itself (features, calibration, hyperparams,
-> model class) or in how stage-1 errors are scored against the
-> production metric (bracket points, not log loss). Audits and
-> metric corrections are now ahead of more ensemble/architecture
-> exploration.
+> **Re-prioritization 2026-05-07.** Audit lane closed by the 538 audit
+> (item #1 below, **DONE**). Two public benchmarks (Vegas at SIGMA=11,
+> 538 round-survival forecasts) have produced contradictory weak-spot
+> signatures: Vegas surfaces "v4 worse on upsets, late rounds, mid-
+> seed-gap, 0.80-0.90 confidence band"; 538 surfaces "v4 worse on
+> chalk picks." The two together imply the bottleneck is calibration
+> *shape* rather than any single bucket. Engineering against any one
+> bucket is now under-motivated; the next levers are the cheaper
+> single-season variance check (#1) and the external-data-as-features
+> experiment (#2), with the calibration-shape insight available as a
+> backup engineering target.
 
-1. **538 v4 gap audit (next benchmark in the audit framework).**
-   Reuse the audit framework from PR 18 (`src/audit_v4_gap_vegas.py`
-   pattern -- bucket-and-compute-metrics, per-cell calibration,
-   weak-spot threshold). Same buckets (round, chalk-vs-upset,
-   v4-confidence quintile, seed-diff magnitude). Difference: 538
-   publishes calibrated tournament-forecast probabilities directly
-   (no SIGMA conversion). 538 is widely regarded as a strong public
-   benchmark; if v4 also beats 538 across the board we have a real
-   "v4 is competitive" finding; if 538 beats v4 in specific buckets,
-   we have weak-spot signatures to engineer against. **Sourcing
-   investigation is the first task** -- 538's tournament-forecast
-   archive: API access? scraping? historical-archive coverage 2014+?
-   Promoted from "next" status in the Vegas-audit findings note.
-2. **Single-season v4 variance check.** The Vegas audit shows v4
+1. **Single-season v4 variance check.** The Vegas audit shows v4
    beats Vegas on the 22-season aggregate. The user's Kaggle finish
    (2159 / 3462) is a single-season result. Plot per-season v4 LL +
    ECE; identify any season where v4's calibration is materially
@@ -451,12 +440,24 @@ success. **Clean-baseline measurement (PR <pending>, recovery step
    audit. Surfaces whether v4's 22-season-average story hides
    high-variance per-season behavior that hurts on single-season
    Kaggle scoring.
-3. **External rankings / external data as features (538 / Vegas
-   prop-bet / roster injury, etc.).** Distinct from item #1: that
-   item AUDITS v4 against 538; this item adds 538-derived signals
-   as input features to v4 itself. Sequence: do the audit first,
-   then engineer against the weak spots it surfaces (if any).
-   Sourcing question shared with item #1.
+2. **External rankings / external data as features (538 / Vegas
+   prop-bet / roster injury, etc.).** Adds 538-derived signals as
+   input features to v4 itself. **Unblocked by the 538 audit:** the
+   Wayback-pinned cache (`data/raw/fte_forecasts/<year>.csv`,
+   `_FTE_URL_BY_YEAR` snapshot map in `src/ingest/fte_forecasts.py`)
+   and team-name resolution path are reusable for the 7 audited
+   seasons (2016-2019, 2021-2023). Cheap-falsification gate
+   (correlation, standalone LL, blend-headroom) per the prior
+   feature-addition pattern (Massey, Colley, HBT, plain BT).
+3. **v4 calibration-shape engineering (audit-derived).** Backup
+   engineering target if items 1-2 don't pre-empt: 538 has v4 LL
+   +0.075 worse on chalk picks (where it counts); Vegas has v4 LL
+   +0.025 worse in the 0.80-0.90 confidence band. Both audits flag
+   confidence-shape weakness, just on different sides of the
+   distribution. Candidate fixes: temperature scaling, isotonic
+   regression on a held-out tournament-only validation set, late-
+   stage "confidence sharpening" feature. Gate: 22-season bracket
+   points (not just LL).
 4. **Small neural net (MLP) as a stage-1.** Adds PyTorch tooling
    cost; diversity vs XGBoost on the 67-feature tabular space is
    the open question. Lower priority after Massey + Colley + HBT
@@ -474,10 +475,41 @@ success. **Clean-baseline measurement (PR <pending>, recovery step
 6. **Roster-level returning-experience.** Player-level data is not
    in the Kaggle Mania archive; would need an external roster CSV
    per season. Different signal from coach experience. Closely
-   related to #3.
+   related to #2.
 
 ## Done
 
+- **538 v4 gap audit -- PASS-AND-FLAG (2026-05-07).** 7-season audit
+  (2016-2019, 2021-2023) on 428 R64-Champ games. Sourcing pivoted to
+  Wayback Machine -- 538's live endpoints went dark in the March 2025
+  shutdown; spec's GitHub raw URL pattern (`raw.githubusercontent.com/.../master/march-madness-predictions/<year>/`)
+  was wrong (that dir only holds 2014's 62 bracket-challenge CSVs),
+  the actual canonical pattern was `projects.fivethirtyeight.com/march-madness-api/<year>/...`
+  and is now dead (302 redirect to abcnews.go.com). Internet Archive
+  has 200-status text/csv captures of the original CSVs for 2016-2023;
+  2014/2015 predate the API, 2024/2025 not archived. Snapshots from
+  2025-03-06 pinned in `_FTE_URL_BY_YEAR`.
+  Schema correction during impl: 538's `rdR_win` is P(reach round R),
+  not P(win round R's game) -- audit reads `rd{X+1}_win` for round-of-X.
+  Verdict: **v4 marginally beats 538 on overall LL** (0.5799 vs 0.6011,
+  delta -0.0212) but trails on accuracy (-1.8 pp). **One weak spot at
+  threshold:** chalk_won=chalk (n=298, ll_v4=0.322, ll_fte=0.247,
+  delta=+0.0754) -- 538 is materially more confident in winning
+  chalk picks than v4 is. Pattern across rounds: 538 leads R64 (+0.011),
+  v4 dominates S16 (-0.123) and E8 (-0.155); 538's BT-norm
+  approximation gets shaky in late rounds where rdR_win averages over
+  multiple expected opponents. Cross-audit comparison: Vegas surfaced
+  6 weak spots (upsets, late rounds, mid-seed-gap, 0.80-0.90 conf
+  band); 538 surfaces 1 (chalk picks). The two benchmarks find
+  *different* weak spots, implying calibration shape (not any single
+  bucket) is the bottleneck. Code retained on feat/v4-gap-audit-fte:
+  `src/ingest/fte_forecasts.py` (loader, 10 unit tests),
+  `src/audit_v4_gap_fte.py` (driver, 9 unit tests). Outputs:
+  `output/v4_gap_audit_fte.json` + 3 calibration PNGs (force-added).
+  Findings: `docs/notes/2026-05-04-v4-gap-audit-fte.md`. Anchors:
+  coverage 99.1% (428/432), R64 rd2_win sum-to-1 1.0/1.0/1.0 across
+  50 sampled matchups, overall ll_v4 within +/-0.05 of clean v4's
+  22-season LL 0.5588.
 - **v4 feature ablation (2026-04-30).** Drop-and-retrain on v4 across
   4 v3 feature groups (late_season, trajectory, conf_tourney,
   vegas_trend); coach skipped because v4 vs v3 LOSO already proves
