@@ -1,0 +1,22 @@
+======================================================================
+v4 PER-SEASON VARIANCE CHECK
+======================================================================
+  warning: 1 Vegas rows have unparseable dates; dropping
+  v4-vs-Vegas frame: 1261 games across 21 seasons
+  v4-vs-538   frame: 428 games across 7 seasons
+computing per-season metrics ...
+
+======================================================================
+VERDICT: MIXED
+======================================================================
+  4 seasons flagged but no clean trend. Findings note must call out the pattern.
+  outlier seasons: [2011, 2013, 2015, 2023]
+
+ANCHORS (weighted per-season mean -- compare to audit overall):
+  weighted_ll_v4_vs_vegas_audit_subset                    = 0.5565
+  weighted_ll_vegas_vs_audit                              = 0.5408
+  weighted_ll_v4_vs_fte_audit_subset                      = 0.5799
+  weighted_ll_fte_vs_audit                                = 0.6011
+
+  saved output/v4_per_season_variance.json
+  saved 2 PNGs in output/
