@@ -1,6 +1,9 @@
 """Unit tests for src/analyze_v4_per_season_variance.py."""
 from __future__ import annotations
 
+import json
+from pathlib import Path
+
 import numpy as np
 import pandas as pd
 import pytest
@@ -137,3 +140,37 @@ def test_pick_verdict_outlier_when_one_or_two_seasons_flagged():
     verdict = _pick_verdict(df, outliers, sigma=1.5)
     assert verdict["label"] == "outlier"
     assert 2009 in verdict["outlier_seasons"]
+
+
+def test_run_analysis_smoke(tmp_path):
+    """Run the full analysis on real data; verify output files exist
+    and JSON is well-formed. Exercises the full join + write path."""
+    pytest.importorskip("matplotlib")
+    out_dir = tmp_path / "output"
+    out_dir.mkdir()
+    out_json = out_dir / "v4_per_season_variance.json"
+
+    # Skip if the required data isn't present (fresh-clone case).
+    if not Path("output/pairwise_v4.csv").exists():
+        pytest.skip("output/pairwise_v4.csv not present")
+    if not Path("data/raw/march-machine-learning-2026/MTeams.csv").exists():
+        pytest.skip("Kaggle data not unpacked")
+
+    from src.analyze_v4_per_season_variance import run_analysis
+    summary = run_analysis(
+        v4_csv="output/pairwise_v4.csv",
+        out_dir=out_dir,
+        out_json=str(out_json),
+        fte_cache_dir="data/raw/fte_forecasts",
+        sigma_threshold=1.5,
+    )
+    assert out_json.exists()
+    assert (out_dir / "v4_per_season_variance_traces.png").exists()
+    assert (out_dir / "v4_per_season_variance_deltas.png").exists()
+    data = json.loads(out_json.read_text())
+    assert "per_season" in data
+    assert "outliers" in data
+    assert "verdict" in data
+    assert data["verdict"]["label"] in {"flat", "outlier", "trend", "mixed"}
+    # At least 22 Vegas-covered seasons.
+    assert len(data["per_season"]) >= 20
