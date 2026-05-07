@@ -135,6 +135,7 @@ def _flag_outliers(
             if pd.isna(row[col]):
                 continue
             z = (float(row[col]) - mean) / std
+            # one-sided: only positive z is interesting for tracked cols
             if z >= sigma:
                 flagged.append({
                     "season": int(row["season"]),
@@ -392,8 +393,6 @@ def run_analysis(
     outliers = _flag_outliers(merged, _TRACKED_COLUMNS, sigma=sigma_threshold)
 
     # Sanity anchors -- weighted aggregate matches audit overall numbers.
-    eps = 1e-15
-
     def _weighted_ll(per_season: pd.DataFrame, col: str) -> float:
         sub = per_season[["n_games", col]].dropna()
         return float(np.average(sub[col], weights=sub["n_games"]))
