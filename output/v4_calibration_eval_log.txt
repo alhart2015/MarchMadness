@@ -1,0 +1,27 @@
+2026-05-08 12:01:50,139 INFO ===== PHASE 1: global T sweep =====
+2026-05-08 12:02:01,074 INFO global T=0.700 -> total=2069.0 delta=+0.0 W/L/T=0/0/22 drop_best=+0.0
+2026-05-08 12:02:07,206 INFO global T=0.850 -> total=2069.0 delta=+0.0 W/L/T=0/0/22 drop_best=+0.0
+2026-05-08 12:02:12,651 INFO global T=1.000 -> total=2069.0 delta=+0.0 W/L/T=0/0/22 drop_best=+0.0
+2026-05-08 12:02:17,402 INFO global T=1.150 -> total=2069.0 delta=+0.0 W/L/T=0/0/22 drop_best=+0.0
+2026-05-08 12:02:22,649 INFO global T=1.300 -> total=2069.0 delta=+0.0 W/L/T=0/0/22 drop_best=+0.0
+2026-05-08 12:02:25,225 INFO global T=1.500 -> total=2069.0 delta=+0.0 W/L/T=0/0/22 drop_best=+0.0
+2026-05-08 12:02:27,874 INFO global T=2.000 -> total=2069.0 delta=+0.0 W/L/T=0/0/22 drop_best=+0.0
+2026-05-08 12:02:27,875 INFO ===== PHASE 1: per-round greedy =====
+2026-05-08 12:02:36,618 INFO per-round: 48465/48465 rows have a resolved round bucket (0 dropped)
+2026-05-08 12:02:53,981 INFO per-round step 1/5 (R64): picked T=0.700, total=2069.0, delta=+0.0
+2026-05-08 12:03:10,573 INFO per-round step 2/5 (R32): picked T=0.700, total=2069.0, delta=+0.0
+2026-05-08 12:03:27,188 INFO per-round step 3/5 (S16): picked T=0.700, total=2069.0, delta=+0.0
+2026-05-08 12:03:47,030 INFO per-round step 4/5 (E8): picked T=0.700, total=2069.0, delta=+0.0
+2026-05-08 12:04:04,651 INFO per-round step 5/5 (F4_NCG): picked T=0.700, total=2069.0, delta=+0.0
+2026-05-08 12:04:13,662 INFO PHASE 1 OVERALL: verdict=FAIL best_kind=global delta=+0.0 drop_best=+0.0 wins=0
+2026-05-08 12:04:13,668 INFO wrote output/v4_calibration_eval.json
+2026-05-08 12:04:13,668 INFO wall: 143.5 seconds
+2026-05-08 12:26:36,290 INFO ===== Phase 2 cell: T=0.85 =====
+2026-05-08 12:27:06,069 INFO Phase 2 T=0.85: verdict=MARGINAL delta=+10.0 drop_best=+6.0 W/L/T=3/1/18 wall=29.8s
+2026-05-08 12:27:06,069 INFO ===== Phase 2 cell: T=1.15 =====
+2026-05-08 12:27:33,955 INFO Phase 2 T=1.15: verdict=MARGINAL delta=+10.0 drop_best=+6.0 W/L/T=3/1/18 wall=27.9s
+2026-05-08 12:27:33,955 INFO ===== Phase 2 cell: T=1.50 =====
+2026-05-08 12:28:04,977 INFO Phase 2 T=1.50: verdict=MARGINAL delta=+10.0 drop_best=+6.0 W/L/T=3/1/18 wall=31.0s
+2026-05-08 12:28:04,977 INFO ===== Phase 2 cell: T=2.00 =====
+2026-05-08 12:28:33,260 INFO Phase 2 T=2.00: verdict=FAIL delta=+0.0 drop_best=+0.0 W/L/T=0/0/22 wall=28.3s
+2026-05-08 12:28:33,271 INFO merged phase2_sweep into output\v4_calibration_eval.json
