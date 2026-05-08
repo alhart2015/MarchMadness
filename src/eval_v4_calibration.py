@@ -404,9 +404,279 @@ def _score_pairwise_df(df: pd.DataFrame, scratch_dir: Path) -> dict:
             pass
 
 
+# ---------------------------------------------------------------------------
+# Phase 2 (filled in Task 5)
+# ---------------------------------------------------------------------------
+
+
+def run_phase2(
+    v4_csv: str,
+    winning_config: dict,
+    baseline_v8_csv: str,
+    out_csv: str,
+) -> dict:
+    """Filled in Task 5."""
+    raise NotImplementedError("see Task 5")
+
+
+# ---------------------------------------------------------------------------
+# Reliability plot
+# ---------------------------------------------------------------------------
+
+
+def _plot_reliability(
+    v8_baseline_df: pd.DataFrame,
+    v8_global_df: "pd.DataFrame | None",
+    v8_perround_df: "pd.DataFrame | None",
+    out_path: str,
+    n_bins: int = 10,
+) -> None:
+    """3-line reliability diagram (predicted prob vs empirical win rate).
+    Each frame must have p_a_wins; we treat the symmetric pair frame as
+    a per-row probability and use the matching outcome from
+    MNCAATourneyCompactResults to compute empirical win rate per bin."""
+    results = pd.read_csv(DATA / "MNCAATourneyCompactResults.csv")
+    # Build a (season, min_id, max_id) -> outcome (1 if min_id beat max_id else 0).
+    outcomes = {}
+    for _, r in results.iterrows():
+        s = int(r["Season"])
+        w, l = int(r["WTeamID"]), int(r["LTeamID"])
+        a, b = (w, l) if w < l else (l, w)
+        outcomes[(s, a, b)] = 1 if w == a else 0
+
+    def _bin(df, label):
+        sub = df.copy()
+        sub["pair_key"] = list(zip(sub["season"], sub["team_a"], sub["team_b"]))
+        sub = sub[sub["pair_key"].apply(
+            lambda k: (int(k[0]), int(k[1]), int(k[2])) in outcomes
+            if k[1] < k[2] else (int(k[0]), int(k[2]), int(k[1])) in outcomes
+        )]
+        bins = np.linspace(0.0, 1.0, n_bins + 1)
+        sub["bin"] = pd.cut(sub["p_a_wins"], bins, include_lowest=True, right=True)
+        per_bin = []
+        for b_interval, grp in sub.groupby("bin"):
+            mid = float(b_interval.mid) if hasattr(b_interval, "mid") else 0.5
+            outs = []
+            for _, row in grp.iterrows():
+                key = (int(row["season"]), int(row["team_a"]), int(row["team_b"]))
+                key_norm = (key[0], min(key[1], key[2]), max(key[1], key[2]))
+                if key_norm not in outcomes:
+                    continue
+                a_won = outcomes[key_norm]
+                if row["team_a"] == key_norm[1]:
+                    outs.append(a_won)
+                else:
+                    outs.append(1 - a_won)
+            if outs:
+                per_bin.append((mid, float(np.mean(outs)), len(outs)))
+        return per_bin
+
+    fig, ax = plt.subplots(figsize=(7, 7))
+    ax.plot([0, 1], [0, 1], "k--", alpha=0.4, label="ideal")
+    for (df, label, color) in [
+        (v8_baseline_df, "v8 baseline", "C0"),
+        (v8_global_df, "v8 + global T", "C1"),
+        (v8_perround_df, "v8 + per-round T", "C2"),
+    ]:
+        if df is None:
+            continue
+        pts = _bin(df, label)
+        if not pts:
+            continue
+        xs, ys, ns = zip(*pts)
+        ax.plot(xs, ys, "-o", color=color, label=f"{label} (n_bins={len(pts)})")
+    ax.set_xlim(0, 1); ax.set_ylim(0, 1)
+    ax.set_xlabel("predicted P(team_a wins)")
+    ax.set_ylabel("empirical win rate")
+    ax.set_title("v4 calibration: temperature scaling reliability (10 bins)")
+    ax.legend(loc="lower right")
+    fig.tight_layout()
+    fig.savefig(out_path, dpi=120)
+    plt.close(fig)
+
+
+# ---------------------------------------------------------------------------
+# CLI
+# ---------------------------------------------------------------------------
+
+
 def main(argv: list[str] | None = None) -> int:
-    """Filled in Task 4."""
-    raise NotImplementedError("see Task 4")
+    p = argparse.ArgumentParser(description="Eval v4 calibration via temperature scaling.")
+    p.add_argument("--v8-csv", default="output/pairwise_v8.csv")
+    p.add_argument("--v4-csv", default="output/pairwise_v4.csv")
+    p.add_argument("--baseline-total", type=float, default=2069.0)
+    p.add_argument("--out-json", default="output/v4_calibration_eval.json")
+    p.add_argument("--out-log", default="output/v4_calibration_eval_log.txt")
+    p.add_argument("--out-plot", default="output/v4_calibration_reliability.png")
+    p.add_argument("--out-dir", default="output")
+    p.add_argument(
+        "--phase",
+        choices=["phase1", "phase2", "auto"],
+        default="auto",
+        help="phase1=skip Phase 2 always; phase2=run Phase 2 unconditionally "
+             "with a manually-specified winning T; auto=run Phase 1, "
+             "trigger Phase 2 only if PASS or MARGINAL.",
+    )
+    p.add_argument(
+        "--phase2-T-config",
+        default=None,
+        help="(phase=phase2 only) JSON-encoded winning T config. "
+             "Either a scalar (e.g. '1.15') or a per-round dict "
+             "(e.g. '{\"R64\":1.15,\"R32\":1.0,\"S16\":0.85,\"E8\":1.5,\"F4_NCG\":1.0}').",
+    )
+    args = p.parse_args(argv)
+
+    out_dir = Path(args.out_dir)
+    out_dir.mkdir(parents=True, exist_ok=True)
+    Path(args.out_json).parent.mkdir(parents=True, exist_ok=True)
+
+    # Tee logs to file + stdout.
+    log_handler = logging.FileHandler(args.out_log, mode="w")
+    log_stream = logging.StreamHandler(sys.stdout)
+    fmt = logging.Formatter("%(asctime)s %(levelname)s %(message)s")
+    for h in (log_handler, log_stream):
+        h.setFormatter(fmt)
+        logging.getLogger().addHandler(h)
+    logging.getLogger().setLevel(logging.INFO)
+
+    t_start = time.time()
+    summary = {
+        "spec": "docs/superpowers/specs/2026-05-08-v4-calibration-temperature-scaling-design.md",
+        "plan": "docs/superpowers/plans/2026-05-08-v4-calibration-temperature-scaling.md",
+        "baseline_total": float(args.baseline_total),
+        "v8_csv": str(args.v8_csv),
+    }
+
+    if args.phase in ("phase1", "auto"):
+        logger.info("===== PHASE 1: global T sweep =====")
+        global_out = run_global_T_sweep(
+            v8_csv=args.v8_csv,
+            T_grid=T_GRID,
+            baseline_total=args.baseline_total,
+            scratch_dir=out_dir,
+        )
+        summary["phase1_global"] = global_out
+
+        logger.info("===== PHASE 1: per-round greedy =====")
+        perround_out = run_per_round_greedy(
+            v8_csv=args.v8_csv,
+            T_grid=T_GRID,
+            round_order=ROUND_ORDER,
+            baseline_total=args.baseline_total,
+            scratch_dir=out_dir,
+        )
+        summary["phase1_perround"] = perround_out
+
+        # Write the winning frames out for force-add.
+        df_v8 = pd.read_csv(args.v8_csv)
+
+        best_global_T = float(global_out["best_cell"]["T"])
+        global_winner_df = scale_pairwise(df_v8, T=best_global_T)
+        global_winner_path = (
+            out_dir / f"pairwise_v8_calibrated_global_T{best_global_T:.2f}.csv"
+        )
+        global_winner_df.to_csv(global_winner_path, index=False)
+        summary["phase1_global"]["winner_csv"] = str(global_winner_path)
+
+        slots_df = pd.read_csv(DATA / "MNCAATourneySlots.csv")
+        seeds_df = pd.read_csv(DATA / "MNCAATourneySeeds.csv")
+        df_v8_bucketed = df_v8.copy()
+        df_v8_bucketed["round_bucket"] = assign_round_buckets(
+            df_v8_bucketed, slots_df, seeds_df
+        )
+        df_v8_resolved = df_v8_bucketed.dropna(subset=["round_bucket"]).copy()
+        T_winner = perround_out["winning_T"]
+        perround_resolved = scale_pairwise(df_v8_resolved, T=T_winner)
+        perround_winner_df = pd.concat(
+            [perround_resolved.drop(columns=["round_bucket"]),
+             df_v8_bucketed[df_v8_bucketed["round_bucket"].isna()].drop(
+                 columns=["round_bucket"])],
+            ignore_index=True,
+        )
+        perround_filename = (
+            "pairwise_v8_calibrated_perround_"
+            + "_".join(f"{T_winner[r]:.2f}" for r in ROUND_ORDER)
+            + ".csv"
+        )
+        perround_winner_path = out_dir / perround_filename
+        perround_winner_df.to_csv(perround_winner_path, index=False)
+        summary["phase1_perround"]["winner_csv"] = str(perround_winner_path)
+
+        # Reliability plot.
+        _plot_reliability(
+            v8_baseline_df=df_v8,
+            v8_global_df=global_winner_df,
+            v8_perround_df=perround_winner_df,
+            out_path=str(args.out_plot),
+        )
+        summary["plot"] = str(args.out_plot)
+
+        # Decide overall Phase 1 verdict from the better of the two cells.
+        global_delta = global_out["best_cell"]["delta_total"]
+        perround_delta = perround_out["winning_cell"]["delta_total"]
+        if perround_delta > global_delta:
+            best_phase1 = perround_out["winning_cell"]
+            best_kind = "per-round"
+        else:
+            best_phase1 = global_out["best_cell"]
+            best_kind = "global"
+        phase1_verdict = _classify_verdict(
+            delta_total=best_phase1["delta_total"],
+            drop_best_delta=best_phase1["drop_best_season_delta"],
+            wins=best_phase1["wins"],
+        )
+        summary["phase1_overall"] = {
+            "verdict": phase1_verdict,
+            "best_kind": best_kind,
+            "best_cell": best_phase1,
+        }
+        logger.info(
+            "PHASE 1 OVERALL: verdict=%s best_kind=%s delta=%+.1f drop_best=%+.1f wins=%d",
+            phase1_verdict, best_kind,
+            best_phase1["delta_total"],
+            best_phase1["drop_best_season_delta"],
+            best_phase1["wins"],
+        )
+
+    # Phase 2 (Task 5).
+    if args.phase == "phase2" or (
+        args.phase == "auto"
+        and summary["phase1_overall"]["verdict"] in ("PASS", "MARGINAL")
+    ):
+        logger.info("===== PHASE 2: retrain v8 on rescaled v4 =====")
+        if args.phase == "phase2":
+            if args.phase2_T_config is None:
+                raise SystemExit("--phase=phase2 requires --phase2-T-config")
+            T_cfg = json.loads(args.phase2_T_config)
+        else:
+            best_kind = summary["phase1_overall"]["best_kind"]
+            if best_kind == "global":
+                T_cfg = float(global_out["best_cell"]["T"])
+            else:
+                T_cfg = perround_out["winning_T"]
+        phase2_out = run_phase2(
+            v4_csv=args.v4_csv,
+            winning_config=T_cfg,
+            baseline_v8_csv=args.v8_csv,
+            out_csv=str(out_dir / "pairwise_v8_phase2.csv"),
+        )
+        summary["phase2"] = phase2_out
+        logger.info(
+            "PHASE 2: verdict=%s delta=%+.1f drop_best=%+.1f wins=%d",
+            phase2_out["verdict"],
+            phase2_out["cell"]["delta_total"],
+            phase2_out["cell"]["drop_best_season_delta"],
+            phase2_out["cell"]["wins"],
+        )
+    elif args.phase == "auto":
+        logger.info("PHASE 2 SKIPPED: Phase 1 verdict was %s", summary["phase1_overall"]["verdict"])
+        summary["phase2"] = {"skipped": True, "reason": "Phase 1 NO-GO"}
+
+    summary["wall_seconds"] = time.time() - t_start
+    Path(args.out_json).write_text(json.dumps(summary, indent=2, default=str))
+    logger.info("wrote %s", args.out_json)
+    logger.info("wall: %.1f seconds", summary["wall_seconds"])
+    return 0
 
 
 if __name__ == "__main__":
