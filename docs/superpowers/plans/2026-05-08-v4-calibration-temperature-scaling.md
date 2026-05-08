@@ -247,8 +247,9 @@ def test_scale_per_round_dispatch():
     assert 0.5 < out.iloc[1]["p_a_wins"] < 0.7
     # S16 (T=0.5) -> further from 0.5 than 0.7.
     assert out.iloc[2]["p_a_wins"] > 0.7
-    # E8 (T=1.5) -> closer to 0.5 than 0.7 but less so than R32.
-    assert 0.5 < out.iloc[3]["p_a_wins"] < out.iloc[1]["p_a_wins"]
+    # E8 (T=1.5) flattens 0.7 less than R32 (T=2.0) does. Since p=0.7 > 0.5,
+    # "closer to 0.5" means smaller numeric value, so R32 < E8 < 0.7.
+    assert 0.5 < out.iloc[1]["p_a_wins"] < out.iloc[3]["p_a_wins"] < 0.7
 
 
 def test_scale_clips_extreme_inputs_to_finite_output():
