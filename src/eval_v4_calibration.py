@@ -158,6 +158,17 @@ def _anchor_check(df_actual: pd.DataFrame, baseline_csv: str) -> dict:
     }
 
 
+def _per_season_delta(
+    score: dict,
+    baseline_per_season: Mapping[int, float],
+) -> dict[int, float]:
+    """Per-season delta = score - baseline, keyed on baseline's seasons."""
+    return {
+        int(s): float(score["per_season_pts"][s]) - float(baseline_per_season[s])
+        for s in baseline_per_season
+    }
+
+
 # ---------------------------------------------------------------------------
 # Phase 1 sweeps
 # ---------------------------------------------------------------------------
@@ -209,10 +220,7 @@ def run_global_T_sweep(
     for T in T_grid:
         scaled = scale_pairwise(df_baseline, T=float(T))
         score = _score_pairwise_df(scaled, scratch_dir)
-        per_season_delta = {
-            int(s): float(score["per_season_pts"][s]) - float(baseline_per_season[s])
-            for s in baseline_per_season
-        }
+        per_season_delta = _per_season_delta(score, baseline_per_season)
         summary = _summarize_cell(per_season_delta, baseline_total=baseline_total)
         summary["T"] = float(T)
         cells.append(summary)
@@ -322,11 +330,11 @@ def run_per_round_greedy(
                      columns=["round_bucket"])],
                 ignore_index=True,
             )
+            assert len(scaled_full) == n_total, (
+                f"row count drift: {len(scaled_full)} vs {n_total}"
+            )
             score = _score_pairwise_df(scaled_full, scratch_dir)
-            per_season_delta = {
-                int(s): float(score["per_season_pts"][s]) - float(baseline_per_season[s])
-                for s in baseline_per_season
-            }
+            per_season_delta = _per_season_delta(score, baseline_per_season)
             summary = _summarize_cell(per_season_delta, baseline_total=baseline_total)
             summary["T"] = float(T)
             summary["round"] = round_name
@@ -347,21 +355,19 @@ def run_per_round_greedy(
             "all_cells": cells,
         })
 
-    winning_cell = chain[-1]  # final step's pick is the chain end
-    # Re-derive the full summary at winning_T (could differ from
-    # chain[-1]['total_after_step'] only by selection order; here they
-    # are equal by construction).
+    # Re-derive the full summary at winning_T (equal by construction to
+    # chain[-1]['total_after_step']).
     winning_full = scale_pairwise(df_resolved, T=best_T)
     winning_full = pd.concat(
         [winning_full.drop(columns=["round_bucket"]),
          df_baseline[df_baseline["round_bucket"].isna()].drop(columns=["round_bucket"])],
         ignore_index=True,
     )
+    assert len(winning_full) == n_total, (
+        f"row count drift: {len(winning_full)} vs {n_total}"
+    )
     winning_score = _score_pairwise_df(winning_full, scratch_dir)
-    winning_per_season_delta = {
-        int(s): float(winning_score["per_season_pts"][s]) - float(baseline_per_season[s])
-        for s in baseline_per_season
-    }
+    winning_per_season_delta = _per_season_delta(winning_score, baseline_per_season)
     winning_summary = _summarize_cell(
         winning_per_season_delta, baseline_total=baseline_total
     )
