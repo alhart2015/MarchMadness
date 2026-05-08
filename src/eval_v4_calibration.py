@@ -23,6 +23,7 @@ from __future__ import annotations
 import argparse
 import json
 import logging
+import os
 import sys
 import tempfile
 import time
@@ -168,12 +169,9 @@ def _score_pairwise_df(df: pd.DataFrame, scratch_dir: Path) -> dict:
     The tempfile is cleaned up before return.
     """
     fd, tmp_path = tempfile.mkstemp(prefix="calib_", suffix=".csv", dir=str(scratch_dir))
-    Path(tmp_path).close = lambda: None  # nothing
+    os.close(fd)
     try:
         df.to_csv(tmp_path, index=False)
-        # close the fd that mkstemp opened
-        import os
-        os.close(fd)
         return score_pairwise_path(tmp_path)
     finally:
         try:
