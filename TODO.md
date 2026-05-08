@@ -470,6 +470,24 @@ success. **Clean-baseline measurement (PR <pending>, recovery step
 > returning-experience promoted to Active queue #1 by elimination.
 > Meta-lesson recorded: post-hoc transforms on stage-2 output must
 > change chalk picks, not just rescale probabilities.
+>
+> **Update 2026-05-08 (Kaggle-gap framing retired).** The "user finished
+> 2159/3462 on Kaggle therefore v4 has a hole" framing that motivated
+> the audit lane, the R64-blend, and the calibration-shape experiment is
+> RETIRED. Kaggle Mania scores log loss; competitive bracket pools score
+> chalk-walk (1/2/4/8/16/32 by round). These are different objectives:
+> chalk-walk is monotone-invariant in p, log loss is sensitive to
+> magnitude. v4 is over-confident for LL (Vegas LL 0.5447 vs v4 0.5595,
+> Vegas ECE 0.029 vs v4 0.037 from the 2026-05-04 Vegas audit) -- the
+> Kaggle finish reflects that LL gap, not a bracket-pool gap. The
+> production objective is the 22-season bracket-points backtest (2069
+> baseline); Kaggle leaderboard rank is no longer treated as falsifying
+> evidence. The strategy note `docs/notes/2026-05-07-v4-kaggle-gap-strategy.md`
+> is deprecated by this update; the audits' bucket-level pick-flipping
+> findings (upset detection 15.3% vs 17.5%, late-round confidence) remain
+> valid because they predict actual chalk-pick flips. Active queue items
+> 1-4 below stand; their motivation is now "does this move the 22-season
+> bracket-points number," not "does this close the Kaggle gap."
 
 1. **Roster-level returning-experience.** **Promoted to #1 by elimination
    (2026-05-08): calibration-shape MARGINAL closes that lane.** Player-
@@ -483,29 +501,45 @@ success. **Clean-baseline measurement (PR <pending>, recovery step
    different from all 67 existing features. Data sourcing cost is high; the
    first step is locating a historical roster-level CSV (returning minutes
    played, returning starters) for the 2003-2025 tournament teams.
-2. **Small neural net (MLP) as a stage-1.** Adds PyTorch tooling
+2. **Pool-aware bracket construction (NEW 2026-05-08).** Orthogonal to
+   improving v4: given v4's pairwise probabilities, what bracket should
+   you actually submit? Chalk-pick-at-every-node maximizes EV on bracket
+   points but loses in competitive pools above ~50 people because too
+   many opponents pick the same chalk -- you need positive variance to
+   differentiate. Cheap to set up: Monte Carlo simulate the tournament
+   from `output/pairwise_probs.json`, then for each candidate bracket
+   compute `P(top-3 finish)` against a model of opponent picks (chalk
+   prior + ESPN crowd-pick distribution). Optimize over a tractable
+   bracket space (e.g., perturbations of chalk with k targeted upsets
+   in F4/E8 region where leverage is highest). The recent structural
+   findings make this attractive: the calibration-shape lane is closed,
+   the data-hypothesis lane is closed, but bracket-construction strategy
+   is a separate axis that's never been touched. Expected gain is
+   pool-size-dependent and not directly comparable to the +25 PASS bar
+   on stage-1/2 experiments. Spec out before #1 if data sourcing for
+   roster turns out to be expensive.
+3. **Small neural net (MLP) as a stage-1.** Adds PyTorch tooling
    cost; diversity vs XGBoost on the 67-feature tabular space is
-   the open question. Lower priority after Massey + Colley + HBT
-   + plain-BT-on-bracket-points. The lesson from the bracket-points
-   re-test (PR 17): same-data peers aren't sufficient even on the
-   production metric -- a stage-1 needs per-disagreement accuracy
-   >= ~45% in the regions where it differs from v4. MLP on the
-   same 67-feature target faces the same risk profile as LR did.
-3. **Full Bayesian Bradley-Terry with strength + variance per team**
+   the open question. The lesson from the bracket-points re-test
+   (PR 17): same-data peers aren't sufficient even on the production
+   metric -- a stage-1 needs per-disagreement accuracy >= ~45% in the
+   regions where it differs from v4. MLP on the same 67-feature target
+   faces the same risk profile as LR did.
+4. **Full Bayesian Bradley-Terry with strength + variance per team**
    (PyMC / NumPyro / Stan). HBT confirmed prior structure doesn't
    lift BT-class standalone strength on the LL-blend gate; the
    bracket-points re-test (PR 17) confirmed plain BT also doesn't
    help on the production metric. Switching to full posterior
-   won't change either. Deferred until items 1-2 are settled.
-4. **Pre-tournament Vegas futures (championship odds, F4-reach
+   won't change either. Deferred until items 1-3 are settled.
+5. **Pre-tournament Vegas futures (championship odds, F4-reach
    odds) as a per-team strength feature.** Was #1b in the
-   `2026-05-07-v4-kaggle-gap-strategy.md` strategy note. **Now
-   demoted** by the R64-blend FAIL: if R64 line apply-time override
-   doesn't move bracket points, the related "futures-derived team
-   strength as v4 stage-1 feature" experiment is now lower-prob.
-   Re-evaluate only if roster-level (#1) and MLP (#2) also fail.
-   Sourcing the historical futures data is its own cost; not worth
-   paying yet.
+   (now-deprecated) `2026-05-07-v4-kaggle-gap-strategy.md` strategy
+   note. **Demoted** by the R64-blend FAIL: if R64 line apply-time
+   override doesn't move bracket points, the related "futures-derived
+   team strength as v4 stage-1 feature" experiment is now lower-prob.
+   Re-evaluate only if roster-level (#1), bracket-construction (#2),
+   and MLP (#3) all fail. Sourcing the historical futures data is
+   its own cost; not worth paying yet.
 
 ## Done
 

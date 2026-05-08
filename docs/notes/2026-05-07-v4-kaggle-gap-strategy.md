@@ -5,8 +5,23 @@
 per-season variance check, and the Kaggle finish (2159 / 3462) into a
 coherent picture of v4's gaps. Captures conclusions reached in a
 2026-05-07 conversation that were at risk of being glossed over.
-**Status:** Reference document. Future sessions should read this before
-starting any "new feature for v4" work.
+**Status: DEPRECATED 2026-05-08.** Kaggle Mania scores log loss;
+competitive bracket pools score chalk-walk (1/2/4/8/16/32 by round).
+These are different objectives -- chalk-walk is monotone-invariant in
+p, log loss is sensitive to magnitude. The 2159/3462 Kaggle finish
+reflects v4's LL over-confidence (Vegas LL 0.5447 vs v4 0.5595 from
+the 2026-05-04 Vegas audit), not a bracket-pool gap. The user's
+production objective is winning a bracket pool, not Kaggle leaderboard
+rank, so this note's central premise (Kaggle gap == something v4 needs
+to fix for bracket-pool wins) is RETIRED. The 22-season bracket-points
+backtest (clean baseline 2069) is the load-bearing benchmark going
+forward; Kaggle leaderboard rank is no longer treated as falsifying
+evidence. The audits' bucket-level pick-flipping findings (upset
+detection, late-round confidence) remain valid because they predict
+chalk-pick flips. See `TODO.md` Active queue preamble Update 2026-05-08
+for the current framing. Retained below as historical reference for the
+chain of reasoning that led to the R64-line-blend (PR 31) and
+calibration-shape (PR 32) experiments.
 
 ---
 
