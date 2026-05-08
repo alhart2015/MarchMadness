@@ -411,12 +411,99 @@ def _score_pairwise_df(df: pd.DataFrame, scratch_dir: Path) -> dict:
 
 def run_phase2(
     v4_csv: str,
-    winning_config: dict,
+    winning_config,
     baseline_v8_csv: str,
     out_csv: str,
 ) -> dict:
-    """Filled in Task 5."""
-    raise NotImplementedError("see Task 5")
+    """Scale v4 stage-1 with `winning_config` (scalar T or per-round dict),
+    write the rescaled v4 to a tempfile, retrain v8 LOSO on the rescaled
+    v4, score the resulting v8 frame.
+
+    Anchor: if winning_config == 1.0 (or all-1 dict), the resulting v8
+    frame must be byte-equal to baseline_v8_csv.
+
+    Returns: {anchor, cell (full summary dict), verdict, retrain_csv}.
+    """
+    from src.train_stage2 import (
+        DATA as STAGE2_DATA,
+        build_v8_pairwise,
+        load_per_game_data,
+    )
+
+    # Resolve winning_config into a scalar or dict; both go through scale_pairwise.
+    df_v4 = pd.read_csv(v4_csv)
+    if isinstance(winning_config, (int, float)):
+        scaled_v4 = scale_pairwise(df_v4, T=float(winning_config))
+    else:
+        # Per-round dict requires bucket assignment.
+        slots_df = pd.read_csv(STAGE2_DATA / "MNCAATourneySlots.csv")
+        seeds_df = pd.read_csv(STAGE2_DATA / "MNCAATourneySeeds.csv")
+        df_v4 = df_v4.copy()
+        df_v4["round_bucket"] = assign_round_buckets(df_v4, slots_df, seeds_df)
+        df_resolved = df_v4.dropna(subset=["round_bucket"]).copy()
+        scaled_resolved = scale_pairwise(df_resolved, T=winning_config)
+        scaled_v4 = pd.concat(
+            [scaled_resolved.drop(columns=["round_bucket"]),
+             df_v4[df_v4["round_bucket"].isna()].drop(columns=["round_bucket"])],
+            ignore_index=True,
+        )
+
+    # Write rescaled v4 to a tempfile so build_v8_pairwise (which
+    # accepts a path) can ingest it.
+    rescaled_path = str(Path(out_csv).parent / "_phase2_v4_rescaled.csv")
+    scaled_v4.to_csv(rescaled_path, index=False)
+
+    # Build per-game training data from the RESCALED v4. (This is the
+    # whole point of Phase 2: v8 trains on rescaled v4, not on the
+    # canonical v4 used in Phase 1.)
+    per_game = load_per_game_data(
+        pairwise_csv=rescaled_path,
+        results_csv=str(STAGE2_DATA / "MNCAATourneyCompactResults.csv"),
+        seeds_csv=str(STAGE2_DATA / "MNCAATourneySeeds.csv"),
+    )
+
+    # Retrain v8 LOSO and apply to the rescaled v4 frame.
+    build_v8_pairwise(
+        per_game=per_game,
+        pairwise_v4_csv=rescaled_path,
+        seeds_csv=str(STAGE2_DATA / "MNCAATourneySeeds.csv"),
+        out_path=out_csv,
+    )
+
+    # Score the resulting v8 frame.
+    score = score_pairwise_path(out_csv)
+    baseline_score = score_pairwise_path(baseline_v8_csv)
+    per_season_delta = {
+        int(s): float(score["per_season_pts"][s])
+                - float(baseline_score["per_season_pts"][s])
+        for s in baseline_score["per_season_pts"]
+    }
+    cell = _summarize_cell(per_season_delta, baseline_total=baseline_score["total_pts"])
+
+    # Anchor: scoring against the canonical v8 baseline; the test is
+    # whether the FRAME is byte-equal (not just whether bracket points
+    # match).
+    df_phase2 = pd.read_csv(out_csv)
+    anchor = _anchor_check(df_phase2, baseline_v8_csv)
+
+    verdict = _classify_verdict(
+        delta_total=cell["delta_total"],
+        drop_best_delta=cell["drop_best_season_delta"],
+        wins=cell["wins"],
+    )
+
+    # Cleanup intermediate (keep the final out_csv for force-add).
+    try:
+        Path(rescaled_path).unlink()
+    except FileNotFoundError:
+        pass
+
+    return {
+        "anchor": anchor,
+        "cell": cell,
+        "verdict": verdict,
+        "retrain_csv": str(out_csv),
+    }
 
 
 # ---------------------------------------------------------------------------

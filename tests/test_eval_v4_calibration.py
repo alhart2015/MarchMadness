@@ -226,3 +226,28 @@ def test_per_round_greedy_monotonic_improvement_in_chain():
     # Monotonic invariant.
     for i in range(1, len(chain)):
         assert chain[i]["total_after_step"] >= chain[i - 1]["total_after_step"]
+
+
+@pytest.mark.skipif(
+    not (Path("output/pairwise_v4.csv").exists()
+         and Path("output/pairwise_v8.csv").exists()
+         and Path("data/raw/march-machine-learning-2026/MNCAATourneyCompactResults.csv").exists()),
+    reason="canonical CSVs / Kaggle data missing",
+)
+def test_phase2_anchor_T_one_reproduces_canonical_v8():
+    """Phase 2 retrain on T=1.0-scaled v4 (== unmodified v4) reproduces
+    canonical pairwise_v8.csv byte-equal. Spec Phase-2 anchor.
+
+    This test is the slowest in the suite (~50s/season * 22 = ~20 min)
+    so it is implicitly slow-marked; CI may skip via -m 'not slow'."""
+    from src.eval_v4_calibration import run_phase2
+
+    out = run_phase2(
+        v4_csv="output/pairwise_v4.csv",
+        winning_config=1.0,
+        baseline_v8_csv="output/pairwise_v8.csv",
+        out_csv="output/pairwise_v8_phase2_anchor.csv",
+    )
+    assert out["anchor"]["matches"] is True
+    assert out["anchor"]["max_abs_diff"] < 1e-9
+    Path("output/pairwise_v8_phase2_anchor.csv").unlink(missing_ok=True)
