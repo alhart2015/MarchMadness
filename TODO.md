@@ -442,26 +442,38 @@ success. **Clean-baseline measurement (PR <pending>, recovery step
 > External Data (now item #1) leads by elimination; calibration-
 > shape engineering (now item #2) remains the backup engineer-to
 > target; no items promoted.
+>
+> **Update 2026-05-07 (R64 closing-line blend came back FAIL).** Cheap
+> apply-time test of the data hypothesis: override v4's 32 R64
+> pairwise probs with Vegas closing-line implied probs (best sigma
+> 12), train v8 on UNMODIFIED v4, apply to OVERRIDDEN frame, score
+> 22-season bracket points. Hard mode delta **+2 brkt pts** (W/L/T
+> 7/11/4); mean mode delta **0**. Both well below the +10 MARGINAL
+> bar despite anchor invariance passing exactly (max_abs_diff=0).
+> The R64 LL improvement (+0.012 from the Vegas audit) **does NOT
+> transfer to bracket points** at the cheap apply-time level. **The
+> data hypothesis at apply-time is falsified.** Consequence: External
+> Data (was #1) is dropped; calibration-shape engineering is promoted
+> to **Active queue #1**. Phase 2 (re-train v8 on overridden frame)
+> NOT triggered per spec. Futures-as-feature de-prioritized -- the
+> null result is meaningful evidence against external-data-as-feature
+> in general for v4's existing 67-feature stack.
 
-1. **External rankings / external data as features (538 / Vegas
-   prop-bet / roster injury, etc.).** Adds 538-derived signals as
-   input features to v4 itself. **Unblocked by the 538 audit:** the
-   Wayback-pinned cache (`data/raw/fte_forecasts/<year>.csv`,
-   `_FTE_URL_BY_YEAR` snapshot map in `src/ingest/fte_forecasts.py`)
-   and team-name resolution path are reusable for the 7 audited
-   seasons (2016-2019, 2021-2023). Cheap-falsification gate
-   (correlation, standalone LL, blend-headroom) per the prior
-   feature-addition pattern (Massey, Colley, HBT, plain BT).
-2. **v4 calibration-shape engineering (audit-derived).** Backup
-   engineering target if item 1 doesn't pre-empt: 538 has v4 LL
+1. **v4 calibration-shape engineering (audit-derived).** **Promoted
+   to #1 by the R64 line blend FAIL (2026-05-07).** 538 has v4 LL
    +0.075 worse on chalk picks (where it counts); Vegas has v4 LL
    +0.025 worse in the 0.80-0.90 confidence band. Both audits flag
    confidence-shape weakness, just on different sides of the
-   distribution. Candidate fixes: temperature scaling, isotonic
-   regression on a held-out tournament-only validation set, late-
-   stage "confidence sharpening" feature. Gate: 22-season bracket
-   points (not just LL).
-3. **Small neural net (MLP) as a stage-1.** Adds PyTorch tooling
+   distribution. The variance check (PR 30) showed ~25% CV on ECE
+   across 21 seasons -- v4's calibration shape varies year to year
+   in a way the model doesn't currently correct for. Candidate
+   fixes: temperature scaling, isotonic regression on a held-out
+   tournament-only validation set, late-stage "confidence sharpening"
+   feature. Gate: 22-season bracket points (not just LL). The
+   R64-blend null result confirms LL gains don't auto-translate to
+   bracket points -- whatever fix is tried here MUST be evaluated
+   on bracket points directly.
+2. **Small neural net (MLP) as a stage-1.** Adds PyTorch tooling
    cost; diversity vs XGBoost on the 67-feature tabular space is
    the open question. Lower priority after Massey + Colley + HBT
    + plain-BT-on-bracket-points. The lesson from the bracket-points
@@ -469,18 +481,71 @@ success. **Clean-baseline measurement (PR <pending>, recovery step
    production metric -- a stage-1 needs per-disagreement accuracy
    >= ~45% in the regions where it differs from v4. MLP on the
    same 67-feature target faces the same risk profile as LR did.
-4. **Full Bayesian Bradley-Terry with strength + variance per team**
+3. **Full Bayesian Bradley-Terry with strength + variance per team**
    (PyMC / NumPyro / Stan). HBT confirmed prior structure doesn't
    lift BT-class standalone strength on the LL-blend gate; the
    bracket-points re-test (PR 17) confirmed plain BT also doesn't
    help on the production metric. Switching to full posterior
    won't change either. Deferred until items 1-2 are settled.
-5. **Roster-level returning-experience.** Player-level data is not
+4. **Roster-level returning-experience.** Player-level data is not
    in the Kaggle Mania archive; would need an external roster CSV
-   per season. Different signal from coach experience. Closely
-   related to #1.
+   per season. Different signal from coach experience. **Now the
+   leading external-data candidate** (since R64-line external-data
+   was falsified) -- but data sourcing cost is high and the broader
+   "v4 has a structural ceiling on bracket-points lift from any
+   apply-time feature" pattern from the R64-blend FAIL applies here
+   too. Reconsider only after calibration-shape (#1) settles.
+5. **Pre-tournament Vegas futures (championship odds, F4-reach
+   odds) as a per-team strength feature.** Was #1b in the
+   `2026-05-07-v4-kaggle-gap-strategy.md` strategy note. **Now
+   demoted** by the R64-blend FAIL: if R64 line apply-time override
+   doesn't move bracket points, the related "futures-derived team
+   strength as v4 stage-1 feature" experiment is now lower-prob.
+   Re-evaluate only if calibration-shape engineering (#1) also
+   fails. Sourcing the historical futures data is its own cost;
+   not worth paying yet.
 
 ## Done
+
+- **R64 closing-line blend -- FAIL (2026-05-07).** Cheap apply-time
+  test of the data-hypothesis (`docs/notes/2026-05-07-v4-kaggle-gap-strategy.md`):
+  override v4's 32 R64 pairwise probabilities per tournament with
+  Vegas closing-line implied probs, train v8 stage-2 on UNMODIFIED
+  v4 + apply to OVERRIDDEN frame, score 22-season bracket points
+  vs canonical clean v4+v8 baseline 2069. **Verdict: FAIL.** Hard
+  mode total **2071 (delta +2 brkt pts; W/L/T 7/11/4; biggest swing
+  2011 +5)**; mean mode total **2069 (delta 0; W/L/T 8/8/6)**. Both
+  well below the +10 MARGINAL bar. SIGMA sweep picked sigma=12.0
+  (LL=0.4996, true interior min on the {9, 10, 11, 12, 13} grid).
+  Anchor invariance PASSED exactly (v8 trained on UNMODIFIED v4
+  + applied to UNMODIFIED reproduces canonical `pairwise_v8.csv`
+  byte-equal: matches=True, max_abs_diff=0.0, total=2069). The R64
+  LL improvement (+0.012 from the Vegas audit on 648 R64 games)
+  **does NOT transfer to bracket points** at the cheap apply-time
+  level. R64 line coverage 648/692 = 93.6% (consistent with the
+  Vegas audit's 91.5% on full frame). 2024 (Kaggle year) showed
+  delta=0 on both modes -- the override doesn't move anything for
+  the year that motivated this work. Phase 2 (re-train v8 on
+  overridden frame) NOT triggered per spec. **Generalized lesson:**
+  external apply-time market consensus on R64 -- the cheapest, most
+  public external-data signal v4 doesn't currently use -- doesn't
+  lift bracket points despite measurably improving R64 LL.
+  Re-prioritization: calibration-shape engineering promoted to
+  Active queue #1; futures-as-feature deprioritized; the "data
+  hypothesis is the leading explanation for the Kaggle gap" claim
+  from the strategy note is now WEAK evidence rather than strong.
+  Code retained on `feat/v4-r64-line-blend`:
+  `src/build_r64_line_override.py` (override + sigma sweep),
+  `src/eval_r64_line_blend.py` (eval driver), 15 unit + smoke tests
+  (8 in `test_build_r64_line_override.py`, 7 in
+  `test_eval_r64_line_blend.py`). Outputs (force-added):
+  `output/pairwise_{v4,v8}_r64lineblend_{hard,mean}_sigma12.csv`,
+  `output/pairwise_v8_r64lineblend_v4only.csv` (anchor),
+  `output/r64_line_blend_eval.json`,
+  `output/r64_line_blend_eval_log.txt`,
+  `output/r64_line_blend_calibration.png`.
+  Findings: `docs/notes/2026-05-07-v4-r64-line-blend.md`.
+  Strategy frame: `docs/notes/2026-05-07-v4-kaggle-gap-strategy.md`.
 
 - **Per-season v4 variance check -- MIXED (2026-05-07).** Cheap
   diagnostic gate over 22 LOSO seasons (21 with Vegas, 7 with 538) to
