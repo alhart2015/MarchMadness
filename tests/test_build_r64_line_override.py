@@ -182,3 +182,19 @@ def test_apply_r64_override_mean_real_data_differs_from_hard(tmp_path):
     a = pd.read_csv(hard_csv).sort_values(["season", "team_a", "team_b"]).reset_index(drop=True)
     b = pd.read_csv(mean_csv).sort_values(["season", "team_a", "team_b"]).reset_index(drop=True)
     assert (a["p_a_wins"] != b["p_a_wins"]).any(), "hard and mean produced identical frames"
+
+
+def test_sigma_sweep_ll_picks_a_finite_minimum():
+    """Smoke: sweep produces a finite LL at each sigma and they're not
+    all equal (the override is actually using sigma)."""
+    if not _real_data_present():
+        pytest.skip("real data not present")
+    from src.build_r64_line_override import sigma_sweep_ll
+
+    rows = sigma_sweep_ll("output/pairwise_v4.csv", sigmas=[9.0, 11.0, 13.0])
+    assert len(rows) == 3
+    lls = [r["ll"] for r in rows]
+    assert all(np.isfinite(ll) and 0.3 < ll < 0.8 for ll in lls), \
+        f"LL out of plausible range: {lls}"
+    # Different sigmas must produce different LLs.
+    assert lls[0] != lls[1] or lls[1] != lls[2]

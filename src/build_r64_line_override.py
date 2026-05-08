@@ -261,3 +261,114 @@ def main(argv=None) -> int:
 
 if __name__ == "__main__":
     sys.exit(main())
+
+
+# ---------------------------------------------------------------------------
+# SIGMA sensitivity sweep (cheap R64-only LL)
+# ---------------------------------------------------------------------------
+
+
+def _compute_r64_ll(
+    v4_csv: str,
+    mode: str,
+    sigma: float,
+    results_df: pd.DataFrame,
+    vegas_df: pd.DataFrame,
+    name_resolution: dict,
+) -> dict:
+    """Compute weighted log-loss of the override frame on R64 games only.
+
+    Builds a vegas lookup at the requested sigma, applies the override,
+    and computes mean LL over the R64 games where we have outcomes.
+
+    Returns: {sigma, mode, n_games, ll, n_overridden, n_missing}.
+    """
+    eps = 1e-15
+
+    # Build lookup at this sigma.
+    vegas_lookup = _build_vegas_lookup_at_sigma(vegas_df, name_resolution, sigma)
+
+    # Build R64 pair index across all seasons in the v4 frame.
+    v4_df = pd.read_csv(v4_csv).drop_duplicates(
+        ["season", "team_a", "team_b"], keep="last"
+    )
+    r64_pairs: dict = {}
+    for season in sorted(v4_df["season"].unique()):
+        r64_pairs.update(_build_r64_pair_index(int(season), results_df))
+
+    out_df, stats = _apply_overrides(
+        v4_df, vegas_lookup, r64_pairs, mode=mode, sigma=sigma,
+    )
+
+    # Score on the R64 games we have outcomes for. Build a results lookup
+    # once (per-iteration filtering would be O(R64 pairs * games)).
+    results_lookup: dict = {}
+    for _, g in results_df.iterrows():
+        season = int(g["Season"])
+        daynum = int(g["DayNum"])
+        w, l = int(g["WTeamID"]), int(g["LTeamID"])
+        a, b = (w, l) if w < l else (l, w)
+        results_lookup[(season, daynum, a, b)] = (1 if w == a else 0)
+
+    out_lookup = {(int(r["season"]), int(r["team_a"]), int(r["team_b"])):
+                  float(r["p_a_wins"])
+                  for _, r in out_df.iterrows()}
+
+    p_list = []
+    for (season, a, b), daynum in r64_pairs.items():
+        winner_is_a = results_lookup.get((season, daynum, a, b))
+        if winner_is_a is None:
+            continue
+        p = out_lookup.get((season, a, b))
+        if p is None:
+            continue
+        p_list.append(p if winner_is_a == 1 else 1.0 - p)
+
+    p_arr = np.clip(np.array(p_list), eps, 1.0 - eps)
+    ll = float(-np.mean(np.log(p_arr)))
+    return {
+        "sigma": float(sigma),
+        "mode": mode,
+        "n_games": len(p_list),
+        "ll": ll,
+        "n_overridden": stats["n_overridden"],
+        "n_missing": stats["n_missing_line"],
+    }
+
+
+def sigma_sweep_ll(
+    v4_csv: str,
+    sigmas: list[float],
+    mode: str = "hard",
+) -> list[dict]:
+    """Compute R64-only LL across sigmas. Returns list of dicts (one per
+    sigma). Loads Vegas + Kaggle data once, then iterates.
+    """
+    print(f"[r64-override] SIGMA sweep (mode={mode}, sigmas={sigmas}) ...")
+
+    results = pd.read_csv(DATA / "MNCAATourneyCompactResults.csv")
+    day_zero = _build_day_zero_map(DATA / "MSeasons.csv")
+
+    vegas_df = load_vegas_lines()
+    teams = pd.read_csv(DATA / "MTeams.csv")
+    spellings = pd.read_csv(DATA / "MTeamSpellings.csv", encoding="latin-1")
+    name_to_id = _build_vegas_name_to_kaggle_map(teams, spellings)
+    fuzzy_cache: dict = {}
+    all_names = set(vegas_df["home"].unique()) | set(vegas_df["road"].unique())
+    name_resolution: dict = {}
+    for name in all_names:
+        tid = _resolve_vegas_name(name, name_to_id, fuzzy_cache)
+        if tid is not None:
+            name_resolution[name] = tid
+    vegas_df = _vegas_to_seasonday(vegas_df, day_zero)
+
+    rows = []
+    for sigma in sigmas:
+        row = _compute_r64_ll(
+            v4_csv, mode, sigma, results, vegas_df, name_resolution,
+        )
+        rows.append(row)
+        print(f"  sigma={sigma:>5.1f}  ll={row['ll']:.4f}  "
+              f"n_games={row['n_games']}  overridden={row['n_overridden']}  "
+              f"missing={row['n_missing']}")
+    return rows
