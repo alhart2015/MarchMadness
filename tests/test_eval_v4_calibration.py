@@ -114,3 +114,115 @@ def test_summarize_cell_computes_wlt_and_biggest_swing():
     assert out["drop_best_season_delta"] == 1
     # total = baseline + delta
     assert out["total"] == 2069 + 9
+
+
+def _real_v8_present() -> bool:
+    return Path("output/pairwise_v8.csv").exists() and Path(
+        "data/raw/march-machine-learning-2026/MNCAATourneySeeds.csv"
+    ).exists()
+
+
+@pytest.mark.skipif(not _real_v8_present(), reason="canonical pairwise_v8.csv missing")
+def test_global_T_anchor_cell_reproduces_2069():
+    """T=1.0 must score 2069 to FP precision. Phase-1 anchor."""
+    from src.eval_v4_calibration import run_global_T_sweep
+
+    out = run_global_T_sweep(
+        v8_csv="output/pairwise_v8.csv",
+        T_grid=[1.0],
+        baseline_total=2069.0,
+    )
+    assert "anchor" in out
+    assert out["anchor"]["matches"] is True
+    assert out["anchor"]["total"] == pytest.approx(2069.0, abs=1e-9)
+    assert len(out["cells"]) == 1
+    cell = out["cells"][0]
+    assert cell["T"] == 1.0
+    assert cell["total"] == pytest.approx(2069.0, abs=1e-9)
+    assert cell["delta_total"] == pytest.approx(0.0, abs=1e-9)
+
+
+@pytest.mark.skipif(not _real_v8_present(), reason="canonical pairwise_v8.csv missing")
+def test_per_round_greedy_anchor_all_one_reproduces_2069():
+    """All-1 per-round vector reproduces 2069 to FP precision."""
+    from src.eval_v4_calibration import run_per_round_greedy
+
+    out = run_per_round_greedy(
+        v8_csv="output/pairwise_v8.csv",
+        T_grid=[1.0],  # singleton grid -- only T=1 available
+        round_order=["R64", "R32", "S16", "E8", "F4_NCG"],
+        baseline_total=2069.0,
+    )
+    assert "anchor" in out
+    assert out["anchor"]["total"] == pytest.approx(2069.0, abs=1e-9)
+    assert out["winning_T"] == {b: 1.0 for b in ("R64", "R32", "S16", "E8", "F4_NCG")}
+    assert out["winning_cell"]["total"] == pytest.approx(2069.0, abs=1e-9)
+
+
+def test_per_round_greedy_monotonic_improvement_in_chain():
+    """Each greedy step's chosen-cell total >= previous step's. Tested
+    against a forced-pass synthetic scoring stub via monkeypatch.
+
+    The greedy invariant is: at step k, holding rounds < k at their
+    best-found T and rounds > k at 1.0, the picked T_round_k must
+    yield total >= total at the previous step's pick."""
+    import src.eval_v4_calibration as mod
+    from src.eval_v4_calibration import run_per_round_greedy
+
+    # Seed a synthetic v8.csv with one row per bucket.
+    df = pd.DataFrame({
+        "season": [2024] * 5,
+        "team_a": [1, 2, 3, 4, 5],
+        "team_b": [10, 11, 12, 13, 14],
+        "p_a_wins": [0.6] * 5,
+        "round_bucket": ["R64", "R32", "S16", "E8", "F4_NCG"],
+    })
+    with tempfile.NamedTemporaryFile("w", delete=False, suffix=".csv") as f:
+        df.to_csv(f.name, index=False)
+        v8_path = f.name
+
+    # Monkeypatch _score_pairwise_df to return a synthetic score that
+    # rewards lower T monotonically (via sum of p_a_wins).
+    def fake_score(scaled_df, scratch_dir):
+        s = scaled_df["p_a_wins"].sum()
+        return {"total_pts": float(2069 + s), "per_season_pts": {2024: float(2069 + s)}}
+
+    # Patch the baseline call too -- the synthetic frame isn't a real
+    # bracket so the real score_pairwise_path would crash on it.
+    def fake_baseline_score(path):
+        df_local = pd.read_csv(path)
+        s = df_local["p_a_wins"].sum()
+        return {"total_pts": float(2069 + s), "per_season_pts": {2024: float(2069 + s)}}
+
+    # Short-circuit assign_round_buckets -- the synthetic frame already
+    # has round_bucket, but the driver re-derives via slots_df/seeds_df.
+    real_assign = mod.assign_round_buckets
+    real_score_df = mod._score_pairwise_df
+    real_score_path = mod.score_pairwise_path
+
+    def fake_assign(d, slots_df, seeds_df):
+        return d["round_bucket"]
+    mod.assign_round_buckets = fake_assign
+    mod._score_pairwise_df = fake_score
+    mod.score_pairwise_path = fake_baseline_score
+
+    try:
+        out = run_per_round_greedy(
+            v8_csv=v8_path,
+            T_grid=[0.5, 1.0, 2.0],
+            round_order=["R64", "R32", "S16", "E8", "F4_NCG"],
+            # baseline_total must equal what fake_baseline_score returns
+            # for the v8_path (5 rows of p=0.6 each = 3.0 sum -> 2072.0).
+            baseline_total=2072.0,
+        )
+    finally:
+        mod.assign_round_buckets = real_assign
+        mod._score_pairwise_df = real_score_df
+        mod.score_pairwise_path = real_score_path
+        Path(v8_path).unlink()
+
+    chain = out["greedy_chain"]
+    assert len(chain) == 5  # one entry per round
+    # Monotonic invariant.
+    for i in range(1, len(chain)):
+        assert chain[i]["total_after_step"] >= chain[i - 1]["total_after_step"]
