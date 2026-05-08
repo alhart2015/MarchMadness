@@ -458,21 +458,31 @@ success. **Clean-baseline measurement (PR <pending>, recovery step
 > NOT triggered per spec. Futures-as-feature de-prioritized -- the
 > null result is meaningful evidence against external-data-as-feature
 > in general for v4's existing 67-feature stack.
+>
+> **Update 2026-05-08 (v4 calibration-shape temperature scaling came back MARGINAL).**
+> Phase 1 (post-hoc T on v8) null by construction -- chalk scoring is
+> monotone-invariant in p. Phase 2 (retrain v8 on rescaled v4) lifted
+> bracket points by +10 (MARGINAL band) at T in {0.85, 1.15, 1.50};
+> identical per-season deltas across the three cells suggests the lift
+> is XGB histogram-binning, not calibration-shape correction. 2024
+> (Kaggle year) moved +3 -- first non-null on this branch. Per spec:
+> candidate, no swap. Calibration-shape lane closes; roster-level
+> returning-experience promoted to Active queue #1 by elimination.
+> Meta-lesson recorded: post-hoc transforms on stage-2 output must
+> change chalk picks, not just rescale probabilities.
 
-1. **v4 calibration-shape engineering (audit-derived).** **Promoted
-   to #1 by the R64 line blend FAIL (2026-05-07).** 538 has v4 LL
-   +0.075 worse on chalk picks (where it counts); Vegas has v4 LL
-   +0.025 worse in the 0.80-0.90 confidence band. Both audits flag
-   confidence-shape weakness, just on different sides of the
-   distribution. The variance check (PR 30) showed ~25% CV on ECE
-   across 21 seasons -- v4's calibration shape varies year to year
-   in a way the model doesn't currently correct for. Candidate
-   fixes: temperature scaling, isotonic regression on a held-out
-   tournament-only validation set, late-stage "confidence sharpening"
-   feature. Gate: 22-season bracket points (not just LL). The
-   R64-blend null result confirms LL gains don't auto-translate to
-   bracket points -- whatever fix is tried here MUST be evaluated
-   on bracket points directly.
+1. **Roster-level returning-experience.** **Promoted to #1 by elimination
+   (2026-05-08): calibration-shape MARGINAL closes that lane.** Player-
+   level data is not in the Kaggle Mania archive; would need an external
+   roster CSV per season. Different signal from coach experience and from
+   anything in v4's 67-feature stack. The R64-blend FAIL + calibration-shape
+   MARGINAL together strengthen the case that the performance ceiling is a
+   feature-space gap (structural signal v4 doesn't have), not a calibration-
+   shape gap (mis-expressing signal v4 already has). Roster-level experience
+   is the leading remaining external-data candidate because it is structurally
+   different from all 67 existing features. Data sourcing cost is high; the
+   first step is locating a historical roster-level CSV (returning minutes
+   played, returning starters) for the 2003-2025 tournament teams.
 2. **Small neural net (MLP) as a stage-1.** Adds PyTorch tooling
    cost; diversity vs XGBoost on the 67-feature tabular space is
    the open question. Lower priority after Massey + Colley + HBT
@@ -487,25 +497,39 @@ success. **Clean-baseline measurement (PR <pending>, recovery step
    bracket-points re-test (PR 17) confirmed plain BT also doesn't
    help on the production metric. Switching to full posterior
    won't change either. Deferred until items 1-2 are settled.
-4. **Roster-level returning-experience.** Player-level data is not
-   in the Kaggle Mania archive; would need an external roster CSV
-   per season. Different signal from coach experience. **Now the
-   leading external-data candidate** (since R64-line external-data
-   was falsified) -- but data sourcing cost is high and the broader
-   "v4 has a structural ceiling on bracket-points lift from any
-   apply-time feature" pattern from the R64-blend FAIL applies here
-   too. Reconsider only after calibration-shape (#1) settles.
-5. **Pre-tournament Vegas futures (championship odds, F4-reach
+4. **Pre-tournament Vegas futures (championship odds, F4-reach
    odds) as a per-team strength feature.** Was #1b in the
    `2026-05-07-v4-kaggle-gap-strategy.md` strategy note. **Now
    demoted** by the R64-blend FAIL: if R64 line apply-time override
    doesn't move bracket points, the related "futures-derived team
    strength as v4 stage-1 feature" experiment is now lower-prob.
-   Re-evaluate only if calibration-shape engineering (#1) also
-   fails. Sourcing the historical futures data is its own cost;
-   not worth paying yet.
+   Re-evaluate only if roster-level (#1) and MLP (#2) also fail.
+   Sourcing the historical futures data is its own cost; not worth
+   paying yet.
 
 ## Done
+
+- **v4 calibration-shape: temperature scaling -- MARGINAL (2026-05-08).**
+  Phase 1 (post-hoc T on v8 output) null by construction: chalk scoring is
+  monotone-invariant in p, so post-hoc temperature scaling can never flip a
+  chalk pick; all 7 Phase 1 T cells returned delta=0. Phase 2 (retrain v8 on
+  temperature-scaled v4) is NOT monotone and lifted bracket points by +10
+  (W/L/T 3/1/18) at T ∈ {0.85, 1.15, 1.50} over 22 LOSO seasons; T=2.00
+  collapsed to canonical baseline (signal erasure). Identical per-season
+  deltas across the three winning cells (2011 +4, 2016 +4, 2024 +3, 2004 -1)
+  indicate the lift is XGB histogram-binning, not calibration-shape correction.
+  2024 (Kaggle year) moved +3 -- first non-null result for that season on this
+  branch. Per spec: MARGINAL, candidate, no swap. Calibration-shape lane
+  closes. **Meta-lesson:** chalk scoring is monotone-invariant in p; any future
+  post-hoc transform on stage-2 output must flip chalk picks specifically, not
+  just rescale probability magnitudes. LL gains from calibration don't transfer
+  to bracket points unless they happen to flip near-50/50 games.
+  Code retained on `feat/v4-calibration-temperature-scaling`:
+  `src/apply_temperature_scaling.py`, `src/eval_v4_calibration.py`,
+  `src/run_phase2_sweep.py`, `tests/test_apply_temperature_scaling.py`,
+  `tests/test_eval_v4_calibration.py`,
+  `output/pairwise_v8_phase2_T{0.85,1.15,1.50,2.00}.csv` (force-added).
+  Findings: `docs/notes/2026-05-08-v4-calibration-temperature-scaling.md`.
 
 - **R64 closing-line blend -- FAIL (2026-05-07).** Cheap apply-time
   test of the data-hypothesis (`docs/notes/2026-05-07-v4-kaggle-gap-strategy.md`):
