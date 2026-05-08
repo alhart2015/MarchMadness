@@ -1231,6 +1231,7 @@ def run_per_round_greedy(
     anchor_summary = {
         "matches": True,
         "max_abs_diff": max_diff,
+        "total": float(baseline_score["total_pts"]),
         "n_resolved": int(n_resolved),
         "n_dropped": int(n_dropped),
     }
