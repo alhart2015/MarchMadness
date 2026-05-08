@@ -421,26 +421,29 @@ success. **Clean-baseline measurement (PR <pending>, recovery step
 ## Active queue
 
 > **Re-prioritization 2026-05-07.** Audit lane closed by the 538 audit
-> (item #1 below, **DONE**). Two public benchmarks (Vegas at SIGMA=11,
+> (now in Done). Two public benchmarks (Vegas at SIGMA=11,
 > 538 round-survival forecasts) have produced contradictory weak-spot
 > signatures: Vegas surfaces "v4 worse on upsets, late rounds, mid-
 > seed-gap, 0.80-0.90 confidence band"; 538 surfaces "v4 worse on
 > chalk picks." The two together imply the bottleneck is calibration
 > *shape* rather than any single bucket. Engineering against any one
 > bucket is now under-motivated; the next levers are the cheaper
-> single-season variance check (#1) and the external-data-as-features
-> experiment (#2), with the calibration-shape insight available as a
+> single-season variance check and the external-data-as-features
+> experiment, with the calibration-shape insight available as a
 > backup engineering target.
+>
+> **Update 2026-05-07 (per-season variance check came back MIXED).** 4
+> seasons flagged at 1.5 sigma (2011, 2013, 2015, 2023), no clean
+> trend. 2011 was the standout (3 of 4 metrics) but predates the
+> user's Kaggle period by ~13 years. 2024 (the Kaggle year) was
+> unremarkable. **No single season explains the user's 2159/3462
+> finish**; the bottleneck is calibration shape, not single-season
+> variance. Per the plan's MIXED rule, queue ordering is retained.
+> External Data (now item #1) leads by elimination; calibration-
+> shape engineering (now item #2) remains the backup engineer-to
+> target; no items promoted.
 
-1. **Single-season v4 variance check.** The Vegas audit shows v4
-   beats Vegas on the 22-season aggregate. The user's Kaggle finish
-   (2159 / 3462) is a single-season result. Plot per-season v4 LL +
-   ECE; identify any season where v4's calibration is materially
-   worse than the 22-season average. Cheap (~30 min) follow-up
-   audit. Surfaces whether v4's 22-season-average story hides
-   high-variance per-season behavior that hurts on single-season
-   Kaggle scoring.
-2. **External rankings / external data as features (538 / Vegas
+1. **External rankings / external data as features (538 / Vegas
    prop-bet / roster injury, etc.).** Adds 538-derived signals as
    input features to v4 itself. **Unblocked by the 538 audit:** the
    Wayback-pinned cache (`data/raw/fte_forecasts/<year>.csv`,
@@ -449,8 +452,8 @@ success. **Clean-baseline measurement (PR <pending>, recovery step
    seasons (2016-2019, 2021-2023). Cheap-falsification gate
    (correlation, standalone LL, blend-headroom) per the prior
    feature-addition pattern (Massey, Colley, HBT, plain BT).
-3. **v4 calibration-shape engineering (audit-derived).** Backup
-   engineering target if items 1-2 don't pre-empt: 538 has v4 LL
+2. **v4 calibration-shape engineering (audit-derived).** Backup
+   engineering target if item 1 doesn't pre-empt: 538 has v4 LL
    +0.075 worse on chalk picks (where it counts); Vegas has v4 LL
    +0.025 worse in the 0.80-0.90 confidence band. Both audits flag
    confidence-shape weakness, just on different sides of the
@@ -458,7 +461,7 @@ success. **Clean-baseline measurement (PR <pending>, recovery step
    regression on a held-out tournament-only validation set, late-
    stage "confidence sharpening" feature. Gate: 22-season bracket
    points (not just LL).
-4. **Small neural net (MLP) as a stage-1.** Adds PyTorch tooling
+3. **Small neural net (MLP) as a stage-1.** Adds PyTorch tooling
    cost; diversity vs XGBoost on the 67-feature tabular space is
    the open question. Lower priority after Massey + Colley + HBT
    + plain-BT-on-bracket-points. The lesson from the bracket-points
@@ -466,19 +469,49 @@ success. **Clean-baseline measurement (PR <pending>, recovery step
    production metric -- a stage-1 needs per-disagreement accuracy
    >= ~45% in the regions where it differs from v4. MLP on the
    same 67-feature target faces the same risk profile as LR did.
-5. **Full Bayesian Bradley-Terry with strength + variance per team**
+4. **Full Bayesian Bradley-Terry with strength + variance per team**
    (PyMC / NumPyro / Stan). HBT confirmed prior structure doesn't
    lift BT-class standalone strength on the LL-blend gate; the
    bracket-points re-test (PR 17) confirmed plain BT also doesn't
    help on the production metric. Switching to full posterior
-   won't change either. Deferred until items 1-3 are settled.
-6. **Roster-level returning-experience.** Player-level data is not
+   won't change either. Deferred until items 1-2 are settled.
+5. **Roster-level returning-experience.** Player-level data is not
    in the Kaggle Mania archive; would need an external roster CSV
    per season. Different signal from coach experience. Closely
-   related to #2.
+   related to #1.
 
 ## Done
 
+- **Per-season v4 variance check -- MIXED (2026-05-07).** Cheap
+  diagnostic gate over 22 LOSO seasons (21 with Vegas, 7 with 538) to
+  test whether single-season variance dominates the user's 2159/3462
+  Kaggle finish. **Verdict: MIXED.** 4 seasons flagged at 1.5 sigma
+  across the 4 tracked metrics (`ll_v4_minus_vegas`,
+  `ll_v4_minus_fte`, `ll_v4`, `ece_v4`): **2011, 2013, 2015, 2023.**
+  No 3-consecutive-season trend. **Standout: 2011** -- flagged in 3
+  of 4 metrics. Worst single-season `ll_v4` in the frame (0.699 vs
+  21-season mean 0.557, 2.22 sigma above), worst Vegas delta (+0.074,
+  1.77 sigma), high ECE (0.186, 1.54 sigma). v4 accuracy 57.4% in
+  2011 vs Vegas's 65.6% on the same 61 games. 2011 was the
+  Butler/UConn-Kemba/VCU-FF11 tournament with heavy upset traffic --
+  predates the user's Kaggle interest by ~13 years and is not
+  actionable for production. **2024 (the Kaggle year) was unremarkable**
+  in the per-season frame: `ll_v4`=0.591, `ll_v4_minus_vegas`=+0.037,
+  not flagged. Per the plan's MIXED rule, queue ordering is retained;
+  ambiguity noted in the Active queue preamble. Anchors: weighted
+  per-season ll_v4 (538 subset, 428 games) reproduces 538 audit's
+  0.5799 to FP precision; weighted ll_fte reproduces 0.6011; weighted
+  ll_v4 (Vegas R64-Champ subset, 1261 games) is 0.5565, slightly
+  below the Vegas audit's full-frame 0.5595 because the variance
+  check excludes FF/OTHER buckets (intentional, direction consistent
+  with R64-dominated LL arithmetic). ECE variance is non-trivial
+  (~25% CV across 21 seasons) -- modest but real evidence v4's
+  calibration shape varies year to year. Code retained on
+  feat/v4-per-season-variance: `src/analyze_v4_per_season_variance.py`
+  (driver), `tests/test_analyze_v4_per_season_variance.py` (7 unit
+  tests including 1 smoke). Outputs:
+  `output/v4_per_season_variance.json` + 2 PNGs + log (force-added).
+  Findings: `docs/notes/2026-05-07-v4-per-season-variance.md`.
 - **538 v4 gap audit -- PASS-AND-FLAG (2026-05-07).** 7-season audit
   (2016-2019, 2021-2023) on 428 R64-Champ games. Sourcing pivoted to
   Wayback Machine -- 538's live endpoints went dark in the March 2025
