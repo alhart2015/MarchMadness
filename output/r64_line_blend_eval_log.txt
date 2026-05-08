@@ -1,0 +1,62 @@
+======================================================================
+R64 LINE BLEND -- EVAL
+======================================================================
+
+STEP 1: SIGMA sweep (mode=hard, R64-only LL)
+[r64-override] SIGMA sweep (mode=hard, sigmas=[9.0, 10.0, 11.0, 12.0, 13.0]) ...
+  warning: 1 Vegas rows have unparseable dates; dropping
+  sigma=  9.0  ll=0.5086  n_games=692  overridden=648  missing=44
+  sigma= 10.0  ll=0.5025  n_games=692  overridden=648  missing=44
+  sigma= 11.0  ll=0.4999  n_games=692  overridden=648  missing=44
+  sigma= 12.0  ll=0.4996  n_games=692  overridden=648  missing=44
+  sigma= 13.0  ll=0.5008  n_games=692  overridden=648  missing=44
+  picked sigma = 12.0
+
+STEP 2: anchor -- score canonical v8 baseline
+  v8 baseline total: 2069 brkt pts
+
+======================================================================
+CELL  mode=hard  sigma=12.0
+======================================================================
+[r64-override] reading v4 pairwise from output/pairwise_v4.csv ...
+  48,465 rows across 22 seasons
+[r64-override] loading tournament results + day-zero map ...
+[r64-override] building R64 pair index ...
+  692 R64 pairs across 22 seasons
+[r64-override] loading + resolving Vegas lines ...
+  warning: 1 Vegas rows have unparseable dates; dropping
+[r64-override] building Vegas lookup at sigma=12.0 ...
+  94,820 Vegas (season, daynum, a, b) entries
+[r64-override] applying overrides (mode=hard, sigma=12.0) ...
+[r64-override] wrote 48,465 rows to output\pairwise_v4_r64lineblend_hard_sigma12.csv
+  coverage: 648/692 (93.6%)  missing: 44
+[r64-eval] training v8 on UNMODIFIED v4 (output/pairwise_v4.csv), applying to OVERRIDDEN (output\pairwise_v4_r64lineblend_hard_sigma12.csv) ...
+  total: 2071  delta: +2  W/L/T: 7/11/4  biggest_swing: 2011 (+5)  (53.5s)
+
+======================================================================
+CELL  mode=mean  sigma=12.0
+======================================================================
+[r64-override] reading v4 pairwise from output/pairwise_v4.csv ...
+  48,465 rows across 22 seasons
+[r64-override] loading tournament results + day-zero map ...
+[r64-override] building R64 pair index ...
+  692 R64 pairs across 22 seasons
+[r64-override] loading + resolving Vegas lines ...
+  warning: 1 Vegas rows have unparseable dates; dropping
+[r64-override] building Vegas lookup at sigma=12.0 ...
+  94,820 Vegas (season, daynum, a, b) entries
+[r64-override] applying overrides (mode=mean, sigma=12.0) ...
+[r64-override] wrote 48,465 rows to output\pairwise_v4_r64lineblend_mean_sigma12.csv
+  coverage: 648/692 (93.6%)  missing: 44
+[r64-eval] training v8 on UNMODIFIED v4 (output/pairwise_v4.csv), applying to OVERRIDDEN (output\pairwise_v4_r64lineblend_mean_sigma12.csv) ...
+  total: 2069  delta: +0  W/L/T: 8/8/6  biggest_swing: 2007 (+3)  (58.3s)
+
+STEP 4: anchor invariance -- v8 on UNMODIFIED v4 must == baseline
+[r64-eval] training v8 on UNMODIFIED v4 (output/pairwise_v4.csv), applying to OVERRIDDEN (output/pairwise_v4.csv) ...
+  matches=True  max_abs_diff=0.0
+
+======================================================================
+VERDICT: FAIL
+======================================================================
+  best cell delta +2 below MARGINAL bar (10). Close the data-hypothesis lane; calibration-shape engineering becomes #1.
+  saved output/r64_line_blend_eval.json
