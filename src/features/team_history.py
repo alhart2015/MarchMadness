@@ -207,3 +207,48 @@ def compute_team_residuals_in_window(
         out.append((years_ago, prior_seed, residual))
     out.sort()
     return out
+
+
+def compute_team_history_features(
+    tournament_field: pd.DataFrame,
+    tourney_results: pd.DataFrame,
+    seeds: pd.DataFrame,
+    window_years: int = 10,
+) -> pd.DataFrame:
+    """For each (Season, TeamID) in tournament_field, compute
+    team_seed_residual_mean_10yr and team_seed_residual_ewma_hl2.
+
+    The per-seed baseline is recomputed per target season using
+    Season < S data only (leak-safe).
+    """
+    rows = []
+    # Cache baseline per target season (avoids recompute when many teams share S)
+    baseline_cache: dict[int, dict[int | str, float]] = {}
+    for _, fr in tournament_field.iterrows():
+        season = int(fr["Season"])
+        team_id = int(fr["TeamID"])
+        if season not in baseline_cache:
+            tr_filtered = tourney_results[tourney_results["Season"] < season]
+            baseline_cache[season] = compute_per_seed_baseline(
+                tr_filtered, seeds, max_season=season - 1,
+            )
+        residuals = compute_team_residuals_in_window(
+            season=season, team_id=team_id, window_years=window_years,
+            baseline=baseline_cache[season],
+            tourney_results=tourney_results, seeds=seeds,
+        )
+        mean_feat = shrunk_mean([r for (_, _, r) in residuals], k=3)
+        ewma_feat = shrunk_ewma(
+            [(a, r) for (a, _, r) in residuals], half_life=2, k=3,
+        )
+        rows.append({
+            "Season": season,
+            "TeamID": team_id,
+            "team_seed_residual_mean_10yr": mean_feat,
+            "team_seed_residual_ewma_hl2": ewma_feat,
+        })
+    return pd.DataFrame(
+        rows,
+        columns=["Season", "TeamID",
+                 "team_seed_residual_mean_10yr", "team_seed_residual_ewma_hl2"],
+    )

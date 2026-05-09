@@ -272,3 +272,66 @@ def test_residuals_in_window_uses_baseline_for_seed_in_prior_season():
     assert years_ago == 1
     assert prior_seed == 1
     assert residual == pytest.approx(-0.75)
+
+
+import os
+from pathlib import Path
+
+DATA_DIR = Path(__file__).parents[2] / "data" / "raw" / "march-machine-learning-2026"
+
+
+@pytest.mark.skipif(
+    not (DATA_DIR / "MNCAATourneySeeds.csv").exists(),
+    reason="Needs Kaggle data; run `tar -xzf data/training_data.tar.gz -C data/raw/`",
+)
+def test_compute_features_uconn_2024_spot_check():
+    """Hand-compute UConn 2024's two features against the implementation.
+
+    UConn = TeamID 1163 (verified via MTeams.csv 'TeamName == Connecticut').
+    Prior-10-year window for season=2024: seasons 2014-2023.
+    UConn's appearances:
+      2014 (7-seed, won championship → rounds_won=6)
+      2016 (9-seed, R32 loss → rounds_won=1)
+      2021 (7-seed, R64 loss → rounds_won=0)
+      2022 (5-seed, R64 loss → rounds_won=0)
+      2023 (4-seed, won championship → rounds_won=6)
+    """
+    from src.features.team_history import (
+        compute_per_seed_baseline,
+        compute_team_history_features,
+        compute_team_residuals_in_window,
+        shrunk_ewma,
+        shrunk_mean,
+    )
+    tr = pd.read_csv(DATA_DIR / "MNCAATourneyDetailedResults.csv")
+    seeds = pd.read_csv(DATA_DIR / "MNCAATourneySeeds.csv")
+    teams = pd.read_csv(DATA_DIR / "MTeams.csv")
+
+    uconn = int(teams[teams["TeamName"] == "Connecticut"].iloc[0]["TeamID"])
+
+    # Compute features for UConn 2024 only via the public integrator
+    field_2024 = pd.DataFrame([{"Season": 2024, "TeamID": uconn}])
+    out = compute_team_history_features(
+        tournament_field=field_2024,
+        tourney_results=tr,
+        seeds=seeds,
+        window_years=10,
+    )
+    assert len(out) == 1
+    row = out.iloc[0]
+
+    # Hand-compute via the same primitives
+    baseline = compute_per_seed_baseline(tr[tr["Season"] < 2024], seeds, max_season=2023)
+    residuals = compute_team_residuals_in_window(
+        season=2024, team_id=uconn, window_years=10,
+        baseline=baseline, tourney_results=tr, seeds=seeds,
+    )
+    expected_mean = shrunk_mean([r for (_, _, r) in residuals], k=3)
+    expected_ewma = shrunk_ewma(
+        [(a, r) for (a, _, r) in residuals], half_life=2, k=3,
+    )
+
+    assert row["team_seed_residual_mean_10yr"] == pytest.approx(expected_mean, abs=1e-9)
+    assert row["team_seed_residual_ewma_hl2"] == pytest.approx(expected_ewma, abs=1e-9)
+    # Sanity: UConn 2024 should have >= 4 prior appearances in window
+    assert len(residuals) >= 4
