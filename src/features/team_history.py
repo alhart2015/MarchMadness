@@ -57,3 +57,56 @@ def _rounds_won_per_team_season(
     out = out.rename(columns={"won": "rounds_won"})
     out["rounds_won"] = out["rounds_won"].astype(int)
     return out
+
+
+def _extract_seed_num(seed_str: str) -> int:
+    """'W01' -> 1; 'X16a' -> 16; 'Y08' -> 8."""
+    digits = "".join(ch for ch in seed_str if ch.isdigit())
+    return int(digits)
+
+
+def compute_per_seed_baseline(
+    tourney_results: pd.DataFrame,
+    seeds: pd.DataFrame,
+    max_season: int,
+) -> dict[int | str, float]:
+    """Per-seed average rounds_won across all (Season, TeamID) rows
+    with Season <= max_season.
+
+    Returns: dict mapping seed_num (int) -> expected rounds_won. Includes
+    a special key '__fallback__' = overall mean rounds_won, used by callers
+    when a queried seed has 0 historical observations.
+
+    Asserts no input tourney_results row has Season > max_season.
+    """
+    # Leak guard: fail loudly if input violates max_season constraint
+    bad = tourney_results[tourney_results["Season"] > max_season]
+    assert bad.empty, (
+        f"Leak guard: {len(bad)} rows have Season > max_season "
+        f"({max_season}) in compute_per_seed_baseline."
+    )
+
+    # Now we can safely pre-filter and compute rounds_won
+    rounds_won = _rounds_won_per_team_season(
+        tourney_results[tourney_results["Season"] <= max_season],
+        max_season=max_season,
+    )
+    seeds_in_window = seeds[seeds["Season"] <= max_season].copy()
+    seeds_in_window["seed_num"] = seeds_in_window["Seed"].apply(_extract_seed_num)
+    joined = rounds_won.merge(
+        seeds_in_window[["Season", "TeamID", "seed_num"]],
+        on=["Season", "TeamID"],
+        how="left",
+    )
+    # Drop team-seasons without a seed (shouldn't happen for tournament rows,
+    # but defensive).
+    joined = joined.dropna(subset=["seed_num"])
+    joined["seed_num"] = joined["seed_num"].astype(int)
+
+    baseline: dict[int | str, float] = {}
+    for seed in range(1, 17):
+        sub = joined[joined["seed_num"] == seed]
+        if len(sub) > 0:
+            baseline[seed] = float(sub["rounds_won"].mean())
+    baseline["__fallback__"] = float(joined["rounds_won"].mean()) if len(joined) > 0 else 0.0
+    return baseline
