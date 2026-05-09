@@ -122,3 +122,35 @@ def shrunk_mean(residuals: list[float], k: int = 3) -> float:
     if n == 0:
         return 0.0
     return float(sum(residuals)) / (n + k)
+
+
+def shrunk_ewma(
+    residuals_with_age: list[tuple[int, float]],
+    half_life: float = 2.0,
+    k: int = 3,
+) -> float:
+    """Bayesian-shrunk exponentially-weighted mean of residuals.
+
+    residuals_with_age: list of (years_ago, residual) tuples. years_ago=1
+    is the most recent prior season; larger = more remote.
+
+    Weights: w(a) = 0.5 ** ((a - 1) / half_life). w(1) = 1.0.
+
+    Computes weighted_mean = sum(w * r) / sum(w), then applies n-based
+    shrinkage: (n * weighted_mean + k * 0) / (n + k). This decouples
+    "which residuals matter" (EWMA weights) from "how confident we are
+    in the estimate" (raw n).
+
+    Returns 0.0 for empty input.
+    """
+    n = len(residuals_with_age)
+    if n == 0:
+        return 0.0
+    weights = [0.5 ** ((a - 1) / half_life) for (a, _) in residuals_with_age]
+    weight_sum = sum(weights)
+    if weight_sum == 0:
+        return 0.0
+    weighted_mean = sum(
+        w * r for (w, (_, r)) in zip(weights, residuals_with_age)
+    ) / weight_sum
+    return float(n * weighted_mean) / (n + k)

@@ -143,3 +143,45 @@ def test_shrunk_mean_at_large_n_approaches_raw_mean():
     """100 obs averaging 1.0, k=3 → 100/103 ≈ 0.97."""
     from src.features.team_history import shrunk_mean
     assert shrunk_mean([1.0] * 100, k=3) == pytest.approx(100.0 / 103.0)
+
+
+def test_shrunk_ewma_empty_returns_zero():
+    from src.features.team_history import shrunk_ewma
+    assert shrunk_ewma([], half_life=2, k=3) == 0.0
+
+
+def test_shrunk_ewma_single_recent_observation_matches_shrunk_mean():
+    """1 obs at year_ago=1 with HL=2: weight = 1.0, weighted_mean = value.
+    Then n-based shrinkage: (1 * value + 3 * 0) / (1 + 3) = value/4.
+    Equivalent to shrunk_mean([value], k=3)."""
+    from src.features.team_history import shrunk_ewma
+    assert shrunk_ewma([(1, 2.0)], half_life=2, k=3) == pytest.approx(0.5)
+
+
+def test_shrunk_ewma_weights_decay_correctly():
+    """4 obs at years_ago = (1, 3, 5, 9) all with residual 2.0, HL=2.
+    Weights: w(1)=1.0, w(3)=0.5, w(5)=0.25, w(9)=0.0625.
+    Weighted mean = 2.0 (constant residual). After n-shrinkage with n=4, k=3:
+    (4 * 2.0 + 3 * 0) / (4 + 3) = 8/7 ≈ 1.143."""
+    from src.features.team_history import shrunk_ewma
+    out = shrunk_ewma([(1, 2.0), (3, 2.0), (5, 2.0), (9, 2.0)],
+                      half_life=2, k=3)
+    assert out == pytest.approx(8.0 / 7.0)
+
+
+def test_shrunk_ewma_recent_negatives_dominate_old_positive():
+    """UConn 2023 walkthrough from spec: years_ago = (9, 7, 2, 1) with
+    residuals (+5, +0.3, -1, -1.5). Weights: 0.0625, 0.125, ~0.7071, 1.0.
+    Weighted mean ≈ -0.98. n=4, k=3 → (4 * -0.98 + 0) / 7 ≈ -0.56."""
+    from src.features.team_history import shrunk_ewma
+    out = shrunk_ewma(
+        [(9, 5.0), (7, 0.3), (2, -1.0), (1, -1.5)],
+        half_life=2, k=3,
+    )
+    # Hand-computed: weights = [0.0625, 0.125, 0.5**0.5=0.7071..., 1.0]
+    # weighted_sum = 0.0625*5 + 0.125*0.3 + 0.7071*(-1) + 1.0*(-1.5)
+    #              = 0.3125 + 0.0375 - 0.7071 - 1.5 = -1.8571
+    # weight_sum = 1.8946
+    # weighted_mean = -0.9802
+    # shrunk = 4 * -0.9802 / 7 = -0.5601
+    assert out == pytest.approx(-0.5601, abs=1e-3)
