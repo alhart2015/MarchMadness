@@ -1241,7 +1241,13 @@ cd /c/Users/alden/MarchMadness && git add src/enhanced_model_v3.py && git commit
 The canonical clean v4 baseline is `output/pairwise_v4.csv` (PR 21 + recovery). To verify the wire-in is non-invasive when the new features are zero-removed:
 
 ```bash
-cd /c/Users/alden/MarchMadness && MM_FEATURE_DROP=team_seed_residual_mean_10yr,team_seed_residual_ewma_hl2 MM_TUNED_PARAMS_V3=1 python -m src.enhanced_model_v3 2>&1 | tee output/anchor_invariance_run.log
+# MM_TUNED_PARAMS_V3 must be a JSON dict of XGB hyperparameters,
+# not "1". Use the cached snapshot from a prior run:
+cd /c/Users/alden/MarchMadness && \
+  MM_FEATURE_DROP=team_seed_residual_mean_10yr,team_seed_residual_ewma_hl2 \
+  MM_TUNED_PARAMS_V3="$(cat output/v4_tuned_params.json)" \
+  MM_SKIP_DEFAULT_LOSO=1 \
+  python -m src.enhanced_model_v3 2>&1 | tee output/anchor_invariance_run.log
 ```
 
 Expected: writes a fresh `output/pairwise_v4.csv` (overwriting the canonical one). After the run, compare against the prior canonical file — but since we're overwriting, do this BEFORE the run:
@@ -1288,7 +1294,10 @@ cd /c/Users/alden/MarchMadness && git add -f output/anchor_invariance_run.log &&
 - [ ] **Step 1: Run the LOSO with new features active (no MM_FEATURE_DROP)**
 
 ```bash
-cd /c/Users/alden/MarchMadness && MM_TUNED_PARAMS_V3=1 python -m src.enhanced_model_v3 2>&1 | tee output/team_seed_residual_loso_run.log
+cd /c/Users/alden/MarchMadness && \
+  MM_TUNED_PARAMS_V3="$(cat output/v4_tuned_params.json)" \
+  MM_SKIP_DEFAULT_LOSO=1 \
+  python -m src.enhanced_model_v3 2>&1 | tee output/team_seed_residual_loso_run.log
 ```
 
 Expected: ~30-60 min wall. Writes a fresh `output/pairwise_v4.csv` that includes the two new features in v4's training. Save the new file under a versioned name first:
@@ -1301,30 +1310,26 @@ cd /c/Users/alden/MarchMadness && cp output/pairwise_v4.csv output/pairwise_v4_w
 
 - [ ] **Step 3: Apply v8 stage-2 over the new v4 stage-1**
 
+`src/train_stage2.py` reads `output/pairwise_v4.csv` and writes `output/pairwise_v8.csv`. Just run it:
+
 ```bash
-cd /c/Users/alden/MarchMadness && python -c "
-from src.train_stage2 import load_per_game_data, fit_stage2
-from src.build_v8 import build_v8_pairwise
-import pandas as pd
-v4_new = pd.read_csv('output/pairwise_v4_with_team_history.csv')
-# Re-train v8 stage-2 over the new v4 distribution.
-# ... (use the same call surface that production uses; see src/predict_2026_stage2.py for the recipe)
-# For LOSO scoring: use train_stage2.fit_loso(v4_new, ...) and write pairwise_v8_with_team_history.csv
-"
+cd /c/Users/alden/MarchMadness && python -m src.train_stage2 2>&1 | tee output/v8_retrain_team_history_run.log
+# After it finishes, save the v8 output under a versioned name:
+cp output/pairwise_v8.csv output/pairwise_v8_with_team_history.csv
 ```
 
-(If `train_stage2` doesn't expose a clean LOSO entry point, mirror the recipe from `src/eval_v4_calibration.py:run_phase2`.)
-
 - [ ] **Step 4: Score 22-season bracket points**
+
+NOTE: `score_pairwise_path` returns `{"total_pts": float, "per_season_pts": {...}}` — the key is `total_pts`, NOT `total`.
 
 ```bash
 cd /c/Users/alden/MarchMadness && python -c "
 from src.score_chalk_brackets import score_pairwise_path
-canonical_total = score_pairwise_path('output/pairwise_v8.csv')
-new_total = score_pairwise_path('output/pairwise_v8_with_team_history.csv')
-print(f'canonical v8: {canonical_total[\"total\"]}')
-print(f'new (with team history): {new_total[\"total\"]}')
-print(f'delta: {new_total[\"total\"] - canonical_total[\"total\"]:+d} brkt pts')
+canonical = score_pairwise_path('output/pairwise_v8_canonical_snapshot.csv')
+new = score_pairwise_path('output/pairwise_v8_with_team_history.csv')
+print(f'canonical v8: {canonical[\"total_pts\"]:.0f}')
+print(f'new (with team history): {new[\"total_pts\"]:.0f}')
+print(f'delta: {new[\"total_pts\"] - canonical[\"total_pts\"]:+.0f} brkt pts')
 "
 ```
 
@@ -1352,12 +1357,13 @@ cd /c/Users/alden/MarchMadness && python -c "
 import json
 from src.score_chalk_brackets import score_pairwise_path
 
-canonical = score_pairwise_path('output/pairwise_v8.csv')
+# score_pairwise_path returns {'total_pts': float, 'per_season_pts': {int: float}}
+canonical = score_pairwise_path('output/pairwise_v8_canonical_snapshot.csv')
 new = score_pairwise_path('output/pairwise_v8_with_team_history.csv')
 
 per_season_delta = {}
-for season in canonical['per_season']:
-    per_season_delta[season] = new['per_season'][season] - canonical['per_season'][season]
+for season in canonical['per_season_pts']:
+    per_season_delta[season] = new['per_season_pts'][season] - canonical['per_season_pts'][season]
 
 agg = sum(per_season_delta.values())
 max_swing = max(per_season_delta.values(), key=abs)
@@ -1376,15 +1382,15 @@ losses = sum(1 for d in per_season_delta.values() if d < 0)
 ties = sum(1 for d in per_season_delta.values() if d == 0)
 
 summary = {
-    'canonical_total': canonical['total'],
-    'new_total': new['total'],
+    'canonical_total': canonical['total_pts'],
+    'new_total': new['total_pts'],
     'aggregate_delta': agg,
     'max_swing_value': max_swing,
     'max_positive_delta': max_pos,
     'fragility_check_value': fragility_check,
     'fragility_check_pass': fragility_check >= 5,
     'wins_losses_ties': [wins, losses, ties],
-    'per_season_delta': per_season_delta,
+    'per_season_delta': {str(k): v for k, v in per_season_delta.items()},
     'verdict': verdict,
     'verdict_bands': {
         'PASS': '>=20 brkt pts AND fragility-check>=5',
