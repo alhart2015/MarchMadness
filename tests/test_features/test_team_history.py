@@ -185,3 +185,90 @@ def test_shrunk_ewma_recent_negatives_dominate_old_positive():
     # weighted_mean = -0.9802
     # shrunk = 4 * -0.9802 / 7 = -0.5601
     assert out == pytest.approx(-0.5601, abs=1e-3)
+
+
+def test_residuals_in_window_returns_empty_when_no_prior_appearances():
+    from src.features.team_history import (
+        compute_per_seed_baseline,
+        compute_team_residuals_in_window,
+    )
+    tr = _toy_tourney([(2024, 136, 100, 116)])
+    seeds = _toy_seeds([(2024, "W01", 100), (2024, "W16", 116)])
+    baseline = compute_per_seed_baseline(tr, seeds, max_season=2024)
+    out = compute_team_residuals_in_window(
+        season=2024, team_id=999, window_years=10,
+        baseline=baseline, tourney_results=tr, seeds=seeds,
+    )
+    assert out == []
+
+
+def test_residuals_in_window_window_edges():
+    """For target season 2024 with window=10, year-10 (2014) is IN,
+    year-11 (2013) is OUT."""
+    from src.features.team_history import (
+        compute_per_seed_baseline,
+        compute_team_residuals_in_window,
+    )
+    # Team 100 appears in 2013 (out of window), 2014 (in window edge), 2024 (target, excluded).
+    # Build baseline on 2013+2014 only (not 2024).
+    tr_baseline = _toy_tourney([
+        (2013, 136, 100, 116),  # team 100 wins R64 in 2013
+        (2014, 136, 100, 117),  # team 100 wins R64 in 2014
+    ])
+    # Full tourney results including target season.
+    tr_full = _toy_tourney([
+        (2013, 136, 100, 116),  # team 100 wins R64 in 2013
+        (2014, 136, 100, 117),  # team 100 wins R64 in 2014
+        (2024, 136, 100, 118),  # target season, must NOT be in residuals
+    ])
+    seeds = _toy_seeds([
+        (2013, "W08", 100), (2013, "W09", 116),
+        (2014, "W08", 100), (2014, "W09", 117),
+        (2024, "W08", 100), (2024, "W09", 118),
+    ])
+    baseline = compute_per_seed_baseline(tr_baseline, seeds, max_season=2023)
+    out = compute_team_residuals_in_window(
+        season=2024, team_id=100, window_years=10,
+        baseline=baseline, tourney_results=tr_full, seeds=seeds,
+    )
+    # Only 2014 should appear (years_ago=10 is in window; 2013 years_ago=11 is out;
+    # 2024 itself is excluded as the target season).
+    years_ago_seen = sorted(a for (a, _, _) in out)
+    assert years_ago_seen == [10]
+
+
+def test_residuals_in_window_uses_baseline_for_seed_in_prior_season():
+    """A team with a prior 1-seed appearance (rounds_won=2) gets
+    residual = 2 - baseline[1]."""
+    from src.features.team_history import (
+        compute_per_seed_baseline,
+        compute_team_residuals_in_window,
+    )
+    tr = _toy_tourney([
+        # 2020-2022: 1-seeds win R64 + R32 (rounds_won=2 each)
+        (2020, 136, 100, 116), (2020, 138, 100, 117),
+        (2021, 136, 200, 216), (2021, 138, 200, 217),
+        (2022, 136, 300, 316), (2022, 138, 300, 317),
+        # 2023: team 400 (1-seed) wins R64 only
+        (2023, 136, 400, 416),
+    ])
+    seeds = _toy_seeds([
+        (2020, "W01", 100), (2020, "W16", 116),
+        (2021, "X01", 200), (2021, "X16", 216),
+        (2022, "Y01", 300), (2022, "Y16", 316),
+        (2023, "Z01", 400), (2023, "Z16", 416),
+    ])
+    baseline = compute_per_seed_baseline(tr, seeds, max_season=2023)
+    # 1-seed baseline = (2 + 2 + 2 + 1) / 4 = 1.75
+    assert baseline[1] == pytest.approx(1.75)
+    out = compute_team_residuals_in_window(
+        season=2024, team_id=400, window_years=10,
+        baseline=baseline, tourney_results=tr, seeds=seeds,
+    )
+    # Team 400's only prior is 2023 as a 1-seed with rounds_won=1
+    # residual = 1 - 1.75 = -0.75
+    assert len(out) == 1
+    years_ago, prior_seed, residual = out[0]
+    assert years_ago == 1
+    assert prior_seed == 1
+    assert residual == pytest.approx(-0.75)

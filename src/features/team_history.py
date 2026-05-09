@@ -154,3 +154,56 @@ def shrunk_ewma(
         w * r for (w, (_, r)) in zip(weights, residuals_with_age)
     ) / weight_sum
     return float(n * weighted_mean) / (n + k)
+
+
+def compute_team_residuals_in_window(
+    season: int,
+    team_id: int,
+    window_years: int,
+    baseline: dict[int | str, float],
+    tourney_results: pd.DataFrame,
+    seeds: pd.DataFrame,
+) -> list[tuple[int, int, float]]:
+    """For target (season, team_id), return [(years_ago, prior_seed, residual)]
+    for the team's prior tournament appearances within window_years.
+
+    years_ago = season - prior_season, in [1, window_years].
+    residual = prior_rounds_won - baseline[prior_seed], with fallback
+    to baseline['__fallback__'] for seeds with no historical data.
+    """
+    earliest = season - window_years
+    rounds_won = _rounds_won_per_team_season(
+        tourney_results[
+            (tourney_results["Season"] >= earliest)
+            & (tourney_results["Season"] <= season - 1)
+        ],
+        max_season=None,
+    )
+    team_priors = rounds_won[rounds_won["TeamID"] == team_id]
+    if team_priors.empty:
+        return []
+
+    seeds_in_range = seeds[
+        (seeds["Season"] >= earliest) & (seeds["Season"] <= season - 1)
+    ].copy()
+    seeds_in_range["seed_num"] = seeds_in_range["Seed"].apply(_extract_seed_num)
+    team_priors = team_priors.merge(
+        seeds_in_range[["Season", "TeamID", "seed_num"]],
+        on=["Season", "TeamID"],
+        how="left",
+    )
+    team_priors = team_priors.dropna(subset=["seed_num"])
+    team_priors["seed_num"] = team_priors["seed_num"].astype(int)
+
+    fallback = baseline.get("__fallback__", 0.0)
+    out = []
+    for _, row in team_priors.iterrows():
+        prior_season = int(row["Season"])
+        prior_seed = int(row["seed_num"])
+        prior_rounds_won = int(row["rounds_won"])
+        seed_baseline = baseline.get(prior_seed, fallback)
+        residual = prior_rounds_won - seed_baseline
+        years_ago = season - prior_season
+        out.append((years_ago, prior_seed, residual))
+    out.sort()
+    return out
