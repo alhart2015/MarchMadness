@@ -1,0 +1,760 @@
+{
+  "spec": "docs/superpowers/specs/2026-05-09-team-seed-residual-design.md",
+  "n_tourney_rows": 1449,
+  "n_seed_rows": 2694,
+  "loso_seasons": [
+    2003,
+    2004,
+    2005,
+    2006,
+    2007,
+    2008,
+    2009,
+    2010,
+    2011,
+    2012,
+    2013,
+    2014,
+    2015,
+    2016,
+    2017,
+    2018,
+    2019,
+    2020,
+    2021,
+    2022,
+    2023,
+    2024
+  ],
+  "per_seed_baseline": [
+    {
+      "seed": 1,
+      "n_observations": 80,
+      "expected_rounds_won": 3.15
+    },
+    {
+      "seed": 2,
+      "n_observations": 80,
+      "expected_rounds_won": 2.225
+    },
+    {
+      "seed": 3,
+      "n_observations": 80,
+      "expected_rounds_won": 2.0125
+    },
+    {
+      "seed": 4,
+      "n_observations": 80,
+      "expected_rounds_won": 1.525
+    },
+    {
+      "seed": 5,
+      "n_observations": 80,
+      "expected_rounds_won": 1.175
+    },
+    {
+      "seed": 6,
+      "n_observations": 80,
+      "expected_rounds_won": 0.8125
+    },
+    {
+      "seed": 7,
+      "n_observations": 80,
+      "expected_rounds_won": 0.975
+    },
+    {
+      "seed": 8,
+      "n_observations": 80,
+      "expected_rounds_won": 0.7375
+    },
+    {
+      "seed": 9,
+      "n_observations": 80,
+      "expected_rounds_won": 0.6375
+    },
+    {
+      "seed": 10,
+      "n_observations": 79,
+      "expected_rounds_won": 0.5569620253164557
+    },
+    {
+      "seed": 11,
+      "n_observations": 98,
+      "expected_rounds_won": 0.7857142857142857
+    },
+    {
+      "seed": 12,
+      "n_observations": 84,
+      "expected_rounds_won": 0.5357142857142857
+    },
+    {
+      "seed": 13,
+      "n_observations": 81,
+      "expected_rounds_won": 0.25925925925925924
+    },
+    {
+      "seed": 14,
+      "n_observations": 81,
+      "expected_rounds_won": 0.12345679012345678
+    },
+    {
+      "seed": 15,
+      "n_observations": 80,
+      "expected_rounds_won": 0.15
+    },
+    {
+      "seed": 16,
+      "n_observations": 112,
+      "expected_rounds_won": 0.30357142857142855
+    }
+  ],
+  "fallback_baseline": 0.9760299625468165,
+  "champion_residuals": [
+    {
+      "season": 2015,
+      "team_name": "Duke",
+      "team_id": 1181,
+      "team_seed_residual_mean_10yr": -0.5705128205128205,
+      "team_seed_residual_ewma_hl2": -0.7026165310942585,
+      "priors": [
+        {
+          "years_ago": 1,
+          "prior_seed": 3,
+          "residual": -2.0833333333333335
+        },
+        {
+          "years_ago": 2,
+          "prior_seed": 2,
+          "residual": 0.625
+        },
+        {
+          "years_ago": 3,
+          "prior_seed": 2,
+          "residual": -2.375
+        },
+        {
+          "years_ago": 4,
+          "prior_seed": 1,
+          "residual": -1.2291666666666665
+        },
+        {
+          "years_ago": 5,
+          "prior_seed": 1,
+          "residual": 2.7708333333333335
+        },
+        {
+          "years_ago": 6,
+          "prior_seed": 2,
+          "residual": -0.375
+        },
+        {
+          "years_ago": 7,
+          "prior_seed": 2,
+          "residual": -1.375
+        },
+        {
+          "years_ago": 8,
+          "prior_seed": 6,
+          "residual": -0.9166666666666666
+        },
+        {
+          "years_ago": 9,
+          "prior_seed": 1,
+          "residual": -1.2291666666666665
+        },
+        {
+          "years_ago": 10,
+          "prior_seed": 1,
+          "residual": -1.2291666666666665
+        }
+      ]
+    },
+    {
+      "season": 2016,
+      "team_name": "Villanova",
+      "team_id": 1437,
+      "team_seed_residual_mean_10yr": -0.28566433566433574,
+      "team_seed_residual_ewma_hl2": -0.8987868598394488,
+      "priors": [
+        {
+          "years_ago": 1,
+          "prior_seed": 1,
+          "residual": -2.2884615384615383
+        },
+        {
+          "years_ago": 2,
+          "prior_seed": 2,
+          "residual": -1.3461538461538463
+        },
+        {
+          "years_ago": 3,
+          "prior_seed": 9,
+          "residual": -0.5192307692307693
+        },
+        {
+          "years_ago": 5,
+          "prior_seed": 9,
+          "residual": -0.5192307692307693
+        },
+        {
+          "years_ago": 6,
+          "prior_seed": 2,
+          "residual": -1.3461538461538463
+        },
+        {
+          "years_ago": 7,
+          "prior_seed": 3,
+          "residual": 1.9807692307692308
+        },
+        {
+          "years_ago": 8,
+          "prior_seed": 12,
+          "residual": 1.4181818181818182
+        },
+        {
+          "years_ago": 9,
+          "prior_seed": 9,
+          "residual": -0.5192307692307693
+        },
+        {
+          "years_ago": 10,
+          "prior_seed": 1,
+          "residual": -0.2884615384615383
+        }
+      ]
+    },
+    {
+      "season": 2017,
+      "team_name": "North Carolina",
+      "team_id": 1314,
+      "team_seed_residual_mean_10yr": 0.49404761904761907,
+      "team_seed_residual_ewma_hl2": 0.5820209786020266,
+      "priors": [
+        {
+          "years_ago": 1,
+          "prior_seed": 1,
+          "residual": 1.6964285714285716
+        },
+        {
+          "years_ago": 2,
+          "prior_seed": 4,
+          "residual": 0.4642857142857142
+        },
+        {
+          "years_ago": 3,
+          "prior_seed": 6,
+          "residual": 0.1071428571428571
+        },
+        {
+          "years_ago": 4,
+          "prior_seed": 8,
+          "residual": 0.25
+        },
+        {
+          "years_ago": 5,
+          "prior_seed": 1,
+          "residual": -0.3035714285714284
+        },
+        {
+          "years_ago": 6,
+          "prior_seed": 2,
+          "residual": 0.625
+        },
+        {
+          "years_ago": 8,
+          "prior_seed": 1,
+          "residual": 2.6964285714285716
+        },
+        {
+          "years_ago": 9,
+          "prior_seed": 1,
+          "residual": 0.6964285714285716
+        },
+        {
+          "years_ago": 10,
+          "prior_seed": 1,
+          "residual": -0.3035714285714284
+        }
+      ]
+    },
+    {
+      "season": 2018,
+      "team_name": "Villanova",
+      "team_id": 1437,
+      "team_seed_residual_mean_10yr": -0.10324074074074084,
+      "team_seed_residual_ewma_hl2": -0.35943621964242417,
+      "priors": [
+        {
+          "years_ago": 1,
+          "prior_seed": 1,
+          "residual": -2.3333333333333335
+        },
+        {
+          "years_ago": 2,
+          "prior_seed": 2,
+          "residual": 3.6666666666666665
+        },
+        {
+          "years_ago": 3,
+          "prior_seed": 1,
+          "residual": -2.3333333333333335
+        },
+        {
+          "years_ago": 4,
+          "prior_seed": 2,
+          "residual": -1.3333333333333335
+        },
+        {
+          "years_ago": 5,
+          "prior_seed": 9,
+          "residual": -0.5166666666666667
+        },
+        {
+          "years_ago": 7,
+          "prior_seed": 9,
+          "residual": -0.5166666666666667
+        },
+        {
+          "years_ago": 8,
+          "prior_seed": 2,
+          "residual": -1.3333333333333335
+        },
+        {
+          "years_ago": 9,
+          "prior_seed": 3,
+          "residual": 2.0166666666666666
+        },
+        {
+          "years_ago": 10,
+          "prior_seed": 12,
+          "residual": 1.4444444444444444
+        }
+      ]
+    },
+    {
+      "season": 2019,
+      "team_name": "Virginia",
+      "team_id": 1438,
+      "team_seed_residual_mean_10yr": -0.7604166666666666,
+      "team_seed_residual_ewma_hl2": -0.9932450684999261,
+      "priors": [
+        {
+          "years_ago": 1,
+          "prior_seed": 1,
+          "residual": -3.296875
+        },
+        {
+          "years_ago": 2,
+          "prior_seed": 5,
+          "residual": -0.109375
+        },
+        {
+          "years_ago": 3,
+          "prior_seed": 1,
+          "residual": -0.296875
+        },
+        {
+          "years_ago": 4,
+          "prior_seed": 2,
+          "residual": -1.296875
+        },
+        {
+          "years_ago": 5,
+          "prior_seed": 1,
+          "residual": -1.296875
+        },
+        {
+          "years_ago": 7,
+          "prior_seed": 10,
+          "residual": -0.546875
+        }
+      ]
+    },
+    {
+      "season": 2021,
+      "team_name": "Baylor",
+      "team_id": 1124,
+      "team_seed_residual_mean_10yr": -0.08496732026143798,
+      "team_seed_residual_ewma_hl2": -0.07680128326178187,
+      "priors": [
+        {
+          "years_ago": 2,
+          "prior_seed": 9,
+          "residual": 0.38235294117647056
+        },
+        {
+          "years_ago": 4,
+          "prior_seed": 3,
+          "residual": -0.07352941176470607
+        },
+        {
+          "years_ago": 5,
+          "prior_seed": 5,
+          "residual": -1.1029411764705883
+        },
+        {
+          "years_ago": 6,
+          "prior_seed": 3,
+          "residual": -2.073529411764706
+        },
+        {
+          "years_ago": 7,
+          "prior_seed": 6,
+          "residual": 1.1764705882352942
+        },
+        {
+          "years_ago": 9,
+          "prior_seed": 3,
+          "residual": 0.9264705882352939
+        }
+      ]
+    },
+    {
+      "season": 2022,
+      "team_name": "Kansas",
+      "team_id": 1242,
+      "team_seed_residual_mean_10yr": -0.19907407407407407,
+      "team_seed_residual_ewma_hl2": -0.3890121638484187,
+      "priors": [
+        {
+          "years_ago": 1,
+          "prior_seed": 3,
+          "residual": -1.0277777777777777
+        },
+        {
+          "years_ago": 3,
+          "prior_seed": 4,
+          "residual": -0.45833333333333326
+        },
+        {
+          "years_ago": 4,
+          "prior_seed": 1,
+          "residual": 0.7222222222222223
+        },
+        {
+          "years_ago": 5,
+          "prior_seed": 1,
+          "residual": -0.2777777777777777
+        },
+        {
+          "years_ago": 6,
+          "prior_seed": 1,
+          "residual": -0.2777777777777777
+        },
+        {
+          "years_ago": 7,
+          "prior_seed": 2,
+          "residual": -1.2638888888888888
+        },
+        {
+          "years_ago": 8,
+          "prior_seed": 2,
+          "residual": -1.2638888888888888
+        },
+        {
+          "years_ago": 9,
+          "prior_seed": 1,
+          "residual": -1.2777777777777777
+        },
+        {
+          "years_ago": 10,
+          "prior_seed": 2,
+          "residual": 2.736111111111111
+        }
+      ]
+    },
+    {
+      "season": 2023,
+      "team_name": "Connecticut",
+      "team_id": 1163,
+      "team_seed_residual_mean_10yr": 0.47932330827067665,
+      "team_seed_residual_ewma_hl2": -0.42741387006589676,
+      "priors": [
+        {
+          "years_ago": 1,
+          "prior_seed": 5,
+          "residual": -1.0921052631578947
+        },
+        {
+          "years_ago": 2,
+          "prior_seed": 7,
+          "residual": -0.9736842105263158
+        },
+        {
+          "years_ago": 7,
+          "prior_seed": 9,
+          "residual": 0.39473684210526316
+        },
+        {
+          "years_ago": 9,
+          "prior_seed": 7,
+          "residual": 5.026315789473684
+        }
+      ]
+    },
+    {
+      "season": 2024,
+      "team_name": "Connecticut",
+      "team_id": 1163,
+      "team_seed_residual_mean_10yr": 0.9640625,
+      "team_seed_residual_ewma_hl2": 0.9111161756922257,
+      "priors": [
+        {
+          "years_ago": 1,
+          "prior_seed": 4,
+          "residual": 4.475
+        },
+        {
+          "years_ago": 2,
+          "prior_seed": 5,
+          "residual": -1.175
+        },
+        {
+          "years_ago": 3,
+          "prior_seed": 7,
+          "residual": -0.975
+        },
+        {
+          "years_ago": 8,
+          "prior_seed": 9,
+          "residual": 0.36250000000000004
+        },
+        {
+          "years_ago": 10,
+          "prior_seed": 7,
+          "residual": 5.025
+        }
+      ]
+    }
+  ],
+  "distribution_percentiles": {
+    "team_seed_residual_mean_10yr": {
+      "p05": -0.362865894262255,
+      "p25": -0.11470734126984126,
+      "p50": 0.0,
+      "p75": 0.09029947916666667,
+      "p95": 0.49773784644474267
+    },
+    "team_seed_residual_ewma_hl2": {
+      "p05": -0.4435199622249788,
+      "p25": -0.14,
+      "p50": 0.0,
+      "p75": 0.09264087671017253,
+      "p95": 0.5956706085790002
+    }
+  },
+  "top_bottom_n": {
+    "team_seed_residual_mean_10yr": {
+      "top": [
+        {
+          "season": 2021,
+          "team_name": "Connecticut",
+          "value": 1.2373949579831933
+        },
+        {
+          "season": 2013,
+          "team_name": "Butler",
+          "value": 1.0976190476190475
+        },
+        {
+          "season": 2019,
+          "team_name": "Kentucky",
+          "value": 0.9914772727272727
+        },
+        {
+          "season": 2022,
+          "team_name": "Kentucky",
+          "value": 0.9652777777777779
+        },
+        {
+          "season": 2024,
+          "team_name": "Connecticut",
+          "value": 0.9640625
+        },
+        {
+          "season": 2015,
+          "team_name": "Butler",
+          "value": 0.9629629629629627
+        },
+        {
+          "season": 2022,
+          "team_name": "Loyola-Chicago",
+          "value": 0.9020114942528735
+        },
+        {
+          "season": 2008,
+          "team_name": "George Mason",
+          "value": 0.8875
+        },
+        {
+          "season": 2015,
+          "team_name": "Kentucky",
+          "value": 0.8843582887700537
+        },
+        {
+          "season": 2016,
+          "team_name": "Kentucky",
+          "value": 0.8677156177156178
+        }
+      ],
+      "bottom": [
+        {
+          "season": 2015,
+          "team_name": "Duke",
+          "value": -0.5705128205128205
+        },
+        {
+          "season": 2005,
+          "team_name": "Mississippi St",
+          "value": -0.575
+        },
+        {
+          "season": 2005,
+          "team_name": "Florida",
+          "value": -0.575
+        },
+        {
+          "season": 2009,
+          "team_name": "Duke",
+          "value": -0.5787037037037037
+        },
+        {
+          "season": 2015,
+          "team_name": "Notre Dame",
+          "value": -0.5810185185185186
+        },
+        {
+          "season": 2014,
+          "team_name": "New Mexico",
+          "value": -0.5869565217391305
+        },
+        {
+          "season": 2010,
+          "team_name": "Duke",
+          "value": -0.6
+        },
+        {
+          "season": 2021,
+          "team_name": "Missouri",
+          "value": -0.6282550057059861
+        },
+        {
+          "season": 2021,
+          "team_name": "Georgetown",
+          "value": -0.6764705882352942
+        },
+        {
+          "season": 2019,
+          "team_name": "Virginia",
+          "value": -0.7604166666666666
+        }
+      ]
+    },
+    "team_seed_residual_ewma_hl2": {
+      "top": [
+        {
+          "season": 2015,
+          "team_name": "Kentucky",
+          "value": 1.9300043139317806
+        },
+        {
+          "season": 2016,
+          "team_name": "Connecticut",
+          "value": 1.810292143099038
+        },
+        {
+          "season": 2013,
+          "team_name": "Butler",
+          "value": 1.6358802922699336
+        },
+        {
+          "season": 2016,
+          "team_name": "Kentucky",
+          "value": 1.4020598445073693
+        },
+        {
+          "season": 2012,
+          "team_name": "VCU",
+          "value": 1.3015631336324367
+        },
+        {
+          "season": 2019,
+          "team_name": "Syracuse",
+          "value": 1.2668295559469671
+        },
+        {
+          "season": 2011,
+          "team_name": "Michigan St",
+          "value": 1.1937380289276647
+        },
+        {
+          "season": 2012,
+          "team_name": "Connecticut",
+          "value": 1.1351738050155684
+        },
+        {
+          "season": 2019,
+          "team_name": "Michigan",
+          "value": 1.1026752608201231
+        },
+        {
+          "season": 2014,
+          "team_name": "Kentucky",
+          "value": 1.0516457037796434
+        }
+      ],
+      "bottom": [
+        {
+          "season": 2009,
+          "team_name": "Duke",
+          "value": -0.7405366019410704
+        },
+        {
+          "season": 2024,
+          "team_name": "Virginia",
+          "value": -0.7426498044610296
+        },
+        {
+          "season": 2013,
+          "team_name": "Pittsburgh",
+          "value": -0.8516812624466574
+        },
+        {
+          "season": 2022,
+          "team_name": "Illinois",
+          "value": -0.8571895424836601
+        },
+        {
+          "season": 2016,
+          "team_name": "Villanova",
+          "value": -0.8987868598394488
+        },
+        {
+          "season": 2022,
+          "team_name": "Texas",
+          "value": -0.9332438148838451
+        },
+        {
+          "season": 2024,
+          "team_name": "Purdue",
+          "value": -0.9494186871701167
+        },
+        {
+          "season": 2019,
+          "team_name": "Virginia",
+          "value": -0.9932450684999261
+        },
+        {
+          "season": 2015,
+          "team_name": "Georgetown",
+          "value": -1.0166491341171426
+        },
+        {
+          "season": 2024,
+          "team_name": "Arizona",
+          "value": -1.0690376322712434
+        }
+      ]
+    }
+  }
+}

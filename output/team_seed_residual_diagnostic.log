@@ -1,0 +1,95 @@
+=== Team-seed-residual Phase 1 diagnostic ===
+Data: data\raw\march-machine-learning-2026
+Tournament rows: 1,449
+Seed rows: 2,694
+LOSO seasons: 2003-2024
+
+=== Per-seed baseline (Season <= 2023) ===
+seed     n   E[rounds_won]
+   1    80           3.150
+   2    80           2.225
+   3    80           2.013
+   4    80           1.525
+   5    80           1.175
+   6    80           0.812
+   7    80           0.975
+   8    80           0.738
+   9    80           0.637
+  10    79           0.557
+  11    98           0.786
+  12    84           0.536
+  13    81           0.259
+  14    81           0.123
+  15    80           0.150
+  16   112           0.304
+  (fallback for missing seeds: 0.976)
+
+=== 9-champion residual values ===
+  Yr Team               |   cont    mom | priors
+------------------------------------------------------------------------------------------
+2015 Duke               |  -0.57  -0.70 | yr1/sd3/r=-2.08, yr2/sd2/r=+0.62, yr3/sd2/r=-2.38, yr4/sd1/r=-1.23, yr5/sd1/r=+2.77, yr6/sd2/r=-0.38, yr7/sd2/r=-1.38, yr8/sd6/r=-0.92, yr9/sd1/r=-1.23, yr10/sd1/r=-1.23
+2016 Villanova          |  -0.29  -0.90 | yr1/sd1/r=-2.29, yr2/sd2/r=-1.35, yr3/sd9/r=-0.52, yr5/sd9/r=-0.52, yr6/sd2/r=-1.35, yr7/sd3/r=+1.98, yr8/sd12/r=+1.42, yr9/sd9/r=-0.52, yr10/sd1/r=-0.29
+2017 North Carolina     |   0.49   0.58 | yr1/sd1/r=+1.70, yr2/sd4/r=+0.46, yr3/sd6/r=+0.11, yr4/sd8/r=+0.25, yr5/sd1/r=-0.30, yr6/sd2/r=+0.62, yr8/sd1/r=+2.70, yr9/sd1/r=+0.70, yr10/sd1/r=-0.30
+2018 Villanova          |  -0.10  -0.36 | yr1/sd1/r=-2.33, yr2/sd2/r=+3.67, yr3/sd1/r=-2.33, yr4/sd2/r=-1.33, yr5/sd9/r=-0.52, yr7/sd9/r=-0.52, yr8/sd2/r=-1.33, yr9/sd3/r=+2.02, yr10/sd12/r=+1.44
+2019 Virginia           |  -0.76  -0.99 | yr1/sd1/r=-3.30, yr2/sd5/r=-0.11, yr3/sd1/r=-0.30, yr4/sd2/r=-1.30, yr5/sd1/r=-1.30, yr7/sd10/r=-0.55
+2021 Baylor             |  -0.08  -0.08 | yr2/sd9/r=+0.38, yr4/sd3/r=-0.07, yr5/sd5/r=-1.10, yr6/sd3/r=-2.07, yr7/sd6/r=+1.18, yr9/sd3/r=+0.93
+2022 Kansas             |  -0.20  -0.39 | yr1/sd3/r=-1.03, yr3/sd4/r=-0.46, yr4/sd1/r=+0.72, yr5/sd1/r=-0.28, yr6/sd1/r=-0.28, yr7/sd2/r=-1.26, yr8/sd2/r=-1.26, yr9/sd1/r=-1.28, yr10/sd2/r=+2.74
+2023 Connecticut        |   0.48  -0.43 | yr1/sd5/r=-1.09, yr2/sd7/r=-0.97, yr7/sd9/r=+0.39, yr9/sd7/r=+5.03
+2024 Connecticut        |   0.96   0.91 | yr1/sd4/r=+4.47, yr2/sd5/r=-1.18, yr3/sd7/r=-0.97, yr8/sd9/r=+0.36, yr10/sd7/r=+5.03
+
+Feature DataFrame: 1,404 rows over seasons 2003-2024
+
+=== Correlation matrix: SKIPPED (no output/v4_team_features.csv) ===
+
+=== Distribution percentiles ===
+feature                                  |     p05     p25     p50     p75     p95
+team_seed_residual_mean_10yr             |  -0.363  -0.115  +0.000  +0.090  +0.498
+team_seed_residual_ewma_hl2              |  -0.444  -0.140  +0.000  +0.093  +0.596
+
+=== Top-10 / bottom-10 by each feature ===
+
+  Top-10 team_seed_residual_mean_10yr:
+    2021 Connecticut             +1.237
+    2013 Butler                  +1.098
+    2019 Kentucky                +0.991
+    2022 Kentucky                +0.965
+    2024 Connecticut             +0.964
+    2015 Butler                  +0.963
+    2022 Loyola-Chicago          +0.902
+    2008 George Mason            +0.887
+    2015 Kentucky                +0.884
+    2016 Kentucky                +0.868
+  Bottom-10 team_seed_residual_mean_10yr:
+    2015 Duke                    -0.571
+    2005 Mississippi St          -0.575
+    2005 Florida                 -0.575
+    2009 Duke                    -0.579
+    2015 Notre Dame              -0.581
+    2014 New Mexico              -0.587
+    2010 Duke                    -0.600
+    2021 Missouri                -0.628
+    2021 Georgetown              -0.676
+    2019 Virginia                -0.760
+
+  Top-10 team_seed_residual_ewma_hl2:
+    2015 Kentucky                +1.930
+    2016 Connecticut             +1.810
+    2013 Butler                  +1.636
+    2016 Kentucky                +1.402
+    2012 VCU                     +1.302
+    2019 Syracuse                +1.267
+    2011 Michigan St             +1.194
+    2012 Connecticut             +1.135
+    2019 Michigan                +1.103
+    2014 Kentucky                +1.052
+  Bottom-10 team_seed_residual_ewma_hl2:
+    2009 Duke                    -0.741
+    2024 Virginia                -0.743
+    2013 Pittsburgh              -0.852
+    2022 Illinois                -0.857
+    2016 Villanova               -0.899
+    2022 Texas                   -0.933
+    2024 Purdue                  -0.949
+    2019 Virginia                -0.993
+    2015 Georgetown              -1.017
+    2024 Arizona                 -1.069

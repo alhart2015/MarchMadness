@@ -335,3 +335,23 @@ def test_compute_features_uconn_2024_spot_check():
     assert row["team_seed_residual_ewma_hl2"] == pytest.approx(expected_ewma, abs=1e-9)
     # Sanity: UConn 2024 should have >= 4 prior appearances in window
     assert len(residuals) >= 4
+
+
+@pytest.mark.skipif(
+    not (DATA_DIR / "MNCAATourneySeeds.csv").exists(),
+    reason="Needs Kaggle data",
+)
+def test_diagnose_team_seed_residual_smoke(tmp_path, monkeypatch):
+    """The Phase 1 diagnostic runs without error and writes JSON + log."""
+    import json as _json
+    from src import diagnose_team_seed_residual as diag
+    monkeypatch.setattr(diag, "OUT_JSON", tmp_path / "diag.json")
+    monkeypatch.setattr(diag, "OUT_LOG", tmp_path / "diag.log")
+    rc = diag.main(["--seasons", "2020-2024"])  # short range = fast smoke
+    assert rc == 0
+    assert (tmp_path / "diag.json").exists()
+    assert (tmp_path / "diag.log").exists()
+    payload = _json.loads((tmp_path / "diag.json").read_text())
+    assert "per_seed_baseline" in payload
+    assert "champion_residuals" in payload
+    assert "distribution_percentiles" in payload
