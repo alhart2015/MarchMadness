@@ -810,6 +810,22 @@ success. **Clean-baseline measurement (PR <pending>, recovery step
 
 ## Engineering follow-ups (deferred)
 
+- **Refactor `enhanced_model_v3.py`'s per-season LOSO body into a reusable
+  function.** Surfaced during the team-program-history experiment
+  (2026-05-09): `MM_PAIRWISE_OUT` proved unstable on Windows for runs
+  longer than ~6-20 seasons (silent OS kill mid-LOSO loop), and the
+  workaround `src/loso_with_pairwise_for_team_history.py` had to duplicate
+  ~80 lines of v3's per-season training body (build_weighted_matchup_data
+  → build_matchup_data_from_kaggle → train_model → pairwise predict). Any
+  future custom driver for similar experiments will face the same
+  duplication. Refactor target: extract a function
+  `train_one_season(holdout, feature_matrix, tourney, reg, feature_cols,
+  top_n_by_season, xgb_params, supplemental_weight) -> (model, X_test,
+  y_test, medians)` from `leave_one_season_out_cv_weighted` so callers can
+  compose around it (with their own `gc.collect()` semantics if needed).
+  Estimated effort: ~30 min, low blast radius. Net benefit: future
+  v4-stage-1 add experiments don't duplicate the loop body.
+
 - **Test-suite hygiene: 10 tests fail on a fresh clone / fresh worktree
   until `tar -xzf data/training_data.tar.gz -C data/raw/` is run.** Has
   bitten us on every data wipe (2026-05-02, 2026-05-04, again at the
