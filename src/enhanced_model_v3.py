@@ -69,6 +69,7 @@ from src.features.late_season import (
     compute_vegas_trend,
 )
 from src.features.coach import compute_coach_features
+from src.features.team_history import compute_team_history_features
 # quality_wins (src/features/quality_wins.py) was tested in a backtest
 # (22 seasons): added 0 R64/R32 signal, dropped F4 accuracy by 9pp. Dropped
 # from the pipeline. Kept as a module for reference / future variants.
@@ -838,6 +839,23 @@ def prepare_loso_inputs() -> dict:
                              "coach_career_champs", "coach_career_seasons"]
         new_feature_names.extend(coach_feat_names)
         print(f"  Coach features: {len(coach_df):,} team-seasons")
+
+    # Team-program tournament-history features (cross-season, team-keyed).
+    # Spec: docs/superpowers/specs/2026-05-09-team-seed-residual-design.md
+    th_df = compute_team_history_features(
+        tournament_field=feature_matrix[["Season", "TeamID"]].drop_duplicates(),
+        tourney_results=data["tourney"],
+        seeds=data["seeds"],
+        window_years=10,
+    )
+    if not th_df.empty:
+        feature_matrix = feature_matrix.merge(
+            th_df, on=["TeamID", "Season"], how="left",
+        )
+        th_feat_names = ["team_seed_residual_mean_10yr",
+                         "team_seed_residual_ewma_hl2"]
+        new_feature_names.extend(th_feat_names)
+        print(f"  Team history features: {len(th_df):,} team-seasons")
 
     # quality_wins block removed: 22-season backtest showed -93 bracket pts vs
     # the v3+coach baseline, with F4 accuracy dropping 9pp. Signal already
