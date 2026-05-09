@@ -110,3 +110,15 @@ def compute_per_seed_baseline(
             baseline[seed] = float(sub["rounds_won"].mean())
     baseline["__fallback__"] = float(joined["rounds_won"].mean()) if len(joined) > 0 else 0.0
     return baseline
+
+
+def shrunk_mean(residuals: list[float], k: int = 3) -> float:
+    """Bayesian shrinkage of mean(residuals) toward 0 with k pseudo-obs.
+
+    For empty input, returns 0.0 ("no evidence").
+    For n observations: (sum(residuals) + k * 0) / (n + k).
+    """
+    n = len(residuals)
+    if n == 0:
+        return 0.0
+    return float(sum(residuals)) / (n + k)

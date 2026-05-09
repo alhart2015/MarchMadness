@@ -120,3 +120,26 @@ def test_per_seed_baseline_missing_seed_falls_back_to_overall_mean():
     assert baseline[1] == 2.0
     assert baseline[8] == 0.0
     assert baseline[16] == 0.0
+
+
+def test_shrunk_mean_empty_returns_zero():
+    from src.features.team_history import shrunk_mean
+    assert shrunk_mean([], k=3) == 0.0
+
+
+def test_shrunk_mean_single_value_shrinks_toward_zero():
+    """Single +6 with k=3: (6 + 0) / (1 + 3) = 1.5."""
+    from src.features.team_history import shrunk_mean
+    assert shrunk_mean([6.0], k=3) == pytest.approx(1.5)
+
+
+def test_shrunk_mean_at_n_equals_k_is_halfway():
+    """3 obs averaging 4.0, k=3 → 4.0 * 3 / 6 = 2.0 (halfway between 0 and 4)."""
+    from src.features.team_history import shrunk_mean
+    assert shrunk_mean([4.0, 4.0, 4.0], k=3) == pytest.approx(2.0)
+
+
+def test_shrunk_mean_at_large_n_approaches_raw_mean():
+    """100 obs averaging 1.0, k=3 → 100/103 ≈ 0.97."""
+    from src.features.team_history import shrunk_mean
+    assert shrunk_mean([1.0] * 100, k=3) == pytest.approx(100.0 / 103.0)
