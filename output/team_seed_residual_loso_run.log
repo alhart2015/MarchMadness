@@ -1,0 +1,109 @@
+Tuned XGB params: {'n_estimators': 449, 'max_depth': 2, 'learning_rate': 0.02793917800027491, 'subsample': 0.7339180704892945, 'colsample_bytree': 0.784894991903791}
+Calling prepare_loso_inputs() ...
+
+======================================================================
+STEP 1 -- Loading all data sources
+======================================================================
+  Loading Massey Ordinals (filtering to target systems)...
+  Regular season games : 124,529
+  Tournament games     : 1,449
+  Seeds                : 2,694
+  Teams                : 381
+  Massey (filtered)    : 54,089
+  KenPom/Barttorvik    : 1,215
+  Conference tourney   : 7,093
+  Team-coach rows      : 13,900
+  KenPom->Kaggle map   : 1213 teams mapped
+
+======================================================================
+STEP 2 -- Computing game-level features
+======================================================================
+  Building team ID mapping (KenPom -> Kaggle)...
+  Mapped 1213 KenPom teams to Kaggle IDs
+  Season 2005: 330 teams
+  Season 2010: 347 teams
+  Season 2015: 351 teams
+  Season 2020: 353 teams
+  Season 2025: 364 teams
+  Season 2026: 365 teams
+
+  Full feature matrix : 8,346 rows
+  Tournament teams    : 1,540 rows
+  Feature columns     : 49 total
+  Seasons             : 2003-2026
+
+======================================================================
+STEP 3 -- Loading and computing Vegas line features
+======================================================================
+  Loaded 95,355 Vegas line records across 23 seasons
+  warning: 1 Vegas rows have unparseable dates; keeping them
+  Filtered to 92,735 pre-tournament rows (2,620 tournament rows dropped)
+  Building Vegas team name -> Kaggle ID mapping...
+  Resolved 397 / 402 unique Vegas team names to Kaggle IDs
+  Games with both teams matched: 92,662 / 92,735
+  Computed Vegas features for 7,096 team-seasons
+  Seasons covered: 2004-2026
+  Teams per season: 309 avg, 233-364 range
+
+======================================================================
+STEP 3a -- Merging Vegas features into feature matrix
+======================================================================
+  Added 6 Vegas feature columns
+  Teams with Vegas data: 1425 / 1540 (92.5%)
+  Vegas feature columns: ['vegas_avg_spread', 'vegas_avg_margin', 'vegas_ats_pct', 'vegas_power_rating', 'vegas_consistency', 'vegas_game_count']
+
+======================================================================
+STEP 3b -- Computing late-season, trajectory, conf tourney, and Vegas trend features
+======================================================================
+  Late-season metrics: 4,214 team-seasons
+  Trajectory features: 7,988 team-seasons
+  Conf tourney features: 7,155 team-seasons
+  Vegas trend features: 6,397 team-seasons
+  Coach features: 1,471 team-seasons
+  Team history features: 1,540 team-seasons
+  New v3 feature columns: ['late_adj_oe', 'late_adj_de', 'late_adj_em', 'late_sos', 'efficiency_trend', 'margin_trend', 'conf_tourney_wins', 'conf_tourney_champ', 'vegas_late_spread_delta', 'coach_career_games', 'coach_career_wins', 'coach_career_winpct', 'coach_career_f4_apps', 'coach_career_champs', 'coach_career_seasons', 'team_seed_residual_mean_10yr', 'team_seed_residual_ewma_hl2']
+
+  Total feature columns (69):
+    adj_oe, adj_de, adj_em, adj_tempo, off_efg, off_to_rate
+    off_or_rate, off_ft_rate, def_efg, def_to_rate, def_or_rate, def_ft_rate
+    rolling_oe, rolling_de, win_pct_30d, win_pct_last10, avg_mov_last10, scoring_trend
+    season_win_pct, season_avg_mov, massey_POM, massey_SAG, massey_MOR, massey_WOL
+    massey_DOL, massey_COL, massey_RPI, massey_composite, conf_strength, kp_KADJ EM
+    kp_KADJ O, kp_KADJ D, kp_BARTHAG, kp_TALENT, kp_EXP, kp_ELITE SOS
+    kp_WAB, kp_EFG%, kp_EFG%D, kp_TOV%, kp_TOV%D, kp_OREB%
+    kp_DREB%, kp_FTR, kp_FTRD, kp_K TEMPO, vegas_avg_spread, vegas_avg_margin
+    vegas_ats_pct, vegas_power_rating, vegas_consistency, vegas_game_count, late_adj_oe, late_adj_de
+    late_adj_em, late_sos, efficiency_trend, margin_trend, conf_tourney_wins, conf_tourney_champ
+    vegas_late_spread_delta, coach_career_games, coach_career_wins, coach_career_winpct, coach_career_f4_apps, coach_career_champs
+    coach_career_seasons, team_seed_residual_mean_10yr, team_seed_residual_ewma_hl2
+
+======================================================================
+STEP 5 -- Building weighted matchup training data
+======================================================================
+  Training samples : 8,464  (tourney: 2898, supplemental: 5566)
+  Features used    : 69
+feature_matrix: 1,540 rows, 69 feature cols
+feature_cols includes: ['team_seed_residual_mean_10yr', 'team_seed_residual_ewma_hl2']
+
+LOSO over 22 seasons: 2003-2025
+  Season 2003: ll=0.5798, acc=0.688, n=64
+  Season 2004: ll=0.5537, acc=0.656, n=64
+  Season 2005: ll=0.5314, acc=0.734, n=64
+  Season 2006: ll=0.5890, acc=0.711, n=64
+  Season 2007: ll=0.4860, acc=0.750, n=64
+  Season 2008: ll=0.4803, acc=0.789, n=64
+  Season 2009: ll=0.5061, acc=0.742, n=64
+  Season 2010: ll=0.5714, acc=0.711, n=64
+  Season 2011: ll=0.6560, acc=0.634, n=67
+  Season 2012: ll=0.5554, acc=0.694, n=67
+  Season 2013: ll=0.5911, acc=0.679, n=67
+  Season 2014: ll=0.5883, acc=0.679, n=67
+  Season 2015: ll=0.4914, acc=0.761, n=67
+  Season 2016: ll=0.5824, acc=0.709, n=67
+  Season 2017: ll=0.5458, acc=0.687, n=67
+  Season 2018: ll=0.5927, acc=0.709, n=67
+  Season 2019: ll=0.5120, acc=0.784, n=67
+  Season 2021: ll=0.5995, acc=0.682, n=66
+  Season 2022: ll=0.6518, acc=0.634, n=67
+  Season 2023: ll=0.6302, acc=0.679, n=67
+---PYTHON EXIT: 1---

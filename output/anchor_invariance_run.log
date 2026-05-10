@@ -1,0 +1,272 @@
+
+======================================================================
+ENHANCED MODEL v3 -- Late-Season Features, Weighted Training, Line Blending
+======================================================================
+
+======================================================================
+STEP 1 -- Loading all data sources
+======================================================================
+  Loading Massey Ordinals (filtering to target systems)...
+  Regular season games : 124,529
+  Tournament games     : 1,449
+  Seeds                : 2,694
+  Teams                : 381
+  Massey (filtered)    : 54,089
+  KenPom/Barttorvik    : 1,215
+  Conference tourney   : 7,093
+  Team-coach rows      : 13,900
+  KenPom->Kaggle map   : 1213 teams mapped
+
+======================================================================
+STEP 2 -- Computing game-level features
+======================================================================
+  Building team ID mapping (KenPom -> Kaggle)...
+  Mapped 1213 KenPom teams to Kaggle IDs
+  Season 2005: 330 teams
+  Season 2010: 347 teams
+  Season 2015: 351 teams
+  Season 2020: 353 teams
+  Season 2025: 364 teams
+  Season 2026: 365 teams
+
+  Full feature matrix : 8,346 rows
+  Tournament teams    : 1,540 rows
+  Feature columns     : 49 total
+  Seasons             : 2003-2026
+
+======================================================================
+STEP 3 -- Loading and computing Vegas line features
+======================================================================
+  Loaded 95,355 Vegas line records across 23 seasons
+  warning: 1 Vegas rows have unparseable dates; keeping them
+  Filtered to 92,735 pre-tournament rows (2,620 tournament rows dropped)
+  Building Vegas team name -> Kaggle ID mapping...
+  Resolved 397 / 402 unique Vegas team names to Kaggle IDs
+  Games with both teams matched: 92,662 / 92,735
+  Computed Vegas features for 7,096 team-seasons
+  Seasons covered: 2004-2026
+  Teams per season: 309 avg, 233-364 range
+
+======================================================================
+STEP 3a -- Merging Vegas features into feature matrix
+======================================================================
+  Added 6 Vegas feature columns
+  Teams with Vegas data: 1425 / 1540 (92.5%)
+  Vegas feature columns: ['vegas_avg_spread', 'vegas_avg_margin', 'vegas_ats_pct', 'vegas_power_rating', 'vegas_consistency', 'vegas_game_count']
+
+======================================================================
+STEP 3b -- Computing late-season, trajectory, conf tourney, and Vegas trend features
+======================================================================
+  Late-season metrics: 4,214 team-seasons
+  Trajectory features: 7,988 team-seasons
+  Conf tourney features: 7,155 team-seasons
+  Vegas trend features: 6,397 team-seasons
+  Coach features: 1,471 team-seasons
+  Team history features: 1,540 team-seasons
+  New v3 feature columns: ['late_adj_oe', 'late_adj_de', 'late_adj_em', 'late_sos', 'efficiency_trend', 'margin_trend', 'conf_tourney_wins', 'conf_tourney_champ', 'vegas_late_spread_delta', 'coach_career_games', 'coach_career_wins', 'coach_career_winpct', 'coach_career_f4_apps', 'coach_career_champs', 'coach_career_seasons', 'team_seed_residual_mean_10yr', 'team_seed_residual_ewma_hl2']
+
+  Total feature columns (69):
+    adj_oe, adj_de, adj_em, adj_tempo, off_efg, off_to_rate
+    off_or_rate, off_ft_rate, def_efg, def_to_rate, def_or_rate, def_ft_rate
+    rolling_oe, rolling_de, win_pct_30d, win_pct_last10, avg_mov_last10, scoring_trend
+    season_win_pct, season_avg_mov, massey_POM, massey_SAG, massey_MOR, massey_WOL
+    massey_DOL, massey_COL, massey_RPI, massey_composite, conf_strength, kp_KADJ EM
+    kp_KADJ O, kp_KADJ D, kp_BARTHAG, kp_TALENT, kp_EXP, kp_ELITE SOS
+    kp_WAB, kp_EFG%, kp_EFG%D, kp_TOV%, kp_TOV%D, kp_OREB%
+    kp_DREB%, kp_FTR, kp_FTRD, kp_K TEMPO, vegas_avg_spread, vegas_avg_margin
+    vegas_ats_pct, vegas_power_rating, vegas_consistency, vegas_game_count, late_adj_oe, late_adj_de
+    late_adj_em, late_sos, efficiency_trend, margin_trend, conf_tourney_wins, conf_tourney_champ
+    vegas_late_spread_delta, coach_career_games, coach_career_wins, coach_career_winpct, coach_career_f4_apps, coach_career_champs
+    coach_career_seasons, team_seed_residual_mean_10yr, team_seed_residual_ewma_hl2
+  ABLATION: dropped 2 features (drop list: team_seed_residual_mean_10yr,team_seed_residual_ewma_hl2); remaining: 67
+
+======================================================================
+STEP 5 -- Building weighted matchup training data
+======================================================================
+  Training samples : 8,464  (tourney: 2898, supplemental: 5566)
+  Features used    : 67
+
+======================================================================
+STEP 6 -- Leave-one-season-out CV (default params, weighted)
+======================================================================
+  MM_SKIP_DEFAULT_LOSO set -- skipping default-params LOSO.
+
+======================================================================
+STEP 7 -- Optuna hyperparameter tuning (30 trials)
+======================================================================
+  Using cached tuned params from env (skipping Optuna): {'n_estimators': 449, 'max_depth': 2, 'learning_rate': 0.02793917800027491, 'subsample': 0.7339180704892945, 'colsample_bytree': 0.784894991903791}
+
+======================================================================
+STEP 8 -- Leave-one-season-out CV (tuned params, weighted)
+======================================================================
+  Saved: output/cv_per_season_v3.csv
+
+  Season    LogLoss    Brier   Accuracy      AUC   #Games
+----------------------------------------------------------
+    2003     0.5730   0.1980      0.703   0.7622       64
+    2004     0.5467   0.1857      0.688   0.7947       64
+    2005     0.5276   0.1758      0.734   0.8176       64
+    2006     0.5726   0.1954      0.711   0.7681       64
+    2007     0.4859   0.1591      0.750   0.8574       64
+    2008     0.4845   0.1588      0.773   0.8542       64
+    2009     0.5105   0.1690      0.719   0.8384       64
+    2010     0.5590   0.1906      0.727   0.7771       64
+    2011     0.6601   0.2324      0.642   0.6959       67
+    2012     0.5604   0.1885      0.701   0.7899       67
+    2013     0.5921   0.2045      0.679   0.7483       67
+    2014     0.5902   0.2042      0.687   0.7538       67
+    2015     0.4934   0.1589      0.761   0.8561       67
+    2016     0.5778   0.1945      0.709   0.7683       67
+    2017     0.5401   0.1831      0.724   0.7980       67
+    2018     0.5989   0.2053      0.701   0.7489       67
+    2019     0.5080   0.1686      0.769   0.8360       67
+    2021     0.5985   0.2075      0.667   0.7436       66
+    2022     0.6559   0.2298      0.627   0.6997       67
+    2023     0.6306   0.2179      0.679   0.7171       67
+    2024     0.5890   0.2021      0.679   0.7565       67
+    2025     0.4689   0.1498      0.799   0.8813       67
+----------------------------------------------------------
+    MEAN     0.5602   0.1900      0.710   0.7847
+
+======================================================================
+MODEL COMPARISON: v2 (enhanced + Vegas) vs v3 (+ late-season, weighted)
+======================================================================
+
+  Metric                   v2 (+Vegas)   v3 (+late,wt)       Delta
+  ---------------------------------------------------------------
+  Log Loss                      0.4560          0.5602     +0.1042
+  Accuracy                       0.735           0.710      -0.025
+  Brier Score                      N/A          0.1900
+  AUC                              N/A          0.7847
+
+  Note: Log loss did not improve (v2 0.4560 vs v3 0.5602)
+
+======================================================================
+STEP 9 -- Training final model on all historical data (weighted)
+======================================================================
+  Final model trained successfully (with sample weights).
+
+======================================================================
+STEP 10 -- Loading 2026 bracket and preparing predictions
+======================================================================
+  Bracket teams mapped: 64 / 64
+  All 64 bracket teams found in feature matrix.
+
+======================================================================
+STEP 11 -- Pre-computing pairwise win probabilities
+======================================================================
+  Computing 64 x 63 = 4,032 pair probabilities...
+  Done. Lookup table has 4,032 entries.
+  Blending 748 R64 game-specific Vegas lines (weight=0.35)...
+  R64 line blending complete.
+
+======================================================================
+STEP 12 -- Monte Carlo simulation (10,000 iterations)
+======================================================================
+  Running simulation...
+    ...2,000 / 10,000 simulations done
+    ...4,000 / 10,000 simulations done
+    ...6,000 / 10,000 simulations done
+    ...8,000 / 10,000 simulations done
+    ...10,000 / 10,000 simulations done
+  Simulation complete.
+
+======================================================================
+RESULTS -- Championship Probabilities (Top 15)
+======================================================================
+
+Rank  Seed  Team                            Champ%      F4%      E8%
+-----------------------------------------------------------------
+   1     1  Duke                            23.18%   50.45%   50.45%
+   2     2  Houston                         12.78%   35.82%   35.82%
+   3     1  Michigan                        12.61%   38.46%   38.46%
+   4     1  Arizona                          8.17%   28.58%   28.58%
+   5     2  Purdue                           6.69%   23.18%   23.18%
+   6     3  Gonzaga                          4.99%   19.12%   19.12%
+   7     1  Florida                          4.68%   20.61%   20.61%
+   8     2  Iowa St.                         4.14%   16.91%   16.91%
+   9     2  Connecticut                      3.20%   12.54%   12.54%
+  10     3  Michigan St.                     2.09%   10.79%   10.79%
+  11     3  Virginia                         2.01%   11.00%   11.00%
+  12     5  Vanderbilt                       1.87%   13.08%   13.08%
+  13     3  Illinois                         1.68%   11.03%   11.03%
+  14     6  Tennessee                        1.44%   10.55%   10.55%
+  15     6  Louisville                       1.24%    6.38%    6.38%
+
+======================================================================
+RESULTS -- Advancement Probabilities (Top 30)
+======================================================================
+  #  Seed  Team                        Region         R64     R32     S16      E8      F4    Champ
+--------------------------------------------------------------------------------------------------
+  1     1  Duke                        East         92.4%   79.3%   64.6%   50.4%   50.4%   23.18%
+  2     2  Houston                     South        92.7%   73.0%   53.6%   35.8%   35.8%   12.78%
+  3     1  Michigan                    Midwest      91.9%   75.5%   57.5%   38.5%   38.5%   12.61%
+  4     1  Arizona                     West         88.9%   64.0%   47.8%   28.6%   28.6%    8.17%
+  5     2  Purdue                      West         88.3%   61.0%   39.0%   23.2%   23.2%    6.69%
+  6     3  Gonzaga                     West         90.7%   60.3%   31.4%   19.1%   19.1%    4.99%
+  7     1  Florida                     South        88.2%   56.3%   37.5%   20.6%   20.6%    4.68%
+  8     2  Iowa St.                    Midwest      88.4%   52.8%   33.0%   16.9%   16.9%    4.14%
+  9     2  Connecticut                 East         88.4%   65.9%   34.2%   12.5%   12.5%    3.20%
+ 10     3  Michigan St.                East         88.3%   51.3%   29.7%   10.8%   10.8%    2.09%
+ 11     3  Virginia                    Midwest      88.3%   42.3%   24.2%   11.0%   11.0%    2.01%
+ 12     5  Vanderbilt                  South        79.5%   57.5%   29.4%   13.1%   13.1%    1.87%
+ 13     3  Illinois                    South        91.2%   53.3%   22.7%   11.0%   11.0%    1.68%
+ 14     6  Tennessee                   Midwest      83.9%   52.7%   24.3%   10.5%   10.5%    1.44%
+ 15     6  Louisville                  East         74.4%   37.5%   19.8%    6.4%    6.4%    1.24%
+ 16     5  St. John's                  East         78.5%   53.1%   17.2%    8.3%    8.3%    0.99%
+ 17     4  Arkansas                    West         89.1%   47.3%   18.8%    7.2%    7.2%    0.91%
+ 18     5  Texas Tech                  Midwest      79.8%   52.4%   20.4%    8.3%    8.3%    0.88%
+ 19     5  Wisconsin                   West         80.2%   45.8%   16.7%    6.3%    6.3%    0.64%
+ 20     6  BYU                         West         65.0%   27.2%   12.7%    4.9%    4.9%    0.53%
+ 21     4  Kansas                      East         79.6%   36.2%    7.9%    3.7%    3.7%    0.45%
+ 22     7  Kentucky                    Midwest      53.1%   26.9%   10.3%    4.5%    4.5%    0.45%
+ 23     7  UCLA                        East         71.8%   24.8%   10.3%    3.2%    3.2%    0.44%
+ 24     7  Miami FL                    West         72.2%   28.3%   10.4%    3.8%    3.8%    0.42%
+ 25     4  Alabama                     Midwest      66.2%   33.1%   10.3%    4.0%    4.0%    0.41%
+ 26     6  North Carolina              South        59.8%   25.5%    7.4%    3.3%    3.3%    0.33%
+ 27     4  Nebraska                    South        87.9%   32.1%   13.6%    4.5%    4.5%    0.32%
+ 28     9  Iowa                        South        62.4%   28.3%   11.4%    3.8%    3.8%    0.31%
+ 29     7  Saint Mary's                South        70.2%   19.6%    9.0%    3.5%    3.5%    0.30%
+ 30     9  Utah St.                    West         64.7%   20.1%    9.0%    3.0%    3.0%    0.28%
+
+======================================================================
+RESULTS -- Bracket Picks
+======================================================================
+
+  Chalk champion: ( 1) Duke  23.18%
+  EV champion   : ( 1) Duke  23.18%
+
+  Final Four (chalk):
+    ( 1) Duke
+    ( 1) Michigan
+
+======================================================================
+STEP 13 -- Exporting results
+======================================================================
+  Saved: C:\Users\alden\MarchMadness\.claude\worktrees\feat-team-seed-residual\output\bracket_2026_real.csv
+  Saved: C:\Users\alden\MarchMadness\.claude\worktrees\feat-team-seed-residual\output\bracket_2026_real_structure.csv
+  Saved: C:\Users\alden\MarchMadness\.claude\worktrees\feat-team-seed-residual\output\pairwise_probs.json
+  Saved: C:\Users\alden\MarchMadness\.claude\worktrees\feat-team-seed-residual\output\bracket_data.json
+  Saved: C:\Users\alden\MarchMadness\.claude\worktrees\feat-team-seed-residual\output\bracket_compact.json
+
+======================================================================
+STEP 14 -- Updating bracket.html
+======================================================================
+  Updated: C:\Users\alden\MarchMadness\.claude\worktrees\feat-team-seed-residual\output\bracket.html
+
+======================================================================
+STEP 15 -- Regenerating Kaggle submission files
+======================================================================
+  Building men's feature matrix for Kaggle submission...
+    M Season 2003: 327 teams (8.6s)
+    M Season 2004: 326 teams (8.2s)
+    M Season 2005: 330 teams (8.3s)
+    M Season 2006: 334 teams (8.1s)
+    M Season 2007: 336 teams (8.4s)
+    M Season 2008: 342 teams (9.1s)
+    M Season 2009: 347 teams (8.8s)
+    M Season 2010: 347 teams (8.8s)
+    M Season 2011: 345 teams (8.4s)
+    M Season 2012: 345 teams (8.6s)
+    M Season 2013: 347 teams (9.1s)
+    M Season 2014: 351 teams (8.9s)

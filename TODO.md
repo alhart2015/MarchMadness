@@ -488,6 +488,26 @@ success. **Clean-baseline measurement (PR <pending>, recovery step
 > valid because they predict actual chalk-pick flips. Active queue items
 > 1-4 below stand; their motivation is now "does this move the 22-season
 > bracket-points number," not "does this close the Kaggle gap."
+>
+> **Update 2026-05-09 (team-program tournament-history features came back FAIL).**
+> Two new features: `team_seed_residual_mean_10yr` (continuity, shrunk mean
+> of seed-residuals over prior 10yr) and `team_seed_residual_ewma_hl2`
+> (momentum, EWMA at HL=2). Phase 1 diagnostic confirmed the features
+> compute correctly (UConn 2024 cont/mom both +0.9, Virginia 2019 both
+> negative, UConn 2023 cont/mom split as designed; top-10 dominated by
+> Kentucky/UConn/Butler/Loyola-Chicago). Phase 2 LOSO + v8 retrain: -84
+> brkt pts vs canonical 2069 (W/L/T 10/12/0), worst single-season -50
+> (2007), 2024 (Kaggle year) -19. Stage-1 LL drift +0.0032 (essentially
+> flat). Anchor invariance verified (drop-features run reproduces canonical
+> within +0.0018 LL noise). **Generalized lesson: this is the seventh
+> same-data-peer add to v4 that has failed (BT-feature, feature-view,
+> HBT, Colley, Massey-MOV, Massey-decay-14d, now team-program-history).**
+> The qualitative signal IS genuine but XGB on the joint stack does not
+> convert it into bracket-points headroom at v4's data scale. Strongest
+> remaining hypothesis: v4 is near-saturated on tabular team-aggregate
+> features. Active queue re-ordered: roster-level (#1) and pool-aware
+> bracket construction (#2) both stand; MLP (#3) and Bayesian BT (#4)
+> downgraded further given the seven-failure pattern.
 
 1. **Roster-level returning-experience.** **Promoted to #1 by elimination
    (2026-05-08): calibration-shape MARGINAL closes that lane.** Player-
@@ -496,11 +516,14 @@ success. **Clean-baseline measurement (PR <pending>, recovery step
    anything in v4's 67-feature stack. The R64-blend FAIL + calibration-shape
    MARGINAL together strengthen the case that the performance ceiling is a
    feature-space gap (structural signal v4 doesn't have), not a calibration-
-   shape gap (mis-expressing signal v4 already has). Roster-level experience
-   is the leading remaining external-data candidate because it is structurally
-   different from all 67 existing features. Data sourcing cost is high; the
-   first step is locating a historical roster-level CSV (returning minutes
-   played, returning starters) for the 2003-2025 tournament teams.
+   shape gap (mis-expressing signal v4 already has). The team-program-history
+   FAIL (2026-05-09) further reinforces this: even a structurally-distinct
+   TEAM-keyed feature failed once added on top of the 67-feature stack, so
+   "more team-aggregate features" is also closed as a lane. Roster data is
+   PLAYER-level — a different aggregation entirely — which is why it
+   remains the leading external-data candidate. Data sourcing cost is high;
+   the first step is locating a historical roster-level CSV (returning
+   minutes played, returning starters) for the 2003-2025 tournament teams.
 2. **Pool-aware bracket construction (NEW 2026-05-08).** Orthogonal to
    improving v4: given v4's pairwise probabilities, what bracket should
    you actually submit? Chalk-pick-at-every-node maximizes EV on bracket
@@ -518,19 +541,26 @@ success. **Clean-baseline measurement (PR <pending>, recovery step
    pool-size-dependent and not directly comparable to the +25 PASS bar
    on stage-1/2 experiments. Spec out before #1 if data sourcing for
    roster turns out to be expensive.
-3. **Small neural net (MLP) as a stage-1.** Adds PyTorch tooling
+3. **Small neural net (MLP) as a stage-1.** **Deprioritized further by
+   the team-program-history FAIL (2026-05-09).** Adds PyTorch tooling
    cost; diversity vs XGBoost on the 67-feature tabular space is
    the open question. The lesson from the bracket-points re-test
    (PR 17): same-data peers aren't sufficient even on the production
    metric -- a stage-1 needs per-disagreement accuracy >= ~45% in the
    regions where it differs from v4. MLP on the same 67-feature target
-   faces the same risk profile as LR did.
+   faces the same risk profile as LR did. The seven-failure pattern
+   on same-data-peer adds (LR, plain BT, HBT, feature-view, Colley,
+   Massey-MOV/decay, team-program-history) is now strong evidence that
+   another same-data peer in a different aggregation framework does
+   not help at v4's data scale.
 4. **Full Bayesian Bradley-Terry with strength + variance per team**
    (PyMC / NumPyro / Stan). HBT confirmed prior structure doesn't
    lift BT-class standalone strength on the LL-blend gate; the
    bracket-points re-test (PR 17) confirmed plain BT also doesn't
    help on the production metric. Switching to full posterior
-   won't change either. Deferred until items 1-3 are settled.
+   won't change either. Deferred until items 1-3 are settled. **Even
+   weaker prior 2026-05-09:** the team-program-history FAIL added
+   a seventh same-data-peer null result.
 5. **Pre-tournament Vegas futures (championship odds, F4-reach
    odds) as a per-team strength feature.** Was #1b in the
    (now-deprecated) `2026-05-07-v4-kaggle-gap-strategy.md` strategy
@@ -542,6 +572,41 @@ success. **Clean-baseline measurement (PR <pending>, recovery step
    its own cost; not worth paying yet.
 
 ## Done
+
+- **Team-program tournament-history features -- FAIL (2026-05-09).**
+  Two new TeamID-keyed features: `team_seed_residual_mean_10yr` (continuity,
+  shrunk mean k=3) and `team_seed_residual_ewma_hl2` (momentum, EWMA HL=2,
+  shrunk k=3). Both use empirical per-seed leak-safe baseline (Season < S
+  data only) over a 10-year prior window. Phase 1 diagnostic confirmed
+  feature correctness: 9-champion residuals match qualitative predictions
+  (UConn 2024 cont/mom both +0.9, Virginia 2019 both negative, UConn 2023
+  cont +0.48 vs mom -0.43 split as designed); top-10 by either feature
+  dominated by historically-tournament-overperforming programs (Kentucky,
+  UConn, Butler, Loyola-Chicago, George Mason). **Verdict FAIL:** v8 retrained
+  on new v4 frame scored 1985 brkt pts vs canonical 2069 (delta -84,
+  W/L/T 10/12/0); stage-1 LL drift +0.0032 (essentially flat); 2024 (Kaggle
+  year) -19. Anchor invariance verified (drop-features run reproduces
+  canonical within +0.0018 LL). **Generalized lesson:** seventh same-data-peer
+  add to v4 to fail on the production metric (after BT-feature, feature-view,
+  HBT, Colley, Massey-MOV, Massey-decay-14d). The qualitative signal IS
+  genuine -- the feature correctly identifies UConn 2023's continuity/momentum
+  split and Virginia 2019's emergence-team profile -- but XGB on the joint
+  67+2 feature stack does not convert it into bracket-points headroom at
+  v4's data scale. Strongest remaining hypothesis: v4 is near-saturated on
+  tabular team-aggregate features. Roster-level (#1) stays open as the
+  leading external-data candidate because it is PLAYER-aggregate, not team-
+  aggregate; pool-aware bracket construction (#2) stays open as orthogonal
+  axis. **Procedural artifact:** `MM_PAIRWISE_OUT` in `enhanced_model_v3.py`
+  proved unstable on Windows for runs longer than ~6-20 seasons (silent OS
+  kill mid-LOSO loop). Custom driver `src/loso_with_pairwise_for_team_history.py`
+  with explicit per-season `gc.collect()` partially worked (20 seasons
+  before kill); seasons 2024 and 2025 ran as separate one-off invocations.
+  Reusable for any future v4-stage-1 add experiments that need per-season
+  pairwise capture. Code retained on `feat/team-seed-residual`:
+  `src/features/team_history.py`, `src/diagnose_team_seed_residual.py`,
+  `src/loso_with_pairwise_for_team_history.py`,
+  `tests/test_features/test_team_history.py` (18 tests). Findings:
+  `docs/notes/2026-05-09-team-seed-residual.md`.
 
 - **v4 calibration-shape: temperature scaling -- MARGINAL (2026-05-08).**
   Phase 1 (post-hoc T on v8 output) null by construction: chalk scoring is
@@ -744,6 +809,22 @@ success. **Clean-baseline measurement (PR <pending>, recovery step
 
 
 ## Engineering follow-ups (deferred)
+
+- **Refactor `enhanced_model_v3.py`'s per-season LOSO body into a reusable
+  function.** Surfaced during the team-program-history experiment
+  (2026-05-09): `MM_PAIRWISE_OUT` proved unstable on Windows for runs
+  longer than ~6-20 seasons (silent OS kill mid-LOSO loop), and the
+  workaround `src/loso_with_pairwise_for_team_history.py` had to duplicate
+  ~80 lines of v3's per-season training body (build_weighted_matchup_data
+  → build_matchup_data_from_kaggle → train_model → pairwise predict). Any
+  future custom driver for similar experiments will face the same
+  duplication. Refactor target: extract a function
+  `train_one_season(holdout, feature_matrix, tourney, reg, feature_cols,
+  top_n_by_season, xgb_params, supplemental_weight) -> (model, X_test,
+  y_test, medians)` from `leave_one_season_out_cv_weighted` so callers can
+  compose around it (with their own `gc.collect()` semantics if needed).
+  Estimated effort: ~30 min, low blast radius. Net benefit: future
+  v4-stage-1 add experiments don't duplicate the loop body.
 
 - **Test-suite hygiene: 10 tests fail on a fresh clone / fresh worktree
   until `tar -xzf data/training_data.tar.gz -C data/raw/` is run.** Has

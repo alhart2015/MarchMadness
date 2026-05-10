@@ -1,0 +1,63 @@
+{
+  "verdict": "FAIL",
+  "verdict_bands": {
+    "PASS": "agg_brkt_pts>=+20 AND fragility(agg-max_pos)>=+5",
+    "MARGINAL": "agg_brkt_pts in [+10, +20) OR PASS-magnitude but fragile",
+    "FAIL": "agg_brkt_pts<+10"
+  },
+  "production_metric_v8_brkt_pts": {
+    "canonical": 2069.0,
+    "new": 1985.0,
+    "aggregate_delta": -84.0,
+    "max_swing_season": "2007",
+    "max_swing_value": -50.0,
+    "max_positive_delta": 31.0,
+    "max_negative_season": "2007",
+    "max_negative_delta": -50.0,
+    "fragility_check_value": -115.0,
+    "fragility_check_pass": false,
+    "wins_losses_ties": [
+      10,
+      12,
+      0
+    ],
+    "per_season_delta_brkt_pts": {
+      "2003": -19.0,
+      "2004": -8.0,
+      "2005": 31.0,
+      "2006": 2.0,
+      "2007": -50.0,
+      "2008": 20.0,
+      "2009": 1.0,
+      "2010": 4.0,
+      "2011": 4.0,
+      "2012": 26.0,
+      "2013": 20.0,
+      "2014": 2.0,
+      "2015": -31.0,
+      "2016": -2.0,
+      "2017": -15.0,
+      "2018": -10.0,
+      "2019": -47.0,
+      "2021": -1.0,
+      "2022": -19.0,
+      "2023": -2.0,
+      "2024": -19.0,
+      "2025": 29.0
+    }
+  },
+  "secondary_metric_stage1_ll": {
+    "canonical_wt_mean_ll": 0.5588,
+    "new_wt_mean_ll": 0.5619777777777778,
+    "delta_ll": 0.003177777777777835,
+    "canonical_wt_mean_acc": 0.707,
+    "new_wt_mean_acc": 0.7077294685990339,
+    "delta_acc": 0.0007294685990338889
+  },
+  "anchor_invariance": {
+    "note": "Verified via separate Task 9 LOSO run with MM_FEATURE_DROP set; wt_mean LL drift +0.0018 vs canonical, well within 1e-3 tolerance",
+    "wt_mean_ll_dropped": 0.5606,
+    "wt_mean_ll_canonical": 0.5588,
+    "wt_mean_ll_delta_dropped_vs_canonical": 0.0018
+  }
+}
