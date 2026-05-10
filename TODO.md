@@ -541,18 +541,15 @@ success. **Clean-baseline measurement (PR <pending>, recovery step
    pool-size-dependent and not directly comparable to the +25 PASS bar
    on stage-1/2 experiments. Spec out before #1 if data sourcing for
    roster turns out to be expensive.
-3. **Small neural net (MLP) as a stage-1.** **Deprioritized further by
-   the team-program-history FAIL (2026-05-09).** Adds PyTorch tooling
-   cost; diversity vs XGBoost on the 67-feature tabular space is
-   the open question. The lesson from the bracket-points re-test
-   (PR 17): same-data peers aren't sufficient even on the production
-   metric -- a stage-1 needs per-disagreement accuracy >= ~45% in the
-   regions where it differs from v4. MLP on the same 67-feature target
-   faces the same risk profile as LR did. The seven-failure pattern
-   on same-data-peer adds (LR, plain BT, HBT, feature-view, Colley,
-   Massey-MOV/decay, team-program-history) is now strong evidence that
-   another same-data peer in a different aggregation framework does
-   not help at v4's data scale.
+3. **Self-supervised team embeddings via regular-season margin prediction
+   (Candidate 4 promoted by GNN Phase 1 FAIL, 2026-05-09).** Saturation-break
+   theory: latent style/matchup specificity at the team-pair level. Risk
+   profile is structurally similar to the failed GNN (Massey may already
+   extract the bulk of the team-strength signal at the RS level). Scope a
+   Phase 1 sanity check (analogous to GNN's: train on RS, beat scalar Massey
+   on late-RS prediction by >= 0.005 LL) before committing to LOSO. See
+   spec `docs/superpowers/specs/2026-05-09-non-tabular-model-class-scoping-design.md`
+   Candidate 4 description for details.
 4. **Full Bayesian Bradley-Terry with strength + variance per team**
    (PyMC / NumPyro / Stan). HBT confirmed prior structure doesn't
    lift BT-class standalone strength on the LL-blend gate; the
@@ -572,6 +569,20 @@ success. **Clean-baseline measurement (PR <pending>, recovery step
    its own cost; not worth paying yet.
 
 ## Done
+
+- **GNN stage-1 peer Phase 1 -- FAIL (2026-05-09).** RS prediction (Mar 1
+  -> Selection Sunday) GNN underperforms scalar Massey composite by mean
+  -0.0958 LL across 5 test seasons (gate >= +0.005). 0/5 individually pass;
+  worst -0.176 (2021), best -0.055 (2024). Per spec sequel-ordering matrix,
+  GNN candidate closed; Candidate 4 (self-supervised embeddings) promoted to
+  lead, Candidate 3 (box-score) kept, Candidate 2 (sequence) deprioritized.
+  Phase 2 plan not written (gate failed). Eighth same-data-equivalent null
+  result counting BT, feature-view, HBT, Colley, Massey-MOV, Massey-decay-14d,
+  team-seed-residual, GNN-Phase-1. Per-season GNN training < 2s/season on
+  CPU (well under 30-min escalation threshold). Findings:
+  `docs/notes/2026-05-09-gnn-phase1.md`. Code:
+  `src/gnn_stage1_peer/`, `src/run_gnn_phase1.py`,
+  `tests/test_gnn_stage1_peer/`.
 
 - **Team-program tournament-history features -- FAIL (2026-05-09).**
   Two new TeamID-keyed features: `team_seed_residual_mean_10yr` (continuity,
