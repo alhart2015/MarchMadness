@@ -120,27 +120,60 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--num-layers", type=int, default=2)
     parser.add_argument("--dropout", type=float, default=0.2)
     parser.add_argument("--decoder-hidden", type=int, default=128)
+    parser.add_argument(
+        "--encoder",
+        choices=["sage", "edge_attr"],
+        default="sage",
+        help=(
+            "Encoder variant: 'sage' (default; original GraphSAGE encoder, "
+            "ignores edge_attr) or 'edge_attr' (GINE encoder consuming "
+            "edge_attr; Phase 2 MARGINAL-row structural variant)."
+        ),
+    )
+    parser.add_argument(
+        "--run-tag",
+        default="",
+        help=(
+            "Optional suffix appended to output filenames as '_<tag>'. "
+            "Defaults to 'edge_attr' when --encoder edge_attr is set without "
+            "an explicit tag, so the SAGE-encoder outputs are not clobbered."
+        ),
+    )
     args = parser.parse_args(argv)
 
     holdouts = [int(s) for s in args.holdout_seasons.split(",") if s.strip()]
     seasons = [int(s) for s in args.seasons.split(",") if s.strip()]
     output_dir = Path(args.output_dir)
     output_dir.mkdir(parents=True, exist_ok=True)
-    log_path = output_dir / "gnn_phase2_loso_run.log"
-    pairwise_out = output_dir / "pairwise_gnn_phase2.csv"
-    per_holdout_path = output_dir / "gnn_phase2_loso_per_holdout.json"
-    summary_path = output_dir / "gnn_phase2_loso_summary.json"
+
+    # Resolve run tag: explicit --run-tag wins; otherwise default to the
+    # encoder name (only matters for non-default encoders so we don't clobber
+    # the sage-encoder outputs).
+    if args.run_tag:
+        tag = args.run_tag
+    elif args.encoder != "sage":
+        tag = args.encoder
+    else:
+        tag = ""
+    suffix = f"_{tag}" if tag else ""
+
+    log_path = output_dir / f"gnn_phase2_loso_run{suffix}.log"
+    pairwise_out = output_dir / f"pairwise_gnn_phase2{suffix}.csv"
+    per_holdout_path = output_dir / f"gnn_phase2_loso_per_holdout{suffix}.json"
+    summary_path = output_dir / f"gnn_phase2_loso_summary{suffix}.json"
 
     # Ensure clean pairwise output: we append per-holdout to keep memory flat.
     pairwise_out.unlink(missing_ok=True)
 
     setup_logging(log_path)
     logging.info(
-        "Phase 2 LOSO sweep: holdouts=%s seed=%d epochs=%d patience=%d",
+        "Phase 2 LOSO sweep: holdouts=%s seed=%d epochs=%d patience=%d encoder=%s tag=%r",
         holdouts,
         args.seed,
         args.epochs,
         args.patience,
+        args.encoder,
+        tag,
     )
     logging.info("Pairwise output: %s", pairwise_out)
 
@@ -162,6 +195,7 @@ def main(argv: list[str] | None = None) -> int:
                 patience=args.patience,
                 seed=args.seed,
                 emit_pairwise=True,
+                encoder=args.encoder,
             )
         except Exception as exc:
             logging.exception("Holdout %d FAILED: %s", holdout, exc)

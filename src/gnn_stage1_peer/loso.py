@@ -30,8 +30,13 @@ from torch_geometric.data import Data
 from .data import build_global_team_index, load_rs_games
 from .evaluation import evaluate_gnn_phase1
 from .graph import build_matchup_pairs, build_pyg_graph
-from .model import GNNStage1Peer
+from .model import GNNStage1Peer, GNNStage1PeerEdgeAttr
 from .training import set_determinism
+
+# Encoder choices for Phase 2 LOSO. "sage" is the original Phase 1/2
+# GraphSAGE encoder (ignores edge_attr). "edge_attr" is the MARGINAL-row
+# structural variant: a GINE encoder that consumes graph.edge_attr.
+_ENCODER_CHOICES = ("sage", "edge_attr")
 
 
 def load_tourney_games(data_dir: Path, season: int) -> pd.DataFrame:
@@ -146,7 +151,8 @@ def train_loso_gnn(
     lr: float = 1e-3,
     patience: int = 5,
     seed: int = 42,
-) -> tuple[GNNStage1Peer, dict]:
+    encoder: str = "sage",
+) -> tuple[GNNStage1Peer | GNNStage1PeerEdgeAttr, dict]:
     """Train ONE ``GNNStage1Peer`` across all training-season graphs (Phase 2).
 
     Per epoch, the model forwards through each training season's RS graph,
@@ -185,11 +191,17 @@ def train_loso_gnn(
     epochs, lr, patience, seed
         Training-loop hyperparameters. ``set_determinism(seed)`` is called
         before model construction so initialisation is reproducible.
+    encoder
+        Either ``"sage"`` (default; original ``GNNStage1Peer`` with
+        ``GraphSAGEEncoder``) or ``"edge_attr"`` (``GNNStage1PeerEdgeAttr``
+        with the ``EdgeAttrAwareEncoder`` GINE variant). Used by the Phase 2
+        MARGINAL-row structural sweep.
 
     Returns
     -------
     model
-        The trained ``GNNStage1Peer``. If at least one validation step
+        The trained model (``GNNStage1Peer`` or ``GNNStage1PeerEdgeAttr``
+        depending on ``encoder``). If at least one validation step
         produced a finite val LL, ``model.load_state_dict`` is called with
         the best-epoch weights before returning.
     info
@@ -203,8 +215,15 @@ def train_loso_gnn(
     LOSO plan: the holdout season's tournament games and RS graph are used
     here, mirroring Phase 1's test-set early stopping).
     """
+    if encoder not in _ENCODER_CHOICES:
+        raise ValueError(
+            f"encoder={encoder!r} not in {_ENCODER_CHOICES}"
+        )
     set_determinism(seed)
-    model = GNNStage1Peer(
+    model_cls = (
+        GNNStage1PeerEdgeAttr if encoder == "edge_attr" else GNNStage1Peer
+    )
+    model = model_cls(
         num_nodes=num_nodes,
         hidden_dim=hidden_dim,
         num_layers=num_layers,
@@ -271,7 +290,7 @@ def train_loso_gnn(
 
 
 def predict_holdout_pairwise(
-    model: GNNStage1Peer,
+    model: GNNStage1Peer | GNNStage1PeerEdgeAttr,
     holdout_graph: Data,
     team_index: dict[int, int],
     holdout_field: list[int],
@@ -331,7 +350,7 @@ def predict_holdout_pairwise(
 
 
 def evaluate_loso(
-    model: GNNStage1Peer,
+    model: GNNStage1Peer | GNNStage1PeerEdgeAttr,
     test_pairs: tuple[torch.Tensor, torch.Tensor, torch.Tensor],
     holdout_graph: Data,
 ) -> dict:
@@ -370,6 +389,7 @@ def run_phase2_one_holdout(
     patience: int = 5,
     seed: int = 42,
     emit_pairwise: bool = False,
+    encoder: str = "sage",
 ) -> dict:
     """Run one LOSO holdout: build data, train cross-season GNN, evaluate.
 
@@ -400,6 +420,10 @@ def run_phase2_one_holdout(
         round-robin pairwise predictions over the holdout's tournament field
         (columns ``team_a``, ``team_b``, ``p_a_wins``; ``team_a < team_b``).
         Default False so existing callers/tests are unaffected.
+    encoder
+        Either ``"sage"`` (default) or ``"edge_attr"``. Forwarded to
+        ``train_loso_gnn``; selects between ``GNNStage1Peer`` (SAGE) and
+        ``GNNStage1PeerEdgeAttr`` (GINE consuming ``edge_attr``).
 
     Returns
     -------
@@ -431,6 +455,7 @@ def run_phase2_one_holdout(
         lr=lr,
         patience=patience,
         seed=seed,
+        encoder=encoder,
     )
     train_minutes = (time.time() - t0) / 60.0
 

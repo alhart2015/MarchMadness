@@ -552,6 +552,46 @@ def test_run_phase2_one_holdout_emit_pairwise_default_off(tmp_path):
     assert "pairwise_df" not in result
 
 
+def test_run_phase2_one_holdout_edge_attr_encoder(tmp_path):
+    """encoder='edge_attr' runs end-to-end on the 3-season fixture."""
+    from src.gnn_stage1_peer.loso import run_phase2_one_holdout
+
+    data_dir = _make_fixture(tmp_path)
+    result = run_phase2_one_holdout(
+        data_dir=data_dir,
+        holdout_season=2024,
+        seasons=[2022, 2023, 2024],
+        hidden_dim=8,
+        num_layers=2,
+        dropout=0.0,
+        decoder_hidden=16,
+        epochs=5,
+        lr=0.05,
+        patience=10,
+        seed=42,
+        encoder="edge_attr",
+    )
+
+    expected_keys = {
+        "holdout_season",
+        "gnn",
+        "predictions",
+        "train_minutes",
+        "epochs_run",
+        "best_epoch",
+        "best_val_ll",
+    }
+    assert set(result.keys()) == expected_keys
+    assert result["holdout_season"] == 2024
+
+    import math as _math
+    gnn = result["gnn"]
+    assert set(gnn.keys()) == {"ll", "accuracy", "n"}
+    assert _math.isfinite(gnn["ll"])
+    assert gnn["n"] > 0
+    assert len(result["predictions"]) == gnn["n"]
+
+
 def test_run_phase2_one_holdout_smoke(tmp_path):
     """End-to-end smoke: build data, train, evaluate on the multi-season fixture."""
     from src.gnn_stage1_peer.loso import run_phase2_one_holdout
