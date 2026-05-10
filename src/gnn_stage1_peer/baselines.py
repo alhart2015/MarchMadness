@@ -7,8 +7,11 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 
-# Default Massey systems used for the composite. Subset of v4's massey_systems
-# that have stable historical coverage across 2003-2025.
+# Default Massey systems used for the composite. Subset of v4's massey_systems.
+# Coverage in MMasseyOrdinals.csv: POM, MOR, DOL span 2003-2026 (full); MAS
+# covers 20/24 seasons (gaps); SAG ends in 2023 (absent for 2024-2026). The
+# composite degrades gracefully -- pandas groupby+mean averages over whichever
+# systems are present per season, so 2024+ is effectively a 3-system mean.
 DEFAULT_SYSTEMS = ("POM", "MAS", "SAG", "MOR", "DOL")
 
 
