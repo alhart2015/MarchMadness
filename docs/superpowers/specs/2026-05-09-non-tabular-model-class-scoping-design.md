@@ -426,10 +426,10 @@ residual experiment did (PR 34):
 - Verdict summary JSON + .txt
 - Anchor invariance log + drop-features pairwise frame
 
-The plan document (the eventual
-`docs/superpowers/plans/2026-05-09-non-tabular-model-class-scoping.md`)
-must include explicit `git add -f <path>` steps in each of these
-phases. The data wipe of 2026-05-04 lost PR 21's clean
+The plan documents (Phase 1:
+`docs/superpowers/plans/2026-05-09-non-tabular-model-class-scoping-phase1.md`,
+and the eventual Phase 2 sibling) must include explicit `git add -f <path>`
+steps in each of these phases. The data wipe of 2026-05-04 lost PR 21's clean
 `pairwise_v4.csv` because it was gitignored and lived only in a
 wiped worktree; that lesson applies forward.
 
@@ -501,8 +501,10 @@ experiment's Task 9.)
 ## Files of record
 
 - This scoping spec: `docs/superpowers/specs/2026-05-09-non-tabular-model-class-scoping-design.md`
-- (After implementation plan is written) Implementation plan:
-  `docs/superpowers/plans/2026-05-09-non-tabular-model-class-scoping.md`
+- Phase 1 implementation plan:
+  `docs/superpowers/plans/2026-05-09-non-tabular-model-class-scoping-phase1.md`
+- (Pending Phase 1 verdict) Phase 2 plan:
+  `docs/superpowers/plans/2026-05-09-non-tabular-model-class-scoping-phase2.md`
 - Predecessor findings: `docs/notes/2026-05-09-team-seed-residual.md`
 - Strategic context: `TODO.md` Active queue (item #3 to be replaced
   by this scoping's recommendation upon completion)
