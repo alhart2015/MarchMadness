@@ -542,13 +542,16 @@ success. **Clean-baseline measurement (PR <pending>, recovery step
    on stage-1/2 experiments. Spec out before #1 if data sourcing for
    roster turns out to be expensive.
 3. **Self-supervised team embeddings via regular-season margin prediction
-   (Candidate 4 promoted by GNN Phase 1 FAIL, 2026-05-09).** Saturation-break
-   theory: latent style/matchup specificity at the team-pair level. Risk
-   profile is structurally similar to the failed GNN (Massey may already
-   extract the bulk of the team-strength signal at the RS level). Scope a
-   Phase 1 sanity check (analogous to GNN's: train on RS, beat scalar Massey
-   on late-RS prediction by >= 0.005 LL) before committing to LOSO. See
-   spec `docs/superpowers/specs/2026-05-09-non-tabular-model-class-scoping-design.md`
+   (Candidate 4 promoted by GNN Phase 2 FAIL, 2026-05-10; Phase 1 verdict
+   retracted, see `docs/notes/2026-05-10-gnn-phase2-loso.md`).** Saturation-
+   break theory: latent style/matchup specificity at the team-pair level.
+   Risk profile is structurally similar to the failed GNN (Massey may
+   already extract the bulk of the team-strength signal at the RS level).
+   **Skip the RS-prediction sanity-check proxy** (this is what tainted
+   Phase 1: tournament prediction is the only sound proxy for tournament
+   prediction). Go directly to a 22-season tournament LOSO with the
+   BT-class LL-blend gate against v4. See spec
+   `docs/superpowers/specs/2026-05-09-non-tabular-model-class-scoping-design.md`
    Candidate 4 description for details.
 4. **Full Bayesian Bradley-Terry with strength + variance per team**
    (PyMC / NumPyro / Stan). HBT confirmed prior structure doesn't
@@ -570,19 +573,32 @@ success. **Clean-baseline measurement (PR <pending>, recovery step
 
 ## Done
 
-- **GNN stage-1 peer Phase 1 -- FAIL (2026-05-09).** RS prediction (Mar 1
-  -> Selection Sunday) GNN underperforms scalar Massey composite by mean
-  -0.0958 LL across 5 test seasons (gate >= +0.005). 0/5 individually pass;
-  worst -0.176 (2021), best -0.055 (2024). Per spec sequel-ordering matrix,
-  GNN candidate closed; Candidate 4 (self-supervised embeddings) promoted to
-  lead, Candidate 3 (box-score) kept, Candidate 2 (sequence) deprioritized.
-  Phase 2 plan not written (gate failed). Eighth same-data-equivalent null
-  result counting BT, feature-view, HBT, Colley, Massey-MOV, Massey-decay-14d,
-  team-seed-residual, GNN-Phase-1. Per-season GNN training < 2s/season on
-  CPU (well under 30-min escalation threshold). Findings:
-  `docs/notes/2026-05-09-gnn-phase1.md`. Code:
-  `src/gnn_stage1_peer/`, `src/run_gnn_phase1.py`,
-  `tests/test_gnn_stage1_peer/`.
+- **GNN stage-1 peer Phase 2 LOSO -- FAIL (2026-05-10), Phase 1 retracted.**
+  Phase 1 (RS-prediction proxy vs scalar Massey) was retracted: the Massey
+  baseline used `ranking_day=133` (Selection Sunday) which already incorporates
+  the test-set RS games -- Massey was looking up the answer. Even leak-free,
+  RS-prediction is a structurally biased proxy for tournament prediction.
+  Phase 2 ran the sound proxy: 22-season tournament LOSO with cross-season
+  shared-parameter training, BT-class LL-blend gate against v4. Standalone
+  GNN wt_mean LL 0.6060 (vs v4 0.5579) over 2898 test games; gate r_residual
+  0.5495 (PASS), optimal_w 0.80 (PASS), **headroom +0.0039 (FAIL, threshold
+  +0.005)**. Plan's MARGINAL row authorized one structural variant (NOT
+  hyperparameter fishing): edge-attr-aware GINE encoder consuming
+  [score_diff, site, days_rest, days_from_start]. Result: standalone LL
+  worse (0.6293), gate failed harder (clauses 2 + 3; optimal_w degenerated
+  to 0.95, headroom collapsed to +0.0003). Both encoders FAIL.
+  Per-season picture: regime-dependent, not uniformly weak -- 9 seasons
+  with real complementary signal (best 2022 +0.0687, 2017 +0.0498), 8
+  seasons strictly worse than v4 (w*=1.00, zero headroom). Eighth same-
+  data-equivalent null result counting BT-feature, feature-view, HBT,
+  Colley, Massey-MOV, Massey-decay-14d, team-seed-residual, GNN-Phase-2.
+  Per spec sequel-ordering matrix, Candidate 4 (self-supervised
+  embeddings) stays promoted as Active queue item #3. Wall-clock: SAGE
+  sweep 9.6 min, edge-attr 21.7 min on CPU. Findings:
+  `docs/notes/2026-05-10-gnn-phase2-loso.md`. Phase 1 retraction header at
+  `docs/notes/2026-05-09-gnn-phase1.md`. Code: `src/gnn_stage1_peer/`,
+  `src/run_gnn_phase2.py`, `src/diagnose_gnn_vs_v4.py`,
+  `tests/test_gnn_stage1_peer/`, `tests/test_diagnose_gnn_vs_v4.py`.
 
 - **Team-program tournament-history features -- FAIL (2026-05-09).**
   Two new TeamID-keyed features: `team_seed_residual_mean_10yr` (continuity,
