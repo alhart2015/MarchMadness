@@ -1,6 +1,7 @@
 """Phase 1 data loading and train/test splits."""
 from __future__ import annotations
 
+from collections.abc import Iterable
 from pathlib import Path
 
 import pandas as pd
@@ -37,3 +38,22 @@ def build_team_index(games: pd.DataFrame) -> dict[int, int]:
     """Build a contiguous TeamID -> node_idx mapping over all teams in `games`."""
     teams = sorted(set(games["WTeamID"]).union(set(games["LTeamID"])))
     return {team_id: idx for idx, team_id in enumerate(teams)}
+
+
+def build_global_team_index(
+    data_dir: Path, seasons: Iterable[int]
+) -> dict[int, int]:
+    """Build a contiguous TeamID -> node_idx mapping spanning multiple seasons.
+
+    LOSO training shares one ``nn.Embedding(num_teams, hidden_dim)`` across all
+    seasons, so the team index must cover the union of teams that appear in any
+    requested season's regular-season games. Returns a deterministic mapping
+    sorted ascending by TeamID, with contiguous indices 0..N-1.
+    """
+    team_ids: set[int] = set()
+    for season in seasons:
+        games = load_rs_games(data_dir, season)
+        team_ids.update(games["WTeamID"].tolist())
+        team_ids.update(games["LTeamID"].tolist())
+    sorted_ids = sorted(team_ids)
+    return {int(team_id): idx for idx, team_id in enumerate(sorted_ids)}
