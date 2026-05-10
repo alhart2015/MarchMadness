@@ -14,6 +14,8 @@ import pandas as pd
 # systems are present per season, so 2024+ is effectively a 3-system mean.
 DEFAULT_SYSTEMS = ("POM", "MAS", "SAG", "MOR", "DOL")
 
+DEFAULT_SCALE = 0.02  # tuned on 2024 late-RS via test_baselines_tune.py
+
 
 def load_massey_composite(
     data_dir: Path,
@@ -37,7 +39,7 @@ def load_massey_composite(
 
 
 def predict_massey_logit(
-    team_a: int, team_b: int, massey_ranks: dict[int, float], scale: float = 0.05
+    team_a: int, team_b: int, massey_ranks: dict[int, float], scale: float = DEFAULT_SCALE
 ) -> float:
     """Predict logit p(A wins) given Massey composite ranks. Lower rank = better."""
     if team_a not in massey_ranks or team_b not in massey_ranks:
@@ -49,7 +51,7 @@ def evaluate_massey_baseline(
     test_games: pd.DataFrame,
     season: int,
     data_dir: Path,
-    scale: float = 0.05,
+    scale: float = DEFAULT_SCALE,
     ranking_day: int = 133,
 ) -> dict:
     """Evaluate Massey baseline on a test split. Symmetric over orientations."""
