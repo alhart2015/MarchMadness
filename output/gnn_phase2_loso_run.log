@@ -1,0 +1,58 @@
+2026-05-10 16:00:36,236 INFO Phase 2 LOSO sweep: holdouts=[2003, 2004, 2005, 2006, 2007, 2008, 2009, 2010, 2011, 2012, 2013, 2014, 2015, 2016, 2017, 2018, 2019, 2021, 2022, 2023, 2024, 2025] seed=42 epochs=50 patience=5
+2026-05-10 16:00:36,236 INFO Pairwise output: output\pairwise_gnn_phase2.csv
+2026-05-10 16:00:36,236 INFO === Holdout season 2003 ===
+2026-05-10 16:01:17,754 INFO Holdout 2003: GNN LL=0.5513 acc=0.711 n=128 train_minutes=0.28 best_epoch=23 epochs_run=29
+2026-05-10 16:01:17,934 INFO === Holdout season 2004 ===
+2026-05-10 16:01:46,952 INFO Holdout 2004: GNN LL=0.5706 acc=0.703 n=128 train_minutes=0.12 best_epoch=16 epochs_run=22
+2026-05-10 16:01:47,087 INFO === Holdout season 2005 ===
+2026-05-10 16:02:09,650 INFO Holdout 2005: GNN LL=0.6329 acc=0.648 n=128 train_minutes=0.09 best_epoch=13 epochs_run=19
+2026-05-10 16:02:09,767 INFO === Holdout season 2006 ===
+2026-05-10 16:02:32,125 INFO Holdout 2006: GNN LL=0.6461 acc=0.594 n=128 train_minutes=0.09 best_epoch=13 epochs_run=19
+2026-05-10 16:02:32,233 INFO === Holdout season 2007 ===
+2026-05-10 16:03:00,365 INFO Holdout 2007: GNN LL=0.6356 acc=0.641 n=128 train_minutes=0.12 best_epoch=15 epochs_run=21
+2026-05-10 16:03:00,490 INFO === Holdout season 2008 ===
+2026-05-10 16:03:20,876 INFO Holdout 2008: GNN LL=0.6698 acc=0.617 n=128 train_minutes=0.08 best_epoch=12 epochs_run=18
+2026-05-10 16:03:21,010 INFO === Holdout season 2009 ===
+2026-05-10 16:03:43,886 INFO Holdout 2009: GNN LL=0.5259 acc=0.719 n=128 train_minutes=0.12 best_epoch=23 epochs_run=29
+2026-05-10 16:03:44,012 INFO === Holdout season 2010 ===
+2026-05-10 16:04:03,114 INFO Holdout 2010: GNN LL=0.6816 acc=0.609 n=128 train_minutes=0.07 best_epoch=10 epochs_run=16
+2026-05-10 16:04:03,226 INFO === Holdout season 2011 ===
+2026-05-10 16:04:23,523 INFO Holdout 2011: GNN LL=0.6288 acc=0.657 n=134 train_minutes=0.08 best_epoch=14 epochs_run=20
+2026-05-10 16:04:23,631 INFO === Holdout season 2012 ===
+2026-05-10 16:04:44,194 INFO Holdout 2012: GNN LL=0.6422 acc=0.657 n=134 train_minutes=0.09 best_epoch=14 epochs_run=20
+2026-05-10 16:04:44,316 INFO === Holdout season 2013 ===
+2026-05-10 16:05:18,157 INFO Holdout 2013: GNN LL=0.6050 acc=0.664 n=134 train_minutes=0.20 best_epoch=30 epochs_run=36
+2026-05-10 16:05:18,314 INFO === Holdout season 2014 ===
+2026-05-10 16:05:48,270 INFO Holdout 2014: GNN LL=0.5645 acc=0.776 n=134 train_minutes=0.12 best_epoch=17 epochs_run=23
+2026-05-10 16:05:48,426 INFO === Holdout season 2015 ===
+2026-05-10 16:06:20,418 INFO Holdout 2015: GNN LL=0.5223 acc=0.739 n=134 train_minutes=0.21 best_epoch=36 epochs_run=42
+2026-05-10 16:06:20,561 INFO === Holdout season 2016 ===
+2026-05-10 16:06:44,390 INFO Holdout 2016: GNN LL=0.6216 acc=0.657 n=134 train_minutes=0.10 best_epoch=15 epochs_run=21
+2026-05-10 16:06:44,522 INFO === Holdout season 2017 ===
+2026-05-10 16:07:15,641 INFO Holdout 2017: GNN LL=0.5050 acc=0.821 n=134 train_minutes=0.22 best_epoch=37 epochs_run=43
+2026-05-10 16:07:15,773 INFO === Holdout season 2018 ===
+2026-05-10 16:07:39,488 INFO Holdout 2018: GNN LL=0.6369 acc=0.627 n=134 train_minutes=0.11 best_epoch=14 epochs_run=20
+2026-05-10 16:07:39,621 INFO === Holdout season 2019 ===
+2026-05-10 16:08:08,786 INFO Holdout 2019: GNN LL=0.5964 acc=0.627 n=134 train_minutes=0.19 best_epoch=27 epochs_run=33
+2026-05-10 16:08:08,892 INFO === Holdout season 2021 ===
+2026-05-10 16:08:31,727 INFO Holdout 2021: GNN LL=0.6763 acc=0.553 n=132 train_minutes=0.08 best_epoch=11 epochs_run=17
+2026-05-10 16:08:31,856 INFO === Holdout season 2022 ===
+2026-05-10 16:08:57,925 INFO Holdout 2022: GNN LL=0.5802 acc=0.679 n=134 train_minutes=0.11 best_epoch=18 epochs_run=24
+2026-05-10 16:08:58,056 INFO === Holdout season 2023 ===
+2026-05-10 16:09:20,259 INFO Holdout 2023: GNN LL=0.6662 acc=0.582 n=134 train_minutes=0.09 best_epoch=12 epochs_run=18
+2026-05-10 16:09:20,368 INFO === Holdout season 2024 ===
+2026-05-10 16:09:44,018 INFO Holdout 2024: GNN LL=0.6398 acc=0.634 n=134 train_minutes=0.10 best_epoch=15 epochs_run=21
+2026-05-10 16:09:44,123 INFO === Holdout season 2025 ===
+2026-05-10 16:10:11,004 INFO Holdout 2025: GNN LL=0.5360 acc=0.776 n=134 train_minutes=0.19 best_epoch=35 epochs_run=41
+2026-05-10 16:10:11,115 INFO === AGGREGATE === {
+  "n_holdouts": 22,
+  "total_test_games": 2898,
+  "weighted_mean_ll": 0.6059510842366742,
+  "weighted_mean_accuracy": 0.6680469278469836,
+  "max_train_minutes": 0.27833189169565836,
+  "total_train_minutes": 2.8766245722770685,
+  "wall_clock_minutes": 9.58132264216741
+}
+2026-05-10 16:10:11,118 INFO Wrote output\gnn_phase2_loso_per_holdout.json
+2026-05-10 16:10:11,118 INFO Wrote output\gnn_phase2_loso_summary.json
+2026-05-10 16:10:11,119 INFO Wrote output\pairwise_gnn_phase2.csv
