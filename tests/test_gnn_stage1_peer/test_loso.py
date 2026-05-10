@@ -439,6 +439,119 @@ def test_evaluate_loso_shape():
     assert _math.isfinite(out["ll"])
 
 
+def test_predict_holdout_pairwise_round_robin():
+    """Round-robin pairwise predictions: (n_field choose 2) rows, asymmetric, probs in [0, 1]."""
+    from src.gnn_stage1_peer.loso import predict_holdout_pairwise
+    from src.gnn_stage1_peer.model import GNNStage1Peer
+
+    num_nodes, gs, _, _, val_graph = _three_season_separable_fixture()
+    # Treat indices 0..3 as the holdout's tournament field. team_index is
+    # identity here (TeamID == graph index) so the returned team_a/team_b
+    # carry the same ints.
+    team_index = {i: i for i in range(num_nodes)}
+    field = [0, 1, 2, 3]
+
+    model = GNNStage1Peer(
+        num_nodes=num_nodes,
+        hidden_dim=8,
+        num_layers=2,
+        dropout=0.0,
+        decoder_hidden=16,
+    )
+    df = predict_holdout_pairwise(model, val_graph, team_index, field)
+
+    # (4 choose 2) = 6 rows.
+    assert list(df.columns) == ["team_a", "team_b", "p_a_wins"]
+    assert len(df) == 6
+
+    # Asymmetric: team_a < team_b on every row.
+    assert (df["team_a"] < df["team_b"]).all()
+
+    # Each unordered pair appears exactly once.
+    pairs = set(zip(df["team_a"].tolist(), df["team_b"].tolist()))
+    expected_pairs = {(i, j) for i in field for j in field if i < j}
+    assert pairs == expected_pairs
+
+    # Probabilities are valid.
+    assert df["p_a_wins"].between(0.0, 1.0).all()
+
+
+def test_predict_holdout_pairwise_drops_unindexed_teams():
+    """Teams missing from team_index are silently dropped (defensive)."""
+    from src.gnn_stage1_peer.loso import predict_holdout_pairwise
+    from src.gnn_stage1_peer.model import GNNStage1Peer
+
+    num_nodes, gs, _, _, val_graph = _three_season_separable_fixture()
+    # Only indices 0, 2, 4 are mapped; field includes a phantom team 99.
+    team_index = {0: 0, 2: 2, 4: 4}
+    field = [0, 2, 4, 99]
+
+    model = GNNStage1Peer(
+        num_nodes=num_nodes,
+        hidden_dim=8,
+        num_layers=2,
+        dropout=0.0,
+        decoder_hidden=16,
+    )
+    df = predict_holdout_pairwise(model, val_graph, team_index, field)
+
+    # 99 dropped -> 3 teams -> 3 pairs.
+    assert len(df) == 3
+    assert set(df["team_a"]) | set(df["team_b"]) == {0, 2, 4}
+
+
+def test_run_phase2_one_holdout_emit_pairwise(tmp_path):
+    """emit_pairwise=True returns a pairwise_df with the expected shape."""
+    from src.gnn_stage1_peer.loso import run_phase2_one_holdout
+
+    data_dir = _make_fixture(tmp_path)
+    result = run_phase2_one_holdout(
+        data_dir=data_dir,
+        holdout_season=2024,
+        seasons=[2022, 2023, 2024],
+        hidden_dim=8,
+        num_layers=2,
+        dropout=0.0,
+        decoder_hidden=16,
+        epochs=5,
+        lr=0.05,
+        patience=10,
+        seed=42,
+        emit_pairwise=True,
+    )
+
+    assert "pairwise_df" in result
+    pdf = result["pairwise_df"]
+    assert list(pdf.columns) == ["team_a", "team_b", "p_a_wins"]
+
+    # 2024 fixture tournament field = {1102, 1104, 1250} -> (3 choose 2) = 3 pairs.
+    assert len(pdf) == 3
+    assert (pdf["team_a"] < pdf["team_b"]).all()
+    assert pdf["p_a_wins"].between(0.0, 1.0).all()
+    assert set(pdf["team_a"]) | set(pdf["team_b"]) == {1102, 1104, 1250}
+
+
+def test_run_phase2_one_holdout_emit_pairwise_default_off(tmp_path):
+    """Default emit_pairwise=False keeps existing dict shape (no pairwise_df)."""
+    from src.gnn_stage1_peer.loso import run_phase2_one_holdout
+
+    data_dir = _make_fixture(tmp_path)
+    result = run_phase2_one_holdout(
+        data_dir=data_dir,
+        holdout_season=2024,
+        seasons=[2022, 2023, 2024],
+        hidden_dim=8,
+        num_layers=2,
+        dropout=0.0,
+        decoder_hidden=16,
+        epochs=3,
+        lr=0.05,
+        patience=10,
+        seed=42,
+    )
+    assert "pairwise_df" not in result
+
+
 def test_run_phase2_one_holdout_smoke(tmp_path):
     """End-to-end smoke: build data, train, evaluate on the multi-season fixture."""
     from src.gnn_stage1_peer.loso import run_phase2_one_holdout

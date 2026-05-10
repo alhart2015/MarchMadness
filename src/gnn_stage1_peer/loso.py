@@ -270,6 +270,66 @@ def train_loso_gnn(
     }
 
 
+def predict_holdout_pairwise(
+    model: GNNStage1Peer,
+    holdout_graph: Data,
+    team_index: dict[int, int],
+    holdout_field: list[int],
+) -> pd.DataFrame:
+    """Round-robin pairwise predictions over the holdout's tournament field.
+
+    Builds every unordered pair ``(team_a, team_b)`` with ``team_a < team_b``
+    drawn from ``holdout_field`` (filtered to teams present in ``team_index``),
+    forwards the holdout graph through ``model``, and returns a DataFrame with
+    columns ``["team_a", "team_b", "p_a_wins"]`` -- the same asymmetric shape as
+    ``output/pairwise_v4.csv`` minus the ``season`` column (caller adds it).
+
+    Parameters
+    ----------
+    model
+        Trained ``GNNStage1Peer`` whose embedding table covers ``team_index``.
+    holdout_graph
+        PyG ``Data`` graph used as encoder input (typically the holdout
+        season's RS graph).
+    team_index
+        Global ``{TeamID: contiguous_idx}`` mapping. Pairs are forwarded with
+        the indexed positions, but the returned ``team_a``/``team_b`` columns
+        carry the original Kaggle ``TeamID`` integers.
+    holdout_field
+        Iterable of ``TeamID`` integers in the holdout's tournament field.
+        Teams missing from ``team_index`` are silently dropped (defensive --
+        a well-formed LOSO input has all tournament teams indexed).
+
+    Returns
+    -------
+    pd.DataFrame
+        Asymmetric round-robin pairwise predictions with columns
+        ``["team_a", "team_b", "p_a_wins"]``. Rows are ordered with
+        ``team_a < team_b``. Caller adds the ``season`` column before
+        appending to ``output/pairwise_gnn_phase2.csv``.
+    """
+    field = sorted(int(t) for t in holdout_field if int(t) in team_index)
+    a_list: list[int] = []
+    b_list: list[int] = []
+    for i in range(len(field)):
+        for j in range(i + 1, len(field)):
+            a_list.append(field[i])
+            b_list.append(field[j])
+    if not a_list:
+        return pd.DataFrame({"team_a": [], "team_b": [], "p_a_wins": []})
+    a_idx = torch.tensor([team_index[t] for t in a_list], dtype=torch.long)
+    b_idx = torch.tensor([team_index[t] for t in b_list], dtype=torch.long)
+    model.eval()
+    with torch.no_grad():
+        logits = model(holdout_graph, a_idx, b_idx)
+        probs = torch.sigmoid(logits)
+    return pd.DataFrame({
+        "team_a": a_list,
+        "team_b": b_list,
+        "p_a_wins": [float(p) for p in probs.tolist()],
+    })
+
+
 def evaluate_loso(
     model: GNNStage1Peer,
     test_pairs: tuple[torch.Tensor, torch.Tensor, torch.Tensor],
@@ -309,6 +369,7 @@ def run_phase2_one_holdout(
     lr: float = 1e-3,
     patience: int = 5,
     seed: int = 42,
+    emit_pairwise: bool = False,
 ) -> dict:
     """Run one LOSO holdout: build data, train cross-season GNN, evaluate.
 
@@ -334,6 +395,11 @@ def run_phase2_one_holdout(
         Forwarded to ``GNNStage1Peer`` via ``train_loso_gnn``.
     epochs, lr, patience, seed
         Training-loop hyperparameters.
+    emit_pairwise
+        If True, include a ``pairwise_df`` key in the returned dict with the
+        round-robin pairwise predictions over the holdout's tournament field
+        (columns ``team_a``, ``team_b``, ``p_a_wins``; ``team_a < team_b``).
+        Default False so existing callers/tests are unaffected.
 
     Returns
     -------
@@ -342,7 +408,9 @@ def run_phase2_one_holdout(
         best_epoch, best_val_ll}`` where ``gnn`` carries the summary metrics
         (``ll``, ``accuracy``, ``n``) without the per-pair predictions, and
         ``predictions`` is the full list of per-pair dicts (split out so
-        downstream pairwise-CSV emission can find them).
+        downstream pairwise-CSV emission can find them). When
+        ``emit_pairwise=True`` the dict additionally carries ``pairwise_df``
+        (a ``pd.DataFrame``) used by the Phase 2 LOSO sweep CLI driver.
     """
     per_season_graphs, train_pairs_by_season, test_pairs, team_index = (
         build_loso_training_data(data_dir, holdout_season, seasons)
@@ -368,7 +436,7 @@ def run_phase2_one_holdout(
 
     gnn_eval = evaluate_loso(model, test_pairs, per_season_graphs[holdout_season])
 
-    return {
+    result: dict = {
         "holdout_season": holdout_season,
         "gnn": {k: v for k, v in gnn_eval.items() if k != "predictions"},
         "predictions": gnn_eval["predictions"],
@@ -377,3 +445,18 @@ def run_phase2_one_holdout(
         "best_epoch": train_info["best_epoch"],
         "best_val_ll": train_info["best_val_ll"],
     }
+
+    if emit_pairwise:
+        tourney = load_tourney_games(data_dir, holdout_season)
+        field = sorted(
+            set(int(t) for t in tourney["WTeamID"].tolist())
+            | set(int(t) for t in tourney["LTeamID"].tolist())
+        )
+        result["pairwise_df"] = predict_holdout_pairwise(
+            model,
+            per_season_graphs[holdout_season],
+            team_index,
+            field,
+        )
+
+    return result
