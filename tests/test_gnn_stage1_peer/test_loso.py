@@ -396,3 +396,86 @@ def test_train_loso_gnn_history_keys_and_shapes():
     assert info["epochs_run"] == 5
     assert len(info["train_history"]["loss"]) == 5
     assert len(info["train_history"]["val_ll"]) == 5
+
+
+# ------------------------------- Task D tests ---------------------------------
+#
+# Evaluator + per-holdout driver. evaluate_loso must match the Phase 1
+# evaluator's output shape exactly. run_phase2_one_holdout integrates B+C+D
+# end-to-end on a tiny fixture.
+
+
+def test_evaluate_loso_shape():
+    """evaluate_loso returns Phase 1's evaluator shape on a tiny model+graph."""
+    from src.gnn_stage1_peer.loso import evaluate_loso
+    from src.gnn_stage1_peer.model import GNNStage1Peer
+
+    num_nodes, gs, _, val_pairs, val_graph = _three_season_separable_fixture()
+    model = GNNStage1Peer(
+        num_nodes=num_nodes,
+        hidden_dim=8,
+        num_layers=2,
+        dropout=0.0,
+        decoder_hidden=16,
+    )
+    out = evaluate_loso(model, val_pairs, val_graph)
+
+    assert set(out.keys()) == {"ll", "accuracy", "n", "predictions"}
+    a_v, b_v, y_v = val_pairs
+    assert out["n"] == int(y_v.numel())
+    assert isinstance(out["predictions"], list)
+    assert len(out["predictions"]) == out["n"]
+    for p in out["predictions"]:
+        assert set(p.keys()) == {"team_a_idx", "team_b_idx", "p_a_wins", "label"}
+        assert isinstance(p["team_a_idx"], int)
+        assert isinstance(p["team_b_idx"], int)
+        assert isinstance(p["p_a_wins"], float)
+        assert isinstance(p["label"], float)
+        assert 0.0 <= p["p_a_wins"] <= 1.0
+    assert 0.0 <= out["accuracy"] <= 1.0
+    # ll is a finite non-negative BCE value.
+    assert out["ll"] >= 0.0
+    import math as _math
+    assert _math.isfinite(out["ll"])
+
+
+def test_run_phase2_one_holdout_smoke(tmp_path):
+    """End-to-end smoke: build data, train, evaluate on the multi-season fixture."""
+    from src.gnn_stage1_peer.loso import run_phase2_one_holdout
+
+    data_dir = _make_fixture(tmp_path)
+    result = run_phase2_one_holdout(
+        data_dir=data_dir,
+        holdout_season=2024,
+        seasons=[2022, 2023, 2024],
+        hidden_dim=8,
+        num_layers=2,
+        dropout=0.0,
+        decoder_hidden=16,
+        epochs=5,
+        lr=0.05,
+        patience=10,
+        seed=42,
+    )
+
+    expected_keys = {
+        "holdout_season",
+        "gnn",
+        "predictions",
+        "train_minutes",
+        "epochs_run",
+        "best_epoch",
+        "best_val_ll",
+    }
+    assert set(result.keys()) == expected_keys
+    assert result["holdout_season"] == 2024
+
+    import math as _math
+    gnn = result["gnn"]
+    assert set(gnn.keys()) == {"ll", "accuracy", "n"}
+    assert _math.isfinite(gnn["ll"])
+    assert gnn["n"] > 0
+    assert len(result["predictions"]) == gnn["n"]
+    assert result["train_minutes"] >= 0
+    assert result["epochs_run"] >= 1
+    assert result["epochs_run"] <= 5

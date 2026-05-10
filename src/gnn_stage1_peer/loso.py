@@ -17,6 +17,7 @@ patience.
 from __future__ import annotations
 
 import math
+import time
 from collections.abc import Iterable
 from pathlib import Path
 
@@ -27,6 +28,7 @@ import torch.nn.functional as F
 from torch_geometric.data import Data
 
 from .data import build_global_team_index, load_rs_games
+from .evaluation import evaluate_gnn_phase1
 from .graph import build_matchup_pairs, build_pyg_graph
 from .model import GNNStage1Peer
 from .training import set_determinism
@@ -265,4 +267,113 @@ def train_loso_gnn(
         "best_epoch": int(np.argmin(history["val_ll"])) if history["val_ll"] else 0,
         "epochs_run": len(history["loss"]),
         "train_history": history,
+    }
+
+
+def evaluate_loso(
+    model: GNNStage1Peer,
+    test_pairs: tuple[torch.Tensor, torch.Tensor, torch.Tensor],
+    holdout_graph: Data,
+) -> dict:
+    """Evaluate a trained LOSO GNN on the holdout season's tournament pairs.
+
+    Mirrors Phase 1's ``evaluate_gnn_phase1`` shape exactly:
+    ``{"ll", "accuracy", "n", "predictions"}`` where each prediction dict
+    carries ``(team_a_idx, team_b_idx, p_a_wins, label)``. Implementation
+    delegates to ``evaluate_gnn_phase1`` since the signatures match.
+
+    Parameters
+    ----------
+    model
+        Trained ``GNNStage1Peer`` (typically the output of ``train_loso_gnn``).
+    test_pairs
+        ``(a_idx, b_idx, y)`` -- holdout season's tournament matchup pairs,
+        both orientations.
+    holdout_graph
+        PyG ``Data`` graph used as input when scoring ``test_pairs``. For
+        Phase 2 LOSO this is the holdout season's RS graph.
+    """
+    return evaluate_gnn_phase1(model, holdout_graph, test_pairs)
+
+
+def run_phase2_one_holdout(
+    data_dir: Path,
+    holdout_season: int,
+    seasons: Iterable[int],
+    *,
+    hidden_dim: int = 64,
+    num_layers: int = 2,
+    dropout: float = 0.2,
+    decoder_hidden: int = 128,
+    epochs: int = 50,
+    lr: float = 1e-3,
+    patience: int = 5,
+    seed: int = 42,
+) -> dict:
+    """Run one LOSO holdout: build data, train cross-season GNN, evaluate.
+
+    Composes Tasks B (``build_loso_training_data``), C (``train_loso_gnn``),
+    and D (``evaluate_loso``). Mirrors ``training.run_phase1_one_season``'s
+    style.
+
+    Note: ``test_pairs`` is passed as ``val_pairs`` to ``train_loso_gnn`` --
+    this is test-set early stopping, mirroring Phase 1's ``training.py``.
+    Documented as a known compromise in the Phase 2 LOSO plan.
+
+    Parameters
+    ----------
+    data_dir
+        Directory containing ``MRegularSeasonCompactResults.csv`` and
+        ``MNCAATourneyCompactResults.csv``.
+    holdout_season
+        Season whose tournament games are held out for evaluation.
+    seasons
+        All seasons to include in the LOSO sweep. Must contain
+        ``holdout_season``.
+    hidden_dim, num_layers, dropout, decoder_hidden
+        Forwarded to ``GNNStage1Peer`` via ``train_loso_gnn``.
+    epochs, lr, patience, seed
+        Training-loop hyperparameters.
+
+    Returns
+    -------
+    dict
+        ``{holdout_season, gnn, predictions, train_minutes, epochs_run,
+        best_epoch, best_val_ll}`` where ``gnn`` carries the summary metrics
+        (``ll``, ``accuracy``, ``n``) without the per-pair predictions, and
+        ``predictions`` is the full list of per-pair dicts (split out so
+        downstream pairwise-CSV emission can find them).
+    """
+    per_season_graphs, train_pairs_by_season, test_pairs, team_index = (
+        build_loso_training_data(data_dir, holdout_season, seasons)
+    )
+
+    t0 = time.time()
+    model, train_info = train_loso_gnn(
+        per_season_graphs,
+        train_pairs_by_season,
+        val_pairs=test_pairs,
+        val_graph=per_season_graphs[holdout_season],
+        num_nodes=len(team_index),
+        hidden_dim=hidden_dim,
+        num_layers=num_layers,
+        dropout=dropout,
+        decoder_hidden=decoder_hidden,
+        epochs=epochs,
+        lr=lr,
+        patience=patience,
+        seed=seed,
+    )
+    train_minutes = (time.time() - t0) / 60.0
+
+    gnn_eval = evaluate_loso(model, test_pairs, per_season_graphs[holdout_season])
+
+    return {
+        "holdout_season": holdout_season,
+        "gnn": {k: v for k, v in gnn_eval.items() if k != "predictions"},
+        "predictions": gnn_eval["predictions"],
+        "train_minutes": train_minutes,
+        "epochs_run": train_info["epochs_run"],
+        "best_epoch": train_info["best_epoch"],
+        "best_val_ll": train_info["best_val_ll"],
     }
