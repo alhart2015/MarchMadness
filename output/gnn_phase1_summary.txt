@@ -1,0 +1,11 @@
+Phase 1 sweep verdict: FAIL
+Mean LL delta (Massey - GNN): -0.0958 (gate >= +0.0050)
+Per-season passes: 0/5
+Max per-season training time: 0.0 min
+
+Per-season detail:
+  2018: GNN LL 0.6060 acc 0.678 | Massey LL 0.5403 acc 0.733 | delta -0.0657 | train_min 0.0
+  2019: GNN LL 0.5788 acc 0.707 | Massey LL 0.5056 acc 0.759 | delta -0.0732 | train_min 0.0
+  2021: GNN LL 0.6876 acc 0.541 | Massey LL 0.5115 acc 0.773 | delta -0.1761 | train_min 0.0
+  2022: GNN LL 0.6096 acc 0.684 | Massey LL 0.5007 acc 0.775 | delta -0.1089 | train_min 0.0
+  2024: GNN LL 0.6097 acc 0.653 | Massey LL 0.5543 acc 0.734 | delta -0.0554 | train_min 0.0

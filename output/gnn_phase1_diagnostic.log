@@ -1,0 +1,19 @@
+2026-05-09 23:08:51,152 INFO Phase 1 sweep: seasons=[2018, 2019, 2021, 2022, 2024], seed=42
+2026-05-09 23:08:51,153 INFO === Season 2018 ===
+2026-05-09 23:08:58,128 INFO Season 2018: GNN LL=0.6060 acc=0.678 vs Massey LL=0.5403 acc=0.733 -> ll_delta=-0.0657 (FAIL), train_minutes=0.0
+2026-05-09 23:08:58,128 INFO === Season 2019 ===
+2026-05-09 23:09:04,801 INFO Season 2019: GNN LL=0.5788 acc=0.707 vs Massey LL=0.5056 acc=0.759 -> ll_delta=-0.0732 (FAIL), train_minutes=0.0
+2026-05-09 23:09:04,801 INFO === Season 2021 ===
+2026-05-09 23:09:09,655 INFO Season 2021: GNN LL=0.6876 acc=0.541 vs Massey LL=0.5115 acc=0.773 -> ll_delta=-0.1761 (FAIL), train_minutes=0.0
+2026-05-09 23:09:09,655 INFO === Season 2022 ===
+2026-05-09 23:09:15,925 INFO Season 2022: GNN LL=0.6096 acc=0.684 vs Massey LL=0.5007 acc=0.775 -> ll_delta=-0.1089 (FAIL), train_minutes=0.0
+2026-05-09 23:09:15,925 INFO === Season 2024 ===
+2026-05-09 23:09:22,091 INFO Season 2024: GNN LL=0.6097 acc=0.653 vs Massey LL=0.5543 acc=0.734 -> ll_delta=-0.0554 (FAIL), train_minutes=0.0
+2026-05-09 23:09:22,092 INFO === AGGREGATE === {
+  "n_seasons": 5,
+  "n_pass": 0,
+  "mean_ll_delta": -0.09584329634212754,
+  "gate_threshold": 0.005,
+  "verdict": "FAIL",
+  "max_train_minutes": 0.03099037806193034
+}

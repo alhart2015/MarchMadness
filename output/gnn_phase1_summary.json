@@ -1,0 +1,8 @@
+{
+  "n_seasons": 5,
+  "n_pass": 0,
+  "mean_ll_delta": -0.09584329634212754,
+  "gate_threshold": 0.005,
+  "verdict": "FAIL",
+  "max_train_minutes": 0.03099037806193034
+}
