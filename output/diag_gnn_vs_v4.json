@@ -1,0 +1,22 @@
+{
+  "diagnostic": {
+    "n_games": 1449,
+    "ll_v4": 0.5579088975921702,
+    "ll_gnn": 0.6056535189878106,
+    "acc_v4": 0.7018633540372671,
+    "acc_gnn": 0.6694271911663217,
+    "r_residual": 0.5495428181561579,
+    "disagree_n": 391,
+    "both_correct": 798,
+    "v4_only_correct": 219,
+    "gnn_only_correct": 172,
+    "both_wrong": 260,
+    "optimal_w": 0.8,
+    "optimal_ll": 0.5540489646110388,
+    "headroom": 0.0038599329811314087
+  },
+  "gate": {
+    "pass": false,
+    "reason": "headroom 0.0039 <= 0.005"
+  }
+}
