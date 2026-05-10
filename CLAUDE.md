@@ -36,7 +36,13 @@ Model evolution log lives in `README.md`. **When extending, prefer adding a new 
 
 ## Workflow rule
 
-Spec -> plan -> execute, all on a feature branch. **Specs, plans, and implementation reach `main` only via PR; never commit specs or plans directly to `main`.** Set up the worktree first, then write the spec on the branch. Existing specs and plans under `docs/superpowers/specs/` and `docs/superpowers/plans/` are the template -- match their dated-filename convention (`YYYY-MM-DD-short-name.md`).
+Spec -> plan -> execute, all on a feature branch. **Specs, plans, and implementation reach `main` only via PR; never commit specs or plans directly to `main`.**
+
+**Branch workflow: do NOT use `git worktree add`.** Create the feature branch directly in the main repo (`git -C "<repo>" checkout -b feat/<name>`). Worktrees have caused recurring data loss in this project -- artifacts that live in `.gitignore`-permitted paths inside a worktree directory get wiped during worktree teardown or cleanup, and prior incidents (PR 21's clean `pairwise_v4.csv` lost in the 2026-05-04 wipe; the 2026-05-02 PowerShell junction Delete() incident) make worktrees the wrong default. If parallelism genuinely requires worktrees, confirm with the user first.
+
+**Force-add any output data that needs to persist** beyond the branch's working life: LOSO outputs, diagnostic JSONs/logs, pairwise frames, verdict summaries, retrain logs. The team-seed-residual experiment (PR 34) is the working template -- mirror its `git add -f <path>` pattern explicitly in plan docs. Do not rely on gitignored artifacts surviving cleanup.
+
+Existing specs and plans under `docs/superpowers/specs/` and `docs/superpowers/plans/` are the template -- match their dated-filename convention (`YYYY-MM-DD-short-name.md`).
 
 ## Conventions you must follow
 
