@@ -231,3 +231,168 @@ def test_build_loso_training_data_raises_on_unknown_tourney_team(tmp_path):
         build_loso_training_data(
             tmp_path, holdout_season=2024, seasons=[2022, 2024]
         )
+
+
+# ------------------------------- Task C tests ---------------------------------
+#
+# Cross-season shared-parameter training loop. We build a separable toy across
+# three "fake" seasons sharing 6 globally-indexed teams (indices 0..5). The
+# label rule across all seasons is "lower index always beats higher index"
+# (i.e., team 0 > team 1 > ... > team 5). Each season's RS graph encodes that
+# ordering with a different subset of games so encoder must generalise across
+# graphs while decoder learns the shared rule. Tournament pairs are drawn
+# from the same separable rule.
+
+
+def _toy_graph(num_nodes: int, edges: list[tuple[int, int, float]]) -> Data:
+    """Build a small bidirected PyG Data graph from (winner, loser, score_diff) tuples."""
+    src, dst, attr = [], [], []
+    for w, l, sd in edges:
+        src.append(w); dst.append(l); attr.append([sd, 0.0, 0.0, 50.0])
+        src.append(l); dst.append(w); attr.append([-sd, 0.0, 0.0, 50.0])
+    edge_index = torch.tensor([src, dst], dtype=torch.long)
+    edge_attr = torch.tensor(attr, dtype=torch.float)
+    return Data(edge_index=edge_index, edge_attr=edge_attr, num_nodes=num_nodes)
+
+
+def _toy_pairs(matchups: list[tuple[int, int]]) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
+    """Symmetric matchup pairs for (winner, loser) tuples.
+
+    Each game produces (w, l, 1.0) and (l, w, 0.0) -- mirrors build_matchup_pairs.
+    """
+    a, b, y = [], [], []
+    for w, l in matchups:
+        a.append(w); b.append(l); y.append(1.0)
+        a.append(l); b.append(w); y.append(0.0)
+    return (
+        torch.tensor(a, dtype=torch.long),
+        torch.tensor(b, dtype=torch.long),
+        torch.tensor(y, dtype=torch.float),
+    )
+
+
+def _three_season_separable_fixture():
+    """Three fake seasons sharing 6 globally-indexed teams (0..5).
+
+    Rule: lower-index team always beats higher-index team. Each season's RS
+    graph is a fully-connected separable round-robin where every (i, j) with
+    i < j has an edge i -> j (low-idx beats high-idx). The score_diff varies
+    per season to make the seasons distinct, but the structural information
+    (each team plays each other) is shared so encoder embeddings transfer
+    cleanly. We use season 2024 as holdout.
+    """
+    num_nodes = 6
+
+    def _round_robin_edges(score_scale: float) -> list[tuple[int, int, float]]:
+        edges: list[tuple[int, int, float]] = []
+        for i in range(num_nodes):
+            for j in range(i + 1, num_nodes):
+                # Lower idx beats higher idx; magnitude grows with gap.
+                edges.append((i, j, score_scale * (j - i)))
+        return edges
+
+    g22 = _toy_graph(num_nodes, _round_robin_edges(score_scale=3.0))
+    g23 = _toy_graph(num_nodes, _round_robin_edges(score_scale=4.0))
+    g24 = _toy_graph(num_nodes, _round_robin_edges(score_scale=5.0))
+    per_season_graphs = {2022: g22, 2023: g23, 2024: g24}
+
+    # Training tournament pairs respect same rule (lower idx beats higher).
+    train_pairs_by_season = {
+        2022: _toy_pairs([(0, 3), (1, 4), (2, 5)]),  # 3 games -> 6 pairs
+        2023: _toy_pairs([(0, 5), (1, 2), (3, 4)]),  # 3 games -> 6 pairs
+    }
+    # Validation pairs (holdout 2024 tournament): 3 games -> 6 pairs.
+    val_pairs = _toy_pairs([(0, 2), (1, 4), (2, 5)])
+    val_graph = g24
+
+    return num_nodes, per_season_graphs, train_pairs_by_season, val_pairs, val_graph
+
+
+def test_train_loso_gnn_loss_decreases():
+    """On a separable 3-season toy, final training loss should be lower than initial."""
+    from src.gnn_stage1_peer.loso import train_loso_gnn
+
+    num_nodes, gs, train_by_s, val_pairs, val_graph = _three_season_separable_fixture()
+    model, info = train_loso_gnn(
+        gs, train_by_s, val_pairs, val_graph, num_nodes,
+        hidden_dim=16, num_layers=2, dropout=0.0, decoder_hidden=32,
+        epochs=100, lr=0.05, patience=100, seed=42,
+    )
+    losses = info["train_history"]["loss"]
+    assert len(losses) >= 2
+    # Final train loss should drop substantially below initial loss.
+    assert losses[-1] < losses[0], (
+        f"Loss did not decrease: first={losses[0]:.4f} last={losses[-1]:.4f}"
+    )
+    # Stronger sanity check: separable toy should reach near-perfect loss.
+    assert losses[-1] < losses[0] * 0.5
+
+
+def test_train_loso_gnn_val_ll_improves():
+    """Validation LL should improve (decrease) over training on separable toy."""
+    from src.gnn_stage1_peer.loso import train_loso_gnn
+
+    num_nodes, gs, train_by_s, val_pairs, val_graph = _three_season_separable_fixture()
+    _, info = train_loso_gnn(
+        gs, train_by_s, val_pairs, val_graph, num_nodes,
+        hidden_dim=16, num_layers=2, dropout=0.0, decoder_hidden=32,
+        epochs=100, lr=0.05, patience=100, seed=42,
+    )
+    val_history = info["train_history"]["val_ll"]
+    assert len(val_history) >= 2
+    # Final val LL strictly better (lower) than initial.
+    assert val_history[-1] < val_history[0], (
+        f"Val LL did not improve: first={val_history[0]:.4f} last={val_history[-1]:.4f}"
+    )
+
+
+def test_train_loso_gnn_returns_best_state():
+    """Returned model evaluated on val_pairs reproduces best_val_ll.
+
+    ``best_val_ll`` is the val LL at the last epoch where val improved by
+    more than 1e-5 over the running best (mirrors Phase 1's ``train_gnn``).
+    The argmin of the full history may be marginally lower if subsequent
+    improvements were below the eps threshold, so we check:
+      - best_epoch is consistent with ``np.argmin(val_history)`` modulo eps,
+      - best_val_ll is within eps of the absolute minimum,
+      - the returned model reproduces best_val_ll exactly.
+    """
+    import numpy as np
+    import torch.nn.functional as F
+
+    from src.gnn_stage1_peer.loso import train_loso_gnn
+
+    num_nodes, gs, train_by_s, val_pairs, val_graph = _three_season_separable_fixture()
+    model, info = train_loso_gnn(
+        gs, train_by_s, val_pairs, val_graph, num_nodes,
+        hidden_dim=16, num_layers=2, dropout=0.0, decoder_hidden=32,
+        epochs=60, lr=0.05, patience=100, seed=42,
+    )
+    val_history = info["train_history"]["val_ll"]
+    # best_val_ll is within early-stopping eps of the absolute minimum.
+    assert info["best_val_ll"] <= min(val_history) + 1e-5
+    # best_epoch points to argmin of the full history.
+    assert info["best_epoch"] == int(np.argmin(val_history))
+    # Returned model weights reproduce best_val_ll on val_pairs.
+    model.eval()
+    with torch.no_grad():
+        a_v, b_v, y_v = val_pairs
+        logits = model(val_graph, a_v, b_v)
+        ll = F.binary_cross_entropy_with_logits(logits, y_v).item()
+    assert ll == pytest.approx(info["best_val_ll"], abs=1e-5)
+
+
+def test_train_loso_gnn_history_keys_and_shapes():
+    """Returned info dict has expected keys; history lists are non-empty."""
+    from src.gnn_stage1_peer.loso import train_loso_gnn
+
+    num_nodes, gs, train_by_s, val_pairs, val_graph = _three_season_separable_fixture()
+    _, info = train_loso_gnn(
+        gs, train_by_s, val_pairs, val_graph, num_nodes,
+        hidden_dim=8, num_layers=2, dropout=0.0, decoder_hidden=16,
+        epochs=5, lr=0.05, patience=100, seed=42,
+    )
+    assert set(info.keys()) >= {"best_val_ll", "best_epoch", "epochs_run", "train_history"}
+    assert info["epochs_run"] == 5
+    assert len(info["train_history"]["loss"]) == 5
+    assert len(info["train_history"]["val_ll"]) == 5
