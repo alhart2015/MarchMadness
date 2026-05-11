@@ -13,7 +13,7 @@ Phase 2 trains a single cross-season GNN on 21 tournament seasons (LOSO over 22 
 
 This is the eighth same-data-equivalent FAIL in a row (BT-as-feature, feature-view ensemble, HBT, Colley, Massey-MOV, Massey-decay-14d, team-seed-residual, and now GNN-Phase-2). The signal is **regime-dependent rather than uniformly weak**: 9-10 seasons where the GNN adds real per-season blend headroom (best: 2022 +0.0687, 2017 +0.0498, 2003 +0.0482, 2011 +0.0455) versus 8 seasons where the GNN is strictly worse and the optimal blend collapses to all-v4 with zero headroom (2005, 2006, 2007, 2008, 2010, 2012, 2019, 2021). The pooled +0.0039 LL is the net of these, not a flat low signal.
 
-**Lane status:** GNN closed as a v4 LL-blend peer. v8 stage-2 retrain was not run (gate failed, so production-metric scoring would not be meaningful). Phase 1's verdict is RETRACTED in the same commit that introduces this note: the Phase 1 Massey baseline used `ranking_day=133` (Selection Sunday), which means the comparison rankings already incorporated the held-out RS test games -- the Phase 1 GNN was disadvantaged against a leaked baseline on a structurally biased task (RS-prediction is not the same target as tournament prediction).
+**Lane status:** GNN closed as a v4 LL-blend peer. v8 stage-2 retrain was initially skipped per the plan's decision matrix (LL-blend FAIL gates the production-metric test), but was run as a post-hoc diagnostic to surface the production-metric number (see "Bracket-points re-test" below). The LOSO-realistic v8 retrain delivered **-4 bracket points** over 22 LOSO seasons, confirming the LL-blend FAIL; a cheating-ideal blend (single test-set-optimized w=0.80) showed +28 but the gap was driven by per-season overfitting that LOSO discipline removes. Phase 1's verdict is RETRACTED in the same commit that introduces this note: the Phase 1 Massey baseline used `ranking_day=133` (Selection Sunday), which means the comparison rankings already incorporated the held-out RS test games -- the Phase 1 GNN was disadvantaged against a leaked baseline on a structurally biased task (RS-prediction is not the same target as tournament prediction).
 
 ## Production-metric verdict (LL-blend gate)
 
@@ -41,7 +41,47 @@ The plan defines the production gate at the LL-blend level rather than v8 bracke
 | optimal blend weight w* | 0.95 | in [0.40, 0.85] | **FAIL** |
 | LL-blend headroom | +0.0003 | >= +0.0050 | **FAIL** |
 
-Both variants fail the +0.005 LL headroom threshold. SAGE fails only clause 3 (headroom) by 0.0011 LL; the edge-attr variant fails both clause 2 (degenerate w*) and clause 3 (10x short on headroom). v8 retrain not run.
+Both variants fail the +0.005 LL headroom threshold. SAGE fails only clause 3 (headroom) by 0.0011 LL; the edge-attr variant fails both clause 2 (degenerate w*) and clause 3 (10x short on headroom).
+
+## Bracket-points re-test (post-LL-blend-FAIL diagnostic)
+
+The plan's decision matrix skips the v8 stage-2 retrain on LL-blend FAIL. The user authorized a post-hoc bracket-points re-test anyway, to surface the production-metric number and check whether the +0.0039 LL miss might still translate to a meaningful bracket-points lift. Two blend regimes were tested, both using the SAGE pairwise frame (the better of the two encoders by every LL-gate clause).
+
+**Anchor invariance.** Modified `train_stage2.py` (additive `--pairwise-in` / `--pairwise-out` CLI args) was first re-run against the canonical `output/pairwise_v4.csv` to verify it produces `output/pairwise_v8_anchor.csv` byte-identically to the committed canonical `output/pairwise_v8.csv`. Max absolute per-pair probability diff: 0.000000. Score: 2069 pts, identical to canonical. The wire-in is sound; any delta from a non-trivial blend is real.
+
+**Cheating-ideal blend (w_v4 = 0.80 across all seasons, fit on test outcomes):**
+
+| Frame | Total brkt pts | Delta vs canonical 2069 | W/L/T |
+|---|---|---|---|
+| canonical v8 | 2069 | -- | -- |
+| v8 retrain on (0.80 v4 + 0.20 GNN) | 2097 | **+28** | 13 / 9 / 0 |
+
+This nominally clears the plan's +25 bracket-points PASS threshold. But the +28 is the optimistic ceiling because the w=0.80 was selected by minimizing LL on the test outcomes themselves; a deployable rule cannot use that information.
+
+**LOSO-realistic blend (per-season w_v4, fit on the 21 other seasons' tournament outcomes per holdout):**
+
+Per-season LOSO-fit weights are tight, ranging 0.76-0.84 with mean 0.80, recorded in `output/gnn_blend_loso_weights.csv`. The weight stability suggests there is no single-season-specific outlier weight; the cheating-ideal w=0.80 was not numerically far from any per-season-LOSO choice.
+
+| Frame | Total brkt pts | Delta vs canonical 2069 | W/L/T |
+|---|---|---|---|
+| canonical v8 | 2069 | -- | -- |
+| v8 retrain on (LOSO-fit w v4 + (1-w) GNN) | 2065 | **-4** | 12 / 10 / 0 |
+
+The LOSO-realistic blend **fails the +25 PASS threshold and lands slightly negative**.
+
+**Where the 32-point cheating-vs-LOSO gap comes from.** Per-season comparison (cheating vs LOSO) reveals one season drives most of the gap:
+
+| Season | Cheating-w bracket delta | LOSO-w bracket delta | swing |
+|---|---|---|---|
+| 2017 | +29 | -5 | **-34** |
+| 2025 | +34 | +16 | -18 |
+| 2016 | +15 | +27 | +12 |
+
+2017's cheating-w was 0.25 (use 75% GNN, GNN gets the year right); 2017's LOSO-fit w is 0.83 (use 17% GNN, GNN loses the lift). The cheating-ideal was overfitting season-specifically to 2017's distribution.
+
+**Fragility check (LOSO blend):** aggregate -4, max_positive +27 (2016), so `aggregate - max_pos = -31`. Removing the best single season takes the result to -31 -- clearly fragile to the season composition, in the same way the team-seed-residual experiment was (-115 fragility).
+
+**Conclusion of the bracket-points re-test.** The LOSO-realistic v8 retrain confirms the LL-blend gate's verdict. The +0.0039 LL miss was not a false negative -- it correctly forecast that a deployable blend (i.e., one that cannot use test-set outcomes to choose its weight) would not lift bracket points beyond noise. The cheating-ideal w produced a misleading +28 that disappears under LOSO discipline. **Final production-metric verdict: FAIL (-4 brkt pts vs canonical 2069, LOSO-fit blend, 12/10/0, fragility -31).**
 
 ## Per-season detail (SAGE encoder)
 
@@ -132,6 +172,10 @@ The Phase 2 result hardens the saturation-on-tabular-features hypothesis. Eight 
 
 8. **Wall-clock.** SAGE sweep: 9.6 min wall-clock, 2.9 min total train time. Edge-attr sweep: 21.7 min wall-clock, 11.3 min total train time. CPU only, no GPU. The wall-clock cost is dominated by graph build + per-holdout encoder forward passes, not by training epochs.
 
+9. **LL gate vs bracket-points: not a false negative.** The bracket-points re-test (cheating-w +28 vs LOSO-w -4) provides a useful methodological data point: the LL-blend +0.005 threshold correctly predicted the LOSO-realistic production-metric outcome. The cheating-ideal w produced a misleading "PASS" only because it was permitted to overfit one season (2017). This argues for trusting the LL-blend gate as a screen on future candidates (especially Candidate 4) without always paying the v8 retrain compute -- but only when the LL gate result is clean. Marginal cases like SAGE's +0.0039 are still worth a LOSO-realistic bracket-points spot-check, because they verify the screen rather than overrule it.
+
+10. **Anchor invariance on the v8 retrain wire-in.** The modified `train_stage2.py` (with the new `--pairwise-in` / `--pairwise-out` CLI args) reproduces canonical `output/pairwise_v8.csv` byte-identically when run with default args: max absolute per-pair probability diff = 0.000000, score = 2069 pts. So the bracket-points deltas reported above are not contaminated by the CLI refactor.
+
 ## Open questions
 
 1. **Would Candidate 4 (self-supervised team embeddings on RS margin prediction) clear the gate where the GNN did not?** The GNN's regime-dependent value pattern (9-10 winning seasons vs 8 losing seasons) is genuine signal -- it just doesn't aggregate to +0.005 net. A representation learned from a denser objective (per-game margin prediction across all RS games, ~5,000 pairs per season vs ~70 tournament games) might be lower-variance and clear the gate. Worth a Phase 1 sanity check before LOSO commitment.
@@ -167,3 +211,13 @@ The Phase 2 result hardens the saturation-on-tabular-features hypothesis. Eight 
   - `output/diag_gnn_vs_v4_edge_attr.json`
   - `output/diag_gnn_vs_v4_edge_attr_curve.csv`
   - `output/cv_per_season_gnn_phase2_edge_attr_blend.csv`
+- Bracket-points re-test outputs (force-added):
+  - `src/build_gnn_blend.py` (cheating-ideal w=0.80 blender)
+  - `src/build_gnn_blend_loso.py` (LOSO-realistic per-season w blender)
+  - `src/train_stage2.py` (additive `--pairwise-in` / `--pairwise-out` CLI args)
+  - `output/pairwise_v4_with_gnn_blend.csv` (stage-1, cheating-w)
+  - `output/pairwise_v8_with_gnn_blend.csv` (stage-2 retrained on cheating-w; 2097 pts, delta +28)
+  - `output/pairwise_v4_with_gnn_blend_loso.csv` (stage-1, LOSO-w)
+  - `output/pairwise_v8_with_gnn_blend_loso.csv` (stage-2 retrained on LOSO-w; 2065 pts, delta -4)
+  - `output/pairwise_v8_anchor.csv` (anchor invariance: pure v4 -> v8 via modified train_stage2, identical to canonical)
+  - `output/gnn_blend_loso_weights.csv` (per-season LOSO-fit w_v4 audit trail)
