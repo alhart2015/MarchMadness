@@ -587,18 +587,30 @@ success. **Clean-baseline measurement (PR <pending>, recovery step
   [score_diff, site, days_rest, days_from_start]. Result: standalone LL
   worse (0.6293), gate failed harder (clauses 2 + 3; optimal_w degenerated
   to 0.95, headroom collapsed to +0.0003). Both encoders FAIL.
-  Per-season picture: regime-dependent, not uniformly weak -- 9 seasons
-  with real complementary signal (best 2022 +0.0687, 2017 +0.0498), 8
-  seasons strictly worse than v4 (w*=1.00, zero headroom). Eighth same-
-  data-equivalent null result counting BT-feature, feature-view, HBT,
-  Colley, Massey-MOV, Massey-decay-14d, team-seed-residual, GNN-Phase-2.
-  Per spec sequel-ordering matrix, Candidate 4 (self-supervised
-  embeddings) stays promoted as Active queue item #3. Wall-clock: SAGE
-  sweep 9.6 min, edge-attr 21.7 min on CPU. Findings:
+  **User-authorized bracket-points re-test (post-LL-blend-FAIL diagnostic):**
+  cheating-ideal w=0.80 blend lifts +28 brkt pts vs canonical 2069 (W/L/T
+  13/9/0) -- driven by 2017 overfitting (cheating w*=0.25 yields +29, LOSO
+  w*=0.83 yields -5, a -34 cheating-vs-LOSO swing). LOSO-realistic blend
+  (per-season w_v4 fit on 21 other seasons; weights tight 0.76-0.84) lifts
+  **-4 brkt pts** (W/L/T 12/10/0, fragility -31). Confirms the LL-blend
+  gate's verdict: the +0.0039 LL miss was not a false negative; the
+  cheating-w +28 evaporates under LOSO discipline. Anchor invariance:
+  modified train_stage2 with default args reproduces canonical pairwise_v8
+  byte-identically (max abs diff 0.000000). Per-season picture: regime-
+  dependent, not uniformly weak -- 9 seasons with real LL-blend signal
+  (best 2022 +0.0687, 2017 +0.0498), 8 seasons strictly worse than v4
+  (w*=1.00, zero headroom). Eighth same-data-equivalent null result
+  counting BT-feature, feature-view, HBT, Colley, Massey-MOV,
+  Massey-decay-14d, team-seed-residual, GNN-Phase-2. Per spec
+  sequel-ordering matrix, Candidate 4 (self-supervised embeddings) stays
+  promoted as Active queue item #3. Wall-clock: SAGE sweep 9.6 min,
+  edge-attr 21.7 min, v8 retrains ~2 min each on CPU. Findings:
   `docs/notes/2026-05-10-gnn-phase2-loso.md`. Phase 1 retraction header at
   `docs/notes/2026-05-09-gnn-phase1.md`. Code: `src/gnn_stage1_peer/`,
   `src/run_gnn_phase2.py`, `src/diagnose_gnn_vs_v4.py`,
-  `tests/test_gnn_stage1_peer/`, `tests/test_diagnose_gnn_vs_v4.py`.
+  `src/build_gnn_blend.py`, `src/build_gnn_blend_loso.py`,
+  `src/train_stage2.py` (CLI), `tests/test_gnn_stage1_peer/`,
+  `tests/test_diagnose_gnn_vs_v4.py`.
 
 - **Team-program tournament-history features -- FAIL (2026-05-09).**
   Two new TeamID-keyed features: `team_seed_residual_mean_10yr` (continuity,
