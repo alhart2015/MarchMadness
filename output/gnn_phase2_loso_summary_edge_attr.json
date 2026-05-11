@@ -1,0 +1,9 @@
+{
+  "n_holdouts": 22,
+  "total_test_games": 2898,
+  "weighted_mean_ll": 0.6292656773612613,
+  "weighted_mean_accuracy": 0.6245686711731905,
+  "max_train_minutes": 2.02896755139033,
+  "total_train_minutes": 11.284694759051003,
+  "wall_clock_minutes": 21.69892108440399
+}

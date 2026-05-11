@@ -222,13 +222,23 @@ def build_v8_pairwise(per_game: pd.DataFrame, pairwise_v4_csv: str, seeds_csv: s
     pd.DataFrame(out_rows).to_csv(out_path, index=False)
 
 
-def main():
+def main(argv=None):
+    import argparse
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--pairwise-in", default="output/pairwise_v4.csv",
+                        help="Stage-1 pairwise CSV (input). Default: output/pairwise_v4.csv")
+    parser.add_argument("--pairwise-out", default="output/pairwise_v8.csv",
+                        help="Stage-2-adjusted pairwise CSV (output). Default: output/pairwise_v8.csv")
+    args = parser.parse_args(argv)
+
     print("=" * 80)
-    print("STAGE 2 TRAINING (double-LOSO on v4 stage-1 predictions)")
+    print("STAGE 2 TRAINING (double-LOSO on stage-1 predictions)")
+    print(f"  Input:  {args.pairwise_in}")
+    print(f"  Output: {args.pairwise_out}")
     print("=" * 80)
 
     per_game = load_per_game_data(
-        "output/pairwise_v4.csv",
+        args.pairwise_in,
         str(DATA / "MNCAATourneyCompactResults.csv"),
         str(DATA / "MNCAATourneySeeds.csv"),
     )
@@ -262,12 +272,12 @@ def main():
           f"{mean_acc_s1*100:>5.1f}%  {mean_acc_s12*100:>5.1f}%  "
           f"{(mean_acc_s12 - mean_acc_s1)*100:>+5.1f}pp")
 
-    print("\nWriting stage-2-adjusted pairwise to output/pairwise_v8.csv ...")
+    print(f"\nWriting stage-2-adjusted pairwise to {args.pairwise_out} ...")
     build_v8_pairwise(
         per_game,
-        "output/pairwise_v4.csv",
+        args.pairwise_in,
         str(DATA / "MNCAATourneySeeds.csv"),
-        "output/pairwise_v8.csv",
+        args.pairwise_out,
     )
     print("  Done.")
 

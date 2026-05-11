@@ -541,18 +541,18 @@ success. **Clean-baseline measurement (PR <pending>, recovery step
    pool-size-dependent and not directly comparable to the +25 PASS bar
    on stage-1/2 experiments. Spec out before #1 if data sourcing for
    roster turns out to be expensive.
-3. **Small neural net (MLP) as a stage-1.** **Deprioritized further by
-   the team-program-history FAIL (2026-05-09).** Adds PyTorch tooling
-   cost; diversity vs XGBoost on the 67-feature tabular space is
-   the open question. The lesson from the bracket-points re-test
-   (PR 17): same-data peers aren't sufficient even on the production
-   metric -- a stage-1 needs per-disagreement accuracy >= ~45% in the
-   regions where it differs from v4. MLP on the same 67-feature target
-   faces the same risk profile as LR did. The seven-failure pattern
-   on same-data-peer adds (LR, plain BT, HBT, feature-view, Colley,
-   Massey-MOV/decay, team-program-history) is now strong evidence that
-   another same-data peer in a different aggregation framework does
-   not help at v4's data scale.
+3. **Self-supervised team embeddings via regular-season margin prediction
+   (Candidate 4 promoted by GNN Phase 2 FAIL, 2026-05-10; Phase 1 verdict
+   retracted, see `docs/notes/2026-05-10-gnn-phase2-loso.md`).** Saturation-
+   break theory: latent style/matchup specificity at the team-pair level.
+   Risk profile is structurally similar to the failed GNN (Massey may
+   already extract the bulk of the team-strength signal at the RS level).
+   **Skip the RS-prediction sanity-check proxy** (this is what tainted
+   Phase 1: tournament prediction is the only sound proxy for tournament
+   prediction). Go directly to a 22-season tournament LOSO with the
+   BT-class LL-blend gate against v4. See spec
+   `docs/superpowers/specs/2026-05-09-non-tabular-model-class-scoping-design.md`
+   Candidate 4 description for details.
 4. **Full Bayesian Bradley-Terry with strength + variance per team**
    (PyMC / NumPyro / Stan). HBT confirmed prior structure doesn't
    lift BT-class standalone strength on the LL-blend gate; the
@@ -572,6 +572,45 @@ success. **Clean-baseline measurement (PR <pending>, recovery step
    its own cost; not worth paying yet.
 
 ## Done
+
+- **GNN stage-1 peer Phase 2 LOSO -- FAIL (2026-05-10), Phase 1 retracted.**
+  Phase 1 (RS-prediction proxy vs scalar Massey) was retracted: the Massey
+  baseline used `ranking_day=133` (Selection Sunday) which already incorporates
+  the test-set RS games -- Massey was looking up the answer. Even leak-free,
+  RS-prediction is a structurally biased proxy for tournament prediction.
+  Phase 2 ran the sound proxy: 22-season tournament LOSO with cross-season
+  shared-parameter training, BT-class LL-blend gate against v4. Standalone
+  GNN wt_mean LL 0.6060 (vs v4 0.5579) over 2898 test games; gate r_residual
+  0.5495 (PASS), optimal_w 0.80 (PASS), **headroom +0.0039 (FAIL, threshold
+  +0.005)**. Plan's MARGINAL row authorized one structural variant (NOT
+  hyperparameter fishing): edge-attr-aware GINE encoder consuming
+  [score_diff, site, days_rest, days_from_start]. Result: standalone LL
+  worse (0.6293), gate failed harder (clauses 2 + 3; optimal_w degenerated
+  to 0.95, headroom collapsed to +0.0003). Both encoders FAIL.
+  **User-authorized bracket-points re-test (post-LL-blend-FAIL diagnostic):**
+  cheating-ideal w=0.80 blend lifts +28 brkt pts vs canonical 2069 (W/L/T
+  13/9/0) -- driven by 2017 overfitting (cheating w*=0.25 yields +29, LOSO
+  w*=0.83 yields -5, a -34 cheating-vs-LOSO swing). LOSO-realistic blend
+  (per-season w_v4 fit on 21 other seasons; weights tight 0.76-0.84) lifts
+  **-4 brkt pts** (W/L/T 12/10/0, fragility -31). Confirms the LL-blend
+  gate's verdict: the +0.0039 LL miss was not a false negative; the
+  cheating-w +28 evaporates under LOSO discipline. Anchor invariance:
+  modified train_stage2 with default args reproduces canonical pairwise_v8
+  byte-identically (max abs diff 0.000000). Per-season picture: regime-
+  dependent, not uniformly weak -- 9 seasons with real LL-blend signal
+  (best 2022 +0.0687, 2017 +0.0498), 8 seasons strictly worse than v4
+  (w*=1.00, zero headroom). Eighth same-data-equivalent null result
+  counting BT-feature, feature-view, HBT, Colley, Massey-MOV,
+  Massey-decay-14d, team-seed-residual, GNN-Phase-2. Per spec
+  sequel-ordering matrix, Candidate 4 (self-supervised embeddings) stays
+  promoted as Active queue item #3. Wall-clock: SAGE sweep 9.6 min,
+  edge-attr 21.7 min, v8 retrains ~2 min each on CPU. Findings:
+  `docs/notes/2026-05-10-gnn-phase2-loso.md`. Phase 1 retraction header at
+  `docs/notes/2026-05-09-gnn-phase1.md`. Code: `src/gnn_stage1_peer/`,
+  `src/run_gnn_phase2.py`, `src/diagnose_gnn_vs_v4.py`,
+  `src/build_gnn_blend.py`, `src/build_gnn_blend_loso.py`,
+  `src/train_stage2.py` (CLI), `tests/test_gnn_stage1_peer/`,
+  `tests/test_diagnose_gnn_vs_v4.py`.
 
 - **Team-program tournament-history features -- FAIL (2026-05-09).**
   Two new TeamID-keyed features: `team_seed_residual_mean_10yr` (continuity,

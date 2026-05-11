@@ -1,0 +1,266 @@
+[
+  {
+    "holdout_season": 2003,
+    "gnn": {
+      "ll": 0.6769933104515076,
+      "accuracy": 0.5546875,
+      "n": 128
+    },
+    "train_minutes": 0.3115294615427653,
+    "epochs_run": 15,
+    "best_epoch": 9,
+    "best_val_ll": 0.6769933104515076
+  },
+  {
+    "holdout_season": 2004,
+    "gnn": {
+      "ll": 0.5525107979774475,
+      "accuracy": 0.71875,
+      "n": 128
+    },
+    "train_minutes": 2.02896755139033,
+    "epochs_run": 50,
+    "best_epoch": 49,
+    "best_val_ll": 0.5525107979774475
+  },
+  {
+    "holdout_season": 2005,
+    "gnn": {
+      "ll": 0.588111162185669,
+      "accuracy": 0.75,
+      "n": 128
+    },
+    "train_minutes": 0.9460797985394795,
+    "epochs_run": 50,
+    "best_epoch": 49,
+    "best_val_ll": 0.588111162185669
+  },
+  {
+    "holdout_season": 2006,
+    "gnn": {
+      "ll": 0.6048942804336548,
+      "accuracy": 0.671875,
+      "n": 128
+    },
+    "train_minutes": 0.8332163691520691,
+    "epochs_run": 50,
+    "best_epoch": 45,
+    "best_val_ll": 0.6048942804336548
+  },
+  {
+    "holdout_season": 2007,
+    "gnn": {
+      "ll": 0.5665575265884399,
+      "accuracy": 0.703125,
+      "n": 128
+    },
+    "train_minutes": 0.9067662358283997,
+    "epochs_run": 50,
+    "best_epoch": 49,
+    "best_val_ll": 0.5665575265884399
+  },
+  {
+    "holdout_season": 2008,
+    "gnn": {
+      "ll": 0.6947267055511475,
+      "accuracy": 0.5234375,
+      "n": 128
+    },
+    "train_minutes": 0.2071858286857605,
+    "epochs_run": 15,
+    "best_epoch": 9,
+    "best_val_ll": 0.6947267055511475
+  },
+  {
+    "holdout_season": 2009,
+    "gnn": {
+      "ll": 0.5263363122940063,
+      "accuracy": 0.703125,
+      "n": 128
+    },
+    "train_minutes": 0.5593974510828654,
+    "epochs_run": 50,
+    "best_epoch": 49,
+    "best_val_ll": 0.5263363122940063
+  },
+  {
+    "holdout_season": 2010,
+    "gnn": {
+      "ll": 0.6099263429641724,
+      "accuracy": 0.6328125,
+      "n": 128
+    },
+    "train_minutes": 0.7822757681210836,
+    "epochs_run": 46,
+    "best_epoch": 40,
+    "best_val_ll": 0.6099263429641724
+  },
+  {
+    "holdout_season": 2011,
+    "gnn": {
+      "ll": 0.6626895070075989,
+      "accuracy": 0.5671641826629639,
+      "n": 134
+    },
+    "train_minutes": 0.6540725986162822,
+    "epochs_run": 37,
+    "best_epoch": 31,
+    "best_val_ll": 0.6626895070075989
+  },
+  {
+    "holdout_season": 2012,
+    "gnn": {
+      "ll": 0.569096028804779,
+      "accuracy": 0.7014925479888916,
+      "n": 134
+    },
+    "train_minutes": 0.5236343344052633,
+    "epochs_run": 50,
+    "best_epoch": 49,
+    "best_val_ll": 0.569096028804779
+  },
+  {
+    "holdout_season": 2013,
+    "gnn": {
+      "ll": 0.594169020652771,
+      "accuracy": 0.6492537260055542,
+      "n": 134
+    },
+    "train_minutes": 0.5983909765879313,
+    "epochs_run": 50,
+    "best_epoch": 49,
+    "best_val_ll": 0.594169020652771
+  },
+  {
+    "holdout_season": 2014,
+    "gnn": {
+      "ll": 0.5998287200927734,
+      "accuracy": 0.6940298676490784,
+      "n": 134
+    },
+    "train_minutes": 0.5232738097508748,
+    "epochs_run": 50,
+    "best_epoch": 49,
+    "best_val_ll": 0.5998287200927734
+  },
+  {
+    "holdout_season": 2015,
+    "gnn": {
+      "ll": 0.6756983995437622,
+      "accuracy": 0.5820895433425903,
+      "n": 134
+    },
+    "train_minutes": 0.16302750507990518,
+    "epochs_run": 15,
+    "best_epoch": 9,
+    "best_val_ll": 0.6756983995437622
+  },
+  {
+    "holdout_season": 2016,
+    "gnn": {
+      "ll": 0.6803245544433594,
+      "accuracy": 0.5970149040222168,
+      "n": 134
+    },
+    "train_minutes": 0.17115322748819986,
+    "epochs_run": 15,
+    "best_epoch": 9,
+    "best_val_ll": 0.6803245544433594
+  },
+  {
+    "holdout_season": 2017,
+    "gnn": {
+      "ll": 0.6712117791175842,
+      "accuracy": 0.6194030046463013,
+      "n": 134
+    },
+    "train_minutes": 0.1719267686208089,
+    "epochs_run": 15,
+    "best_epoch": 9,
+    "best_val_ll": 0.6712117791175842
+  },
+  {
+    "holdout_season": 2018,
+    "gnn": {
+      "ll": 0.6156135201454163,
+      "accuracy": 0.6343283653259277,
+      "n": 134
+    },
+    "train_minutes": 0.7150461753209432,
+    "epochs_run": 50,
+    "best_epoch": 49,
+    "best_val_ll": 0.6156135201454163
+  },
+  {
+    "holdout_season": 2019,
+    "gnn": {
+      "ll": 0.6694769859313965,
+      "accuracy": 0.6343283653259277,
+      "n": 134
+    },
+    "train_minutes": 0.15294535954793295,
+    "epochs_run": 19,
+    "best_epoch": 13,
+    "best_val_ll": 0.6694769859313965
+  },
+  {
+    "holdout_season": 2021,
+    "gnn": {
+      "ll": 0.6947649121284485,
+      "accuracy": 0.4848484992980957,
+      "n": 132
+    },
+    "train_minutes": 0.17546710173288982,
+    "epochs_run": 22,
+    "best_epoch": 16,
+    "best_val_ll": 0.6947649121284485
+  },
+  {
+    "holdout_season": 2022,
+    "gnn": {
+      "ll": 0.6827630400657654,
+      "accuracy": 0.5447761416435242,
+      "n": 134
+    },
+    "train_minutes": 0.12159111102422078,
+    "epochs_run": 15,
+    "best_epoch": 9,
+    "best_val_ll": 0.6827630400657654
+  },
+  {
+    "holdout_season": 2023,
+    "gnn": {
+      "ll": 0.6867249608039856,
+      "accuracy": 0.5671641826629639,
+      "n": 134
+    },
+    "train_minutes": 0.16034613450368246,
+    "epochs_run": 20,
+    "best_epoch": 14,
+    "best_val_ll": 0.6867249608039856
+  },
+  {
+    "holdout_season": 2024,
+    "gnn": {
+      "ll": 0.6823862791061401,
+      "accuracy": 0.5223880410194397,
+      "n": 134
+    },
+    "train_minutes": 0.12589623928070068,
+    "epochs_run": 15,
+    "best_epoch": 9,
+    "best_val_ll": 0.6823862791061401
+  },
+  {
+    "holdout_season": 2025,
+    "gnn": {
+      "ll": 0.530433177947998,
+      "accuracy": 0.6940298676490784,
+      "n": 134
+    },
+    "train_minutes": 0.4525049527486165,
+    "epochs_run": 50,
+    "best_epoch": 49,
+    "best_val_ll": 0.530433177947998
+  }
+]
