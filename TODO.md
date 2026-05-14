@@ -1,5 +1,50 @@
 # Future Work
 
+## Tech debt -- XGB env drift, canonical pairwise_v8 not reproducible (NEW 2026-05-14)
+
+**Surfaced during the v13 work (see PR #37).** `output/pairwise_v8.csv`
+(the canonical 2069-brkt-pts baseline) is no longer byte-reproducible from
+a fresh `python -m src.train_stage2` run in the current XGB 3.2.0 env --
+fresh rerun scores 2034 with max abs prob diff 0.084 from canonical.
+`pyproject.toml` pins only `xgboost>=2.0`; canonical was committed
+2026-05-04 era (XGB 2.x stochastics), today's installed is 3.2.0.
+
+**Symptoms.** Two pre-existing tests on `main` fail:
+- `tests/test_eval_r64_line_blend.py::test_run_eval_anchor_reproduces_2069`
+- `tests/test_eval_v4_calibration.py::test_phase2_anchor_T_one_reproduces_canonical_v8`
+
+Both assume `train_stage2.py` reproduces canonical pairwise_v8.csv to FP
+precision; that assumption is broken by the XGB upgrade.
+
+**What v13 had to work around.** All v13 comparisons use the same-env
+fresh rerun `output/pairwise_v8_rerun.csv` (2034 brkt pts) as the
+baseline -- NOT canonical 2069. The 8 prior same-data-peer FAIL verdicts
+(BT-feature, feature-view, HBT, Colley, Massey-MOV, Massey-decay-14d,
+team-seed-residual, GNN-Phase-2) remain internally valid because each
+ran its baseline in the same XGB env as canonical at experiment time.
+Env drift only breaks NEW comparisons against canonical, not old ones.
+
+**Cleanup options (pick one):**
+1. **Pin XGB to the canonical-era version.** Find which XGB 2.x exactly
+   reproduces canonical pairwise_v8.csv from `train_stage2.py`. Pin in
+   `pyproject.toml` (e.g. `xgboost==2.0.3`). Cheapest if reproducibility
+   matters more than upgrades.
+2. **Regenerate canonical artifacts under current XGB.** Re-run
+   `train_stage2.py` in current env, force-add as the new canonical
+   pairwise_v8.csv (will score 2034 not 2069). Update the two failing
+   tests to assert the new baseline. Update any TODO entries that
+   reference the 2069 number as a fixed anchor. Cleanest long-term;
+   moderate effort -- every downstream consumer of pairwise_v8.csv
+   stays consistent with the live training pipeline.
+3. **Hybrid: regenerate canonical AND adopt v13 as the production frame.**
+   `output/pairwise_v13.csv` becomes the production output; `pairwise_v8.csv`
+   is regenerated under current XGB as the new same-env stage-2 baseline
+   for any future stage-2 experiments. The two failing tests get retargeted
+   at the new baselines.
+
+Option 3 is the natural next step given PR #37. Logged so a fresh-context
+session doesn't lose this thread.
+
 ## CONTAMINATION DISCOVERED 2026-05-04 (active recovery)
 
 **TL;DR.** v4's Vegas-derived per-team-per-season features
@@ -489,6 +534,26 @@ success. **Clean-baseline measurement (PR <pending>, recovery step
 > 1-4 below stand; their motivation is now "does this move the 22-season
 > bracket-points number," not "does this close the Kaggle gap."
 >
+> **Update 2026-05-14 (v13 toss-up-bucket blend came back PASS).** First
+> structural lift on the 22-season backtest since the contamination-fix
+> recovery. Architecture: v4 stage-1 unchanged; stage-2 is a 30-seed XGB
+> ensemble of v8-features; for games with `max(p_v4, 1 - p_v4) < 0.55`,
+> apply `p_blend = 0.6 * p_v8_ens + 0.4 * p_v4`; otherwise pure v4.
+> Result: **2106 brkt pts vs 2034 current-env v8 single-seed rerun = +72
+> apples-to-apples**, LOSO-disciplined (`{0, 0.6}` grid picks 0.6 in
+> 22/22 seasons). Note: comparing to historical canonical 2069 is NOT
+> apples-to-apples in the current XGB 3.2.0 env -- canonical was committed
+> under an earlier XGB and is no longer byte-reproducible (fresh rerun
+> = 2034, max abs prob diff 0.084).
+> Cross-config: v10a-alt-ens scores 2109 at the same blend. Architecturally
+> falsifies the "near-saturated on tabular features" framing -- v4's
+> 67-feature stack DOES have residual signal extractable by a different
+> stage-2 architecture. Active queue items #1 (roster), #2 (pool-aware),
+> #3 (SSL embeddings) and #4 (Bayesian BT) remain open as additional
+> levers; v13 is a deployable improvement that's compatible with any of
+> them. Production bracket should now be generated from
+> `output/pairwise_v13.csv` rather than `output/pairwise_v8.csv`.
+>
 > **Update 2026-05-09 (team-program tournament-history features came back FAIL).**
 > Two new features: `team_seed_residual_mean_10yr` (continuity, shrunk mean
 > of seed-residuals over prior 10yr) and `team_seed_residual_ewma_hl2`
@@ -572,6 +637,58 @@ success. **Clean-baseline measurement (PR <pending>, recovery step
    its own cost; not worth paying yet.
 
 ## Done
+
+- **v13 toss-up-bucket v4 x v8-ensemble blend -- PASS (2026-05-14).** First
+  structural improvement on the 22-season bracket-points backtest since the
+  contamination-fix recovery. Architecture: stage-1 v4 unchanged; stage-2 is a
+  30-seed XGB ensemble of v8-features; blend rule applies only in the toss-up
+  confidence bucket (`max(p_v4, 1 - p_v4) < 0.55`), at `alpha = 0.6 * p_v8 +
+  0.4 * p_v4`. All other games pass through pure v4. Result: **2106 brkt pts**
+  over 22 LOSO seasons (current XGB env), vs **2034 current-env v8 single-seed
+  fresh rerun (+72 brkt pts apples-to-apples)**. Comparison against the
+  historical canonical 2069 mixes XGB envs and is not apples-to-apples: the
+  canonical pairwise_v8.csv (committed earlier under XGB 2.x-era stochastics)
+  is no longer byte-reproducible from a fresh train_stage2.py rerun in the
+  current XGB 3.2.0 env -- fresh rerun scores 2034 with max abs prob diff
+  0.084 from canonical. The +72 vs same-env baseline is the robust number;
+  the +37 vs cross-env canonical was a previous version of this entry's
+  framing and has been retracted. The 8 prior same-data-peer FAIL verdicts
+  used canonical-2069 baselines in the SAME XGB env those experiments ran
+  in (each one's findings note confirmed anchor byte-equality at experiment
+  time), so they remain INTERNALLY VALID -- env drift does not retroactively
+  flip those verdicts.
+  LOSO discipline with 2-cell grid `{0, 0.6}` picks 0.6 in 22/22 seasons --
+  the alpha is stable, not per-season-tuned. Cross-config robustness check:
+  same blend with v10a-alt 30-seed ensemble scores 2109 brkt pts (edge 0.55)
+  or 2110 (edge 0.57). Mechanism: v8 stage-2 in current XGB env injects
+  chalk-pick noise in confident games (flipping e.g. 8v9 picks the wrong way)
+  but on TRUE toss-ups (`p_v4 in [0.5, 0.55)`) carries non-trivial tournament-
+  trained signal v4 alone misses. The 30-seed ensemble removes the per-seed
+  variance the older canonical pairwise_v8 quietly relied on (max abs prob
+  diff 0.084 between canonical and current-env fresh rerun). Restricting the
+  blend to the toss-up bucket captures the signal without the noise. Earlier
+  variants of v10/v10a/v10b/v10c (single-seed) lost -70 to -137 vs v8-rerun
+  baseline; the win required BOTH ensembling AND the bucket-restricted
+  v4-blend. Falsifies the standing "near-saturated on tabular team-aggregate
+  features" hypothesis: the 67-feature stack DOES have residual signal, it
+  just requires a different stage-2 architecture to extract. Code retained
+  on `feat/v10-stage2-enriched`: `src/blend_v4_v8.py` (BlendEvaluator, fast
+  in-memory bracket-points scorer, ~100x speedup over file round-trip),
+  `src/score_v13_blend.py` (CLI producer), `src/train_stage2_v10.py`
+  (multi-seed-ensemble + feature-set toggles + capacity-bump hparams),
+  `src/bracket/expected_round.py` (round derived from slots tree),
+  `tests/test_blend_v4_v8.py` (7 unit tests including v13 reproduces 2106
+  brkt pts exactly), `tests/test_bracket/test_expected_round.py` (10 unit
+  tests). Outputs (force-added): `output/pairwise_v13.csv` (production
+  frame), `output/pairwise_v8_ens30.csv` (30-seed v8 stage-2),
+  `output/pairwise_v8_rerun.csv` (single-seed rerun anchor). Notable
+  pre-existing test failures discovered during this work:
+  `test_eval_r64_line_blend.py::test_run_eval_anchor_reproduces_2069` and
+  `test_eval_v4_calibration.py::test_phase2_anchor_T_one_reproduces_canonical_v8`
+  both fail on main because of XGB version drift -- these tests assume the
+  canonical pairwise_v8.csv (2069 pts) is byte-reproducible from
+  `train_stage2.py`, which is no longer true in the current XGB env (rerun
+  scores 2034). Separately tracked.
 
 - **GNN stage-1 peer Phase 2 LOSO -- FAIL (2026-05-10), Phase 1 retracted.**
   Phase 1 (RS-prediction proxy vs scalar Massey) was retracted: the Massey
