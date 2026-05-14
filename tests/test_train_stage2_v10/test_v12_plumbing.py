@@ -99,21 +99,48 @@ def test_v4_feature_ranking_excludes_in_tournament_features():
         assert not leaks, f"forbidden substring '{forbidden}' found in: {leaks}"
 
 
-# Tests below depend on v12 plumbing being added to train_stage2_v10.
-# They are marked xfail until Phase 1 lands the FEATURE_SETS extension.
-
-
-@pytest.mark.xfail(reason="v12 plumbing not yet implemented (Phase 1)")
+@pytest.mark.skipif(not _v12_artifacts_present(), reason="v4 feature artifacts not produced yet")
 def test_diff_sign_flip_on_symmetric_pair():
     """For a single tournament game, the label=1 row (winner's perspective)
     and label=0 row (loser's perspective) must have diff_<feat> values that
     are exact negations of each other."""
     from src.train_stage2_v10 import load_per_game_data, FEATURE_SETS
-    # Implementation lands in Phase 1.
+
     assert "v12_n5" in FEATURE_SETS
+    assert "v12_n10" in FEATURE_SETS
+    assert "v12_n15" in FEATURE_SETS
+
+    fm = pd.read_parquet("output/v4_feature_matrix.parquet")
+    per_game = load_per_game_data(
+        "output/pairwise_v4.csv",
+        "data/raw/march-machine-learning-2026/MNCAATourneyCompactResults.csv",
+        "data/raw/march-machine-learning-2026/MNCAATourneySeeds.csv",
+        "data/raw/march-machine-learning-2026/MNCAATourneySlots.csv",
+        v4_feature_matrix_df=fm,
+    )
+    # Identify diff columns
+    diff_cols = [c for c in per_game.columns if c.startswith("diff_")]
+    assert len(diff_cols) >= 5, f"expected diff_* columns, got {diff_cols}"
+    # Pick one game (the first label=1 row and the corresponding label=0 row).
+    # Pairs are stored as consecutive rows in load_per_game_data.
+    label_1_rows = per_game[per_game["label"] == 1]
+    label_0_rows = per_game[per_game["label"] == 0]
+    # Pair by (season, winner_id) -- label=1 row's team_a IS the winner.
+    paired = label_1_rows.merge(
+        label_0_rows,
+        left_on=["season", "team_a", "team_b"],
+        right_on=["season", "team_b", "team_a"],
+        suffixes=("_w", "_l"),
+    )
+    assert len(paired) > 0, "no W/L symmetric pairs found"
+    for col in diff_cols:
+        w = paired[f"{col}_w"].values
+        l = paired[f"{col}_l"].values
+        np.testing.assert_allclose(w, -l, atol=1e-9,
+                                    err_msg=f"sign flip violated for {col}")
 
 
-@pytest.mark.xfail(reason="v12 plumbing not yet implemented (Phase 1)")
+@pytest.mark.skipif(not _v12_artifacts_present(), reason="v4 feature artifacts not produced yet")
 def test_v12_pairwise_row_count_matches_v4(tmp_path):
     """build_pairwise for v12_n5 produces a frame with the same row count as
     pairwise_v4.csv, with p_a_wins in [0, 1]."""

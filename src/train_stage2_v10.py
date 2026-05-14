@@ -13,7 +13,7 @@ from __future__ import annotations
 
 import math
 from pathlib import Path
-from typing import List, Sequence
+from typing import List, Optional, Sequence
 
 import numpy as np
 import pandas as pd
@@ -29,14 +29,39 @@ SEASONS_TO_BACKTEST = list(range(2003, 2026))
 
 _V8_BASE = ["p_stage1", "seed_a", "seed_b", "abs_seed_diff"]
 
-FEATURE_SETS = {
-    "v8":      _V8_BASE,
-    "v10a":    _V8_BASE + ["expected_round"],
-    "v10b":    _V8_BASE + ["expected_round", "v4_logit"],
-    "v10c":    _V8_BASE + ["expected_round", "min_seed", "max_seed"],
-    "v10":     _V8_BASE + ["expected_round", "v4_logit", "min_seed", "max_seed"],
-    "v10a_oh": _V8_BASE + ["er_r64", "er_r32", "er_s16", "er_e8", "er_f4", "er_champ"],
-}
+# v12 (v13 enriched with top-N v4 feature diffs) -- top-N is read from the
+# Phase-0 ranking artifact at import time. Sets are only populated if the
+# ranking exists, so train_stage2_v10 stays importable without v12 inputs.
+_V12_RANKING_PATH = OUTPUT / "v4_feature_importance.csv"
+_V12_FM_DEFAULT_PATH = OUTPUT / "v4_feature_matrix.parquet"
+_V12_DIFF_PREFIX = "diff_"
+
+
+def _v12_top_n_features(n: int) -> List[str]:
+    ranking = pd.read_csv(_V12_RANKING_PATH)
+    return ranking.head(n)["feature_name"].tolist()
+
+
+def _v12_diff_cols(n: int) -> List[str]:
+    return [f"{_V12_DIFF_PREFIX}{name}" for name in _v12_top_n_features(n)]
+
+
+def _build_feature_sets() -> dict:
+    sets = {
+        "v8":      _V8_BASE,
+        "v10a":    _V8_BASE + ["expected_round"],
+        "v10b":    _V8_BASE + ["expected_round", "v4_logit"],
+        "v10c":    _V8_BASE + ["expected_round", "min_seed", "max_seed"],
+        "v10":     _V8_BASE + ["expected_round", "v4_logit", "min_seed", "max_seed"],
+        "v10a_oh": _V8_BASE + ["er_r64", "er_r32", "er_s16", "er_e8", "er_f4", "er_champ"],
+    }
+    if _V12_RANKING_PATH.exists():
+        for n in (5, 10, 15):
+            sets[f"v12_n{n}"] = _V8_BASE + ["expected_round"] + _v12_diff_cols(n)
+    return sets
+
+
+FEATURE_SETS = _build_feature_sets()
 
 HPARAM_SETS = {
     "v8":     dict(n_estimators=100, max_depth=3, learning_rate=0.05, subsample=0.9,
@@ -58,13 +83,31 @@ def _logit(p, eps=1e-6):
     return math.log(p_clipped / (1.0 - p_clipped))
 
 
+def _build_v4_feature_lookup(fm_df: pd.DataFrame) -> dict:
+    """Index v4 feature matrix by (Season, TeamID) -> {feat_name: value}.
+    Returns ({}, []) if fm_df is None."""
+    if fm_df is None:
+        return {}, []
+    feat_cols = [c for c in fm_df.columns if c not in ("Season", "TeamID")]
+    lookup = {
+        (int(r["Season"]), int(r["TeamID"])): {c: float(r[c]) for c in feat_cols}
+        for _, r in fm_df.iterrows()
+    }
+    return lookup, feat_cols
+
+
 def load_per_game_data(
     pairwise_csv: str,
     results_csv: str,
     seeds_csv: str,
     slots_csv: str,
+    v4_feature_matrix_df: Optional[pd.DataFrame] = None,
 ) -> pd.DataFrame:
-    """Per-played-game training rows, symmetric (W and L perspective each)."""
+    """Per-played-game training rows, symmetric (W and L perspective each).
+
+    If `v4_feature_matrix_df` is provided, also emits `diff_<feat>` columns
+    for each v4 raw feature in the matrix. The label=1 row sees
+    `feat_w - feat_l`; the label=0 row sees `feat_l - feat_w`."""
     pw = pd.read_csv(pairwise_csv)
     pw["pair_key"] = list(zip(pw["season"], pw["team_a"], pw["team_b"]))
     pw = pw.drop_duplicates("pair_key", keep="last")
@@ -76,6 +119,8 @@ def load_per_game_data(
     seeds["seed_int"] = seeds["Seed"].apply(parse_seed)
     seed_lookup = {(int(r["Season"]), int(r["TeamID"])): r["seed_int"]
                    for _, r in seeds.iterrows() if r["seed_int"] is not None}
+
+    v4_lookup, v4_feat_cols = _build_v4_feature_lookup(v4_feature_matrix_df)
 
     rows = []
     for _, g in results.iterrows():
@@ -99,11 +144,22 @@ def load_per_game_data(
         if er is None:
             er = 0
 
+        # v4 diffs (signed, winner perspective). If either team is missing
+        # from the v4 FM, skip the diff fields entirely -- v12 feature sets
+        # will fail the column-select if the columns are absent, so this
+        # only kicks in for rows that v12 wouldn't have selected anyway.
+        w_feats = v4_lookup.get((season, w)) if v4_lookup else None
+        l_feats = v4_lookup.get((season, l)) if v4_lookup else None
+        if v4_lookup and (w_feats is None or l_feats is None):
+            continue
+        w_diff = {f"{_V12_DIFF_PREFIX}{c}": w_feats[c] - l_feats[c]
+                  for c in v4_feat_cols} if v4_lookup else {}
+
         for label, p_team, seed_self, seed_opp in (
             (1, p_w, seed_w, seed_l),
             (0, 1.0 - p_w, seed_l, seed_w),
         ):
-            rows.append({
+            row = {
                 "season": season,
                 "team_a": (w if label == 1 else l),
                 "team_b": (l if label == 1 else w),
@@ -116,7 +172,12 @@ def load_per_game_data(
                 "min_seed": min(seed_self, seed_opp),
                 "max_seed": max(seed_self, seed_opp),
                 "label": label,
-            })
+            }
+            if w_diff:
+                # Label=0 (loser perspective) flips the sign on every diff.
+                sign = 1 if label == 1 else -1
+                row.update({k: sign * v for k, v in w_diff.items()})
+            rows.append(row)
     return pd.DataFrame(rows)
 
 
@@ -211,13 +272,17 @@ def build_pairwise(
     feature_set: str,
     seeds=(42,),
     hparams: str = "v8",
+    v4_feature_matrix_df: Optional[pd.DataFrame] = None,
 ):
     """For each LOSO season, train stage-2 on other-seasons and apply to ALL
     pairs in that season's field. Save the adjusted pairwise CSV.
 
     If multiple `seeds` are passed, trains one stage-2 per seed and averages
     their pairwise probabilities. Single-seed call reproduces v8 byte-equal
-    when feature_set='v8'."""
+    when feature_set='v8'.
+
+    For v12 feature sets, `v4_feature_matrix_df` must be provided -- each
+    pair's diff_<feat> = (team_a feature) - (team_b feature)."""
     pw = pd.read_csv(pairwise_v4_csv).drop_duplicates(
         ["season", "team_a", "team_b"], keep="last"
     )
@@ -225,6 +290,8 @@ def build_pairwise(
     seeds_df["seed_int"] = seeds_df["Seed"].apply(parse_seed)
     seed_lookup = {(int(r["Season"]), int(r["TeamID"])): r["seed_int"]
                    for _, r in seeds_df.iterrows() if r["seed_int"] is not None}
+
+    v4_lookup, v4_feat_cols = _build_v4_feature_lookup(v4_feature_matrix_df)
 
     out_rows = []
     for season in sorted(pw.season.unique()):
@@ -249,6 +316,15 @@ def build_pairwise(
             if seed_a is None or seed_b is None:
                 keep.append(False)
                 continue
+            # v4 diffs for this pair. Skip the row if v12 is requested but
+            # either team is missing from the FM (defensive; should not happen
+            # for the canonical FM which covers all tournament-field teams).
+            a_feats = v4_lookup.get((season, int(r["team_a"]))) if v4_lookup else None
+            b_feats = v4_lookup.get((season, int(r["team_b"]))) if v4_lookup else None
+            if v4_lookup and (a_feats is None or b_feats is None):
+                keep.append(False)
+                continue
+
             er = expected_round_for_pair(
                 int(r["season"]), int(r["team_a"]), int(r["team_b"]),
                 slots_csv, seeds_csv,
@@ -273,6 +349,9 @@ def build_pairwise(
                 "er_f4":    int(er == 5),
                 "er_champ": int(er == 6),
             }
+            if a_feats is not None:
+                for c in v4_feat_cols:
+                    row_dict[f"{_V12_DIFF_PREFIX}{c}"] = a_feats[c] - b_feats[c]
             cols = FEATURE_SETS[feature_set]
             feat_rows.append([row_dict[c] for c in cols])
             keep.append(True)
@@ -313,8 +392,18 @@ def main(argv=None):
     parser.add_argument("--hparams", choices=list(HPARAM_SETS), default="v8",
                         help="XGB hyperparameter set. 'v8' matches canonical train_stage2; "
                              "'v10cap' bumps depth=4 and n_estimators=200.")
+    parser.add_argument("--v4-feature-matrix",
+                        default=str(_V12_FM_DEFAULT_PATH),
+                        help="v4 per-(Season, TeamID) feature parquet for v12 diff joins. "
+                             "Only loaded when --features starts with 'v12_'.")
     args = parser.parse_args(argv)
     seeds = tuple(int(s) for s in args.seeds.split(",") if s.strip())
+
+    v4_fm_df = None
+    if args.features.startswith("v12_"):
+        v4_fm_df = pd.read_parquet(args.v4_feature_matrix)
+        print(f"  Loaded v4 feature matrix: {len(v4_fm_df):,} rows, "
+              f"{len([c for c in v4_fm_df.columns if c not in ('Season', 'TeamID')])} features")
 
     print("=" * 80)
     print(f"STAGE 2 v10 (feature_set={args.features})")
@@ -328,6 +417,7 @@ def main(argv=None):
         str(DATA / "MNCAATourneyCompactResults.csv"),
         str(DATA / "MNCAATourneySeeds.csv"),
         str(DATA / "MNCAATourneySlots.csv"),
+        v4_feature_matrix_df=v4_fm_df,
     )
     print(f"  Per-game training rows: {len(per_game):,} (across "
           f"{per_game.season.nunique()} seasons)")
@@ -366,6 +456,7 @@ def main(argv=None):
         args.features,
         seeds=seeds,
         hparams=args.hparams,
+        v4_feature_matrix_df=v4_fm_df,
     )
     print("  Done.")
 
