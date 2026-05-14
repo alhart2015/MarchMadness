@@ -494,8 +494,12 @@ success. **Clean-baseline measurement (PR <pending>, recovery step
 > recovery. Architecture: v4 stage-1 unchanged; stage-2 is a 30-seed XGB
 > ensemble of v8-features; for games with `max(p_v4, 1 - p_v4) < 0.55`,
 > apply `p_blend = 0.6 * p_v8_ens + 0.4 * p_v4`; otherwise pure v4.
-> Result: **2106 brkt pts** (+37 vs 2069 historical, +72 vs 2034 current-env
-> rerun), LOSO-disciplined (`{0, 0.6}` grid picks 0.6 in 22/22 seasons).
+> Result: **2106 brkt pts vs 2034 current-env v8 single-seed rerun = +72
+> apples-to-apples**, LOSO-disciplined (`{0, 0.6}` grid picks 0.6 in
+> 22/22 seasons). Note: comparing to historical canonical 2069 is NOT
+> apples-to-apples in the current XGB 3.2.0 env -- canonical was committed
+> under an earlier XGB and is no longer byte-reproducible (fresh rerun
+> = 2034, max abs prob diff 0.084).
 > Cross-config: v10a-alt-ens scores 2109 at the same blend. Architecturally
 > falsifies the "near-saturated on tabular features" framing -- v4's
 > 67-feature stack DOES have residual signal extractable by a different
@@ -595,8 +599,19 @@ success. **Clean-baseline measurement (PR <pending>, recovery step
   30-seed XGB ensemble of v8-features; blend rule applies only in the toss-up
   confidence bucket (`max(p_v4, 1 - p_v4) < 0.55`), at `alpha = 0.6 * p_v8 +
   0.4 * p_v4`. All other games pass through pure v4. Result: **2106 brkt pts**
-  over 22 LOSO seasons (current XGB env), vs 2069 historical canonical
-  (+37 brkt pts) and vs 2034 current-env v8 single-seed rerun (+72 brkt pts).
+  over 22 LOSO seasons (current XGB env), vs **2034 current-env v8 single-seed
+  fresh rerun (+72 brkt pts apples-to-apples)**. Comparison against the
+  historical canonical 2069 mixes XGB envs and is not apples-to-apples: the
+  canonical pairwise_v8.csv (committed earlier under XGB 2.x-era stochastics)
+  is no longer byte-reproducible from a fresh train_stage2.py rerun in the
+  current XGB 3.2.0 env -- fresh rerun scores 2034 with max abs prob diff
+  0.084 from canonical. The +72 vs same-env baseline is the robust number;
+  the +37 vs cross-env canonical was a previous version of this entry's
+  framing and has been retracted. The 8 prior same-data-peer FAIL verdicts
+  used canonical-2069 baselines in the SAME XGB env those experiments ran
+  in (each one's findings note confirmed anchor byte-equality at experiment
+  time), so they remain INTERNALLY VALID -- env drift does not retroactively
+  flip those verdicts.
   LOSO discipline with 2-cell grid `{0, 0.6}` picks 0.6 in 22/22 seasons --
   the alpha is stable, not per-season-tuned. Cross-config robustness check:
   same blend with v10a-alt 30-seed ensemble scores 2109 brkt pts (edge 0.55)
