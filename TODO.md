@@ -1,5 +1,50 @@
 # Future Work
 
+## Tech debt -- XGB env drift, canonical pairwise_v8 not reproducible (NEW 2026-05-14)
+
+**Surfaced during the v13 work (see PR #37).** `output/pairwise_v8.csv`
+(the canonical 2069-brkt-pts baseline) is no longer byte-reproducible from
+a fresh `python -m src.train_stage2` run in the current XGB 3.2.0 env --
+fresh rerun scores 2034 with max abs prob diff 0.084 from canonical.
+`pyproject.toml` pins only `xgboost>=2.0`; canonical was committed
+2026-05-04 era (XGB 2.x stochastics), today's installed is 3.2.0.
+
+**Symptoms.** Two pre-existing tests on `main` fail:
+- `tests/test_eval_r64_line_blend.py::test_run_eval_anchor_reproduces_2069`
+- `tests/test_eval_v4_calibration.py::test_phase2_anchor_T_one_reproduces_canonical_v8`
+
+Both assume `train_stage2.py` reproduces canonical pairwise_v8.csv to FP
+precision; that assumption is broken by the XGB upgrade.
+
+**What v13 had to work around.** All v13 comparisons use the same-env
+fresh rerun `output/pairwise_v8_rerun.csv` (2034 brkt pts) as the
+baseline -- NOT canonical 2069. The 8 prior same-data-peer FAIL verdicts
+(BT-feature, feature-view, HBT, Colley, Massey-MOV, Massey-decay-14d,
+team-seed-residual, GNN-Phase-2) remain internally valid because each
+ran its baseline in the same XGB env as canonical at experiment time.
+Env drift only breaks NEW comparisons against canonical, not old ones.
+
+**Cleanup options (pick one):**
+1. **Pin XGB to the canonical-era version.** Find which XGB 2.x exactly
+   reproduces canonical pairwise_v8.csv from `train_stage2.py`. Pin in
+   `pyproject.toml` (e.g. `xgboost==2.0.3`). Cheapest if reproducibility
+   matters more than upgrades.
+2. **Regenerate canonical artifacts under current XGB.** Re-run
+   `train_stage2.py` in current env, force-add as the new canonical
+   pairwise_v8.csv (will score 2034 not 2069). Update the two failing
+   tests to assert the new baseline. Update any TODO entries that
+   reference the 2069 number as a fixed anchor. Cleanest long-term;
+   moderate effort -- every downstream consumer of pairwise_v8.csv
+   stays consistent with the live training pipeline.
+3. **Hybrid: regenerate canonical AND adopt v13 as the production frame.**
+   `output/pairwise_v13.csv` becomes the production output; `pairwise_v8.csv`
+   is regenerated under current XGB as the new same-env stage-2 baseline
+   for any future stage-2 experiments. The two failing tests get retargeted
+   at the new baselines.
+
+Option 3 is the natural next step given PR #37. Logged so a fresh-context
+session doesn't lose this thread.
+
 ## CONTAMINATION DISCOVERED 2026-05-04 (active recovery)
 
 **TL;DR.** v4's Vegas-derived per-team-per-season features
