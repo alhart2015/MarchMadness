@@ -50,6 +50,24 @@ FEATURE_SETS = {
         "p_stage1", "seed_a", "seed_b", "abs_seed_diff",
         "expected_round", "v4_logit", "min_seed", "max_seed",
     ],
+    # v10a_oh: round encoded as 6 one-hot indicators (lets XGB learn
+    # per-round corrections without imposing monotone-in-round assumption)
+    "v10a_oh": [
+        "p_stage1", "seed_a", "seed_b", "abs_seed_diff",
+        "er_r64", "er_r32", "er_s16", "er_e8", "er_f4", "er_champ",
+    ],
+}
+
+
+# Hyperparameter sets keyed by name. The default ('v8') is identical to
+# the canonical train_stage2.py. 'v10cap' is a higher-capacity variant
+# motivated by the audit findings: the round signal at E8/S16 may need
+# deeper trees to exploit.
+HPARAM_SETS = {
+    "v8": dict(n_estimators=100, max_depth=3, learning_rate=0.05, subsample=0.9,
+               colsample_bytree=1.0, reg_alpha=0.1, reg_lambda=1.0),
+    "v10cap": dict(n_estimators=200, max_depth=4, learning_rate=0.05, subsample=0.9,
+                    colsample_bytree=1.0, reg_alpha=0.1, reg_lambda=1.0),
 }
 
 
@@ -127,31 +145,42 @@ def load_per_game_data(
     return pd.DataFrame(rows)
 
 
+def _augment_one_hot_round(df: pd.DataFrame) -> pd.DataFrame:
+    """Add er_r64..er_champ binary columns derived from `expected_round`."""
+    out = df.copy()
+    for i, name in enumerate(["er_r64", "er_r32", "er_s16", "er_e8", "er_f4", "er_champ"], start=1):
+        out[name] = (out["expected_round"] == i).astype(int)
+    return out
+
+
 def stage2_features(df: pd.DataFrame, feature_set: str) -> np.ndarray:
     cols = FEATURE_SETS[feature_set]
+    if any(c.startswith("er_") for c in cols):
+        df = _augment_one_hot_round(df)
     return df[cols].values
 
 
-def fit_stage2(X: np.ndarray, y: np.ndarray, seed: int = 42) -> xgb.XGBClassifier:
-    """Identical hyperparameters to v8 -- the only change is the feature set."""
+def fit_stage2(
+    X: np.ndarray,
+    y: np.ndarray,
+    seed: int = 42,
+    hparams: str = "v8",
+) -> xgb.XGBClassifier:
+    """Defaults to identical hyperparameters as the canonical train_stage2.py.
+    Set hparams='v10cap' for the higher-capacity variant."""
+    params = HPARAM_SETS[hparams]
     model = xgb.XGBClassifier(
-        n_estimators=100,
-        max_depth=3,
-        learning_rate=0.05,
-        subsample=0.9,
-        colsample_bytree=1.0,
-        reg_alpha=0.1,
-        reg_lambda=1.0,
         random_state=seed,
         eval_metric="logloss",
+        **params,
     )
     model.fit(X, y)
     return model
 
 
-def fit_stage2_ensemble(X: np.ndarray, y: np.ndarray, seeds):
+def fit_stage2_ensemble(X: np.ndarray, y: np.ndarray, seeds, hparams: str = "v8"):
     """Train one XGB per seed; return list of fitted classifiers."""
-    return [fit_stage2(X, y, seed=int(s)) for s in seeds]
+    return [fit_stage2(X, y, seed=int(s), hparams=hparams) for s in seeds]
 
 
 def predict_ensemble(models, X: np.ndarray) -> np.ndarray:
@@ -162,7 +191,7 @@ def predict_ensemble(models, X: np.ndarray) -> np.ndarray:
     return probs / len(models)
 
 
-def double_loso_eval(per_game: pd.DataFrame, feature_set: str):
+def double_loso_eval(per_game: pd.DataFrame, feature_set: str, hparams: str = "v8"):
     seasons = sorted(per_game["season"].unique())
     results = []
     for test_season in seasons:
@@ -176,7 +205,7 @@ def double_loso_eval(per_game: pd.DataFrame, feature_set: str):
         X_test = stage2_features(test, feature_set)
         y_test = test["label"].values
 
-        model = fit_stage2(X_train, y_train)
+        model = fit_stage2(X_train, y_train, hparams=hparams)
         p_s12 = model.predict_proba(X_test)[:, 1]
         p_s1 = test["p_stage1"].values
 
@@ -206,6 +235,7 @@ def build_pairwise(
     out_path: str,
     feature_set: str,
     seeds=(42,),
+    hparams: str = "v8",
 ):
     """For each LOSO season, train stage-2 on other-seasons and apply to ALL
     pairs in that season's field. Save the adjusted pairwise CSV.
@@ -230,10 +260,10 @@ def build_pairwise(
         X_train = stage2_features(train, feature_set)
         y_train = train["label"].values
         if len(seeds) == 1:
-            model = fit_stage2(X_train, y_train, seed=int(seeds[0]))
+            model = fit_stage2(X_train, y_train, seed=int(seeds[0]), hparams=hparams)
             models = [model]
         else:
-            models = fit_stage2_ensemble(X_train, y_train, seeds)
+            models = fit_stage2_ensemble(X_train, y_train, seeds, hparams=hparams)
 
         season_pw = pw[pw.season == season].copy()
         feat_rows: List[Sequence[float]] = []
@@ -263,6 +293,13 @@ def build_pairwise(
                 "v4_logit": _logit(p1),
                 "min_seed": min(seed_a, seed_b),
                 "max_seed": max(seed_a, seed_b),
+                # one-hot encoding of expected_round (er in 1..6 maps to er_r64..er_champ)
+                "er_r64":   int(er == 1),
+                "er_r32":   int(er == 2),
+                "er_s16":   int(er == 3),
+                "er_e8":    int(er == 4),
+                "er_f4":    int(er == 5),
+                "er_champ": int(er == 6),
             }
             cols = FEATURE_SETS[feature_set]
             feat_rows.append([row_dict[c] for c in cols])
@@ -301,6 +338,9 @@ def main(argv=None):
     parser.add_argument("--seeds", default="42",
                         help="Comma-separated XGB random_state values. If multiple, the "
                              "stage-2 pairwise probs are averaged across the ensemble.")
+    parser.add_argument("--hparams", choices=list(HPARAM_SETS), default="v8",
+                        help="XGB hyperparameter set. 'v8' matches canonical train_stage2; "
+                             "'v10cap' bumps depth=4 and n_estimators=200.")
     args = parser.parse_args(argv)
     seeds = tuple(int(s) for s in args.seeds.split(",") if s.strip())
 
@@ -320,7 +360,7 @@ def main(argv=None):
     print(f"  Per-game training rows: {len(per_game):,} (across "
           f"{per_game.season.nunique()} seasons)")
 
-    eval_df = double_loso_eval(per_game, args.features)
+    eval_df = double_loso_eval(per_game, args.features, hparams=args.hparams)
     print(f"\n{'Season':>6}  {'N':>3}  {'LL_s1':>7}  {'LL_s12':>7}  "
           f"{'dLL':>7}  {'Acc_s1':>7}  {'Acc_s12':>7}  {'dAcc':>6}")
     print("-" * 75)
@@ -343,7 +383,8 @@ def main(argv=None):
           f"{mean_acc_s1*100:>5.1f}%  {mean_acc_s12*100:>5.1f}%  "
           f"{(mean_acc_s12 - mean_acc_s1)*100:>+5.1f}pp")
 
-    print(f"\nWriting stage-2-adjusted pairwise to {args.pairwise_out} (seeds={seeds}) ...")
+    print(f"\nWriting stage-2-adjusted pairwise to {args.pairwise_out} "
+          f"(seeds={seeds}, hparams={args.hparams}) ...")
     build_pairwise(
         per_game,
         args.pairwise_in,
@@ -352,6 +393,7 @@ def main(argv=None):
         args.pairwise_out,
         args.features,
         seeds=seeds,
+        hparams=args.hparams,
     )
     print("  Done.")
 
