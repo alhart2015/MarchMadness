@@ -1,5 +1,34 @@
 # Future Work
 
+## Done 2026-05-14 -- v12 stage-2 v4-feature-diff enrichment -- FAIL
+
+LOSO-disciplined picked-cell @ v13 blend = **2078 brkt pts** vs v13
+baseline 2106 = -28 (FAIL active regression band). Best single cell
+(n10_v10cap @ alpha=0.6) = 2126 (+20, MARGINAL band) but >50%
+concentrated in season 2015 -- triggers the spec's
+single-season-concentration demotion rule. Both readings collapse to
+FAIL.
+
+The architecture has signal (n10_v10cap blended PASSes the +20 bar in
+isolation), but it's fragile and concentrated. LOSO picker traded
++6 in apparent training-season fit for -48 on the held-out season --
+the picker correctly hid the test set per LOSO discipline; the
+discipline correctly rejected the cell.
+
+**Eighth same-data-peer FAIL** (BT, feature-view, HBT, Colley,
+Massey-MOV, Massey-decay-14d, team-seed-residual, now v12). The pattern
+extended: re-exposing v4's own feature inputs (in any form) on top of
+v4's stage-1 doesn't compound at this data scale. v13 PASS remains the
+exception -- it worked via variance reduction (30-seed ensemble) and
+selectivity (toss-up bucket), not new signal.
+
+Production frame unchanged: `output/pairwise_v13.csv` remains canonical.
+
+Findings: `docs/notes/2026-05-14-v12-stage2-v4-feature-diffs.md`.
+
+Active queue moves to: #1 (roster, blocked on data sourcing) or #2
+(pool-aware bracket construction, never tried, cheap).
+
 ## Done 2026-05-14 -- XGB env drift cleanup (Option 3 hybrid)
 
 Resolved the canonical-pairwise_v8 reproducibility gap via the planned
@@ -249,6 +278,19 @@ success. **Clean-baseline measurement (PR <pending>, recovery step
 
 ## Tried and rejected
 
+- **v12: stage-2 enrichment with v4 top-N feature diffs (2026-05-14).**
+  Added the top-N v4 feature differences (ranked by XGB gain, N in
+  {5, 10, 15}) to v13's stage-2 stack on top of the 30-seed ensemble +
+  toss-up-bucket blend. 6-cell LOSO grid (N x {v8, v10cap} hparams).
+  LOSO-disciplined picked-cell @ blend = 2078 brkt pts vs v13's 2106
+  baseline = -28 (FAIL active regression band). Best single cell
+  (n10_v10cap @ alpha=0.6) = 2126 (+20 MARGINAL), but >50%
+  concentrated in season 2015 (spec demotion rule). Both readings
+  collapse to FAIL. The 8th same-data-peer addition that has failed.
+  Reinforces the saturation prior at the stage-2 layer (prior 7 were
+  all stage-1 adds). v13 PASS remains the exception (variance
+  reduction + selectivity, not new signal). Findings:
+  `docs/notes/2026-05-14-v12-stage2-v4-feature-diffs.md`.
 - **Quality-wins-vs-tournament-field (v5):** -93 pts vs v4 over 22 LOSO
   seasons. F4 accuracy fell 9pp. Already captured by KenPom/SOS.
 - **Matchup-interaction features (v6):** avg = `(A+B)/2` columns
