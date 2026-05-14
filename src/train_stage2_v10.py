@@ -1,23 +1,13 @@
-"""v10 stage-2: enriched-feature corrector on top of v4.
+"""Experimental stage-2 trainer: feature-set toggles + multi-seed ensembles.
 
-Background:
-  - v8 (canonical stage-2) sees only [p_stage1, seed_a, seed_b, abs_seed_diff].
-    The Vegas audit (output/v4_gap_audit_vegas.json) shows v4 trails Vegas
-    by +0.055 LL at E8 and +0.027 LL at S16, but BEATS Vegas at F4/Champ
-    (delta -0.001 to -0.011). v8 has no `round` feature, so it cannot
-    selectively shrink confidence in late-but-not-final-rounds.
-  - v10 adds `expected_round` (structurally derived from slots),
-    `v4_logit` (logit-space p_stage1 -- easier for XGB to express linear-in-
-    confidence corrections), and `min_seed`, `max_seed` (absolute seed level,
-    not just diff -- 1v4 != 5v8 even though abs_diff=3 for both).
+A near-clone of train_stage2.py with two extensions: (1) FEATURE_SETS
+selectable via --features, (2) multi-seed ensemble averaging via --seeds.
+With --features v8 --seeds 42, output reproduces train_stage2.py byte-equal
+(anchor invariance enforced by tests; do not remove that guarantee).
 
-Anchor invariance (verified in tests/test_train_stage2_v10.py):
-  --features v8 reproduces output/pairwise_v8.csv byte-equal.
-
-Leakage discipline (double-LOSO, identical to v8):
-  For each test season Y, stage-2 trains on all-other-seasons' per-game data
-  and applies to Y's full pairwise field. Stage-1's predictions for Y are
-  already out-of-fold (pairwise_v4.csv is LOSO across 22 seasons).
+Double-LOSO discipline (unchanged from v8): for each test season Y, stage-2
+trains on all-other-seasons per-game data and applies to Y's full pairwise
+field. pairwise_v4.csv is already LOSO out-of-fold across 22 seasons.
 """
 from __future__ import annotations
 
@@ -37,37 +27,22 @@ OUTPUT = Path("output")
 
 SEASONS_TO_BACKTEST = list(range(2003, 2026))
 
+_V8_BASE = ["p_stage1", "seed_a", "seed_b", "abs_seed_diff"]
+
 FEATURE_SETS = {
-    "v8": ["p_stage1", "seed_a", "seed_b", "abs_seed_diff"],
-    # v10a: only the round feature
-    "v10a": ["p_stage1", "seed_a", "seed_b", "abs_seed_diff", "expected_round"],
-    # v10b: round + logit (linear-in-confidence helper)
-    "v10b": ["p_stage1", "seed_a", "seed_b", "abs_seed_diff", "expected_round", "v4_logit"],
-    # v10c: round + min/max seed (absolute seed level)
-    "v10c": ["p_stage1", "seed_a", "seed_b", "abs_seed_diff", "expected_round", "min_seed", "max_seed"],
-    # v10 (full): all four new features
-    "v10": [
-        "p_stage1", "seed_a", "seed_b", "abs_seed_diff",
-        "expected_round", "v4_logit", "min_seed", "max_seed",
-    ],
-    # v10a_oh: round encoded as 6 one-hot indicators (lets XGB learn
-    # per-round corrections without imposing monotone-in-round assumption)
-    "v10a_oh": [
-        "p_stage1", "seed_a", "seed_b", "abs_seed_diff",
-        "er_r64", "er_r32", "er_s16", "er_e8", "er_f4", "er_champ",
-    ],
+    "v8":      _V8_BASE,
+    "v10a":    _V8_BASE + ["expected_round"],
+    "v10b":    _V8_BASE + ["expected_round", "v4_logit"],
+    "v10c":    _V8_BASE + ["expected_round", "min_seed", "max_seed"],
+    "v10":     _V8_BASE + ["expected_round", "v4_logit", "min_seed", "max_seed"],
+    "v10a_oh": _V8_BASE + ["er_r64", "er_r32", "er_s16", "er_e8", "er_f4", "er_champ"],
 }
 
-
-# Hyperparameter sets keyed by name. The default ('v8') is identical to
-# the canonical train_stage2.py. 'v10cap' is a higher-capacity variant
-# motivated by the audit findings: the round signal at E8/S16 may need
-# deeper trees to exploit.
 HPARAM_SETS = {
-    "v8": dict(n_estimators=100, max_depth=3, learning_rate=0.05, subsample=0.9,
-               colsample_bytree=1.0, reg_alpha=0.1, reg_lambda=1.0),
+    "v8":     dict(n_estimators=100, max_depth=3, learning_rate=0.05, subsample=0.9,
+                   colsample_bytree=1.0, reg_alpha=0.1, reg_lambda=1.0),
     "v10cap": dict(n_estimators=200, max_depth=4, learning_rate=0.05, subsample=0.9,
-                    colsample_bytree=1.0, reg_alpha=0.1, reg_lambda=1.0),
+                   colsample_bytree=1.0, reg_alpha=0.1, reg_lambda=1.0),
 }
 
 
@@ -279,9 +254,6 @@ def build_pairwise(
                 slots_csv, seeds_csv,
             )
             if er is None:
-                # Play-in self-pair (e.g., W16a vs W16b). v8 path keeps these
-                # in the output (with the v4 prob) -- match that. We use the
-                # sentinel 0 so XGB receives a numeric value.
                 er = 0
             p1 = float(r["p_a_wins"])
             row_dict = {

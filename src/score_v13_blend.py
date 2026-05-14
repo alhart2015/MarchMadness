@@ -1,27 +1,11 @@
-"""Score the v4 x v8-ensemble per-bucket blend (v13 production architecture).
+"""CLI for the v13 production blend: v4 x v8-ensemble, toss-up bucket only.
 
-The v13 architecture, in plain terms:
-    Stage-1:  v4 (unchanged; pairwise_v4.csv)
-    Stage-2:  30-seed XGB ensemble of v8-features
-    Blend rule:  for games where v4 confidence is in the toss-up
-                 bucket [0.50, 0.55), blend 60% stage-2 + 40% stage-1.
-                 For all other games, use pure v4.
+Produces output/pairwise_v13.csv by blending stage-1 v4 with a stage-2
+v8 frame at alpha=0.6 when max(p_v4, 1-p_v4) < 0.55, else pure v4.
 
-Why a toss-up bucket: the v4-vs-v8 audit (2026-05-04) showed v8 ADDS noise
-in confident games (it can flip an 8v9-style chalk pick the wrong way),
-but on true toss-ups (p_v4 in [0.50, 0.55)) it carries non-trivial
-tournament-trained signal that v4 alone misses. Restricting the blend
-to that bucket captures the signal without the noise.
-
-The 30-seed ensemble averages out the chalk-pick variance any single
-XGB random_state introduces -- bridging the gap left by the historical
-canonical pairwise_v8.csv being non-reproducible in the current XGB
-environment (canonical 2069, single-seed-42 rerun 2034).
-
-Result (22-season LOSO backtest, current XGB env):
-    v8 single seed=42 (current env baseline):  2034 brkt pts
-    v8 historical canonical (different env):   2069 brkt pts
-    v13 (this architecture):                   2106 brkt pts  (LOSO-tuned)
+Architecture motivation, audit findings, and the 22-season LOSO backtest
+result (2106 brkt pts vs 2034 same-env v8 single-seed baseline) live in
+TODO.md under the 2026-05-14 Done entry.
 """
 from __future__ import annotations
 

@@ -1,47 +1,51 @@
 """Tests for src.blend_v4_v8.BlendEvaluator and src.score_v13_blend.make_blend."""
 import numpy as np
 import pandas as pd
+import pytest
 
 from src.blend_v4_v8 import BlendEvaluator
 from src.score_v13_blend import make_blend, bucket_for_p
 
 
-def test_evaluator_total_matches_score_pairwise_path():
+@pytest.fixture(scope="module")
+def v8_rerun():
+    return pd.read_csv("output/pairwise_v8_rerun.csv")
+
+
+@pytest.fixture(scope="module")
+def v4():
+    return pd.read_csv("output/pairwise_v4.csv").drop_duplicates(
+        ["season", "team_a", "team_b"], keep="last"
+    )
+
+
+@pytest.fixture(scope="module")
+def evaluator():
+    return BlendEvaluator()
+
+
+def test_evaluator_total_matches_score_pairwise_path(v8_rerun, evaluator):
     """BlendEvaluator.score_probs_df should equal score_chalk_brackets.score_pairwise_path
     on the canonical v8 frame, to machine precision."""
     from src.score_chalk_brackets import score_pairwise_path
-    df = pd.read_csv("output/pairwise_v8_rerun.csv")
-    ev = BlendEvaluator()
-    pts = ev.score_probs_df(df)
+    pts = evaluator.score_probs_df(v8_rerun)
     ref = score_pairwise_path("output/pairwise_v8_rerun.csv")["per_season_pts"]
     for s in pts:
         assert abs(pts[s] - ref[s]) < 1e-9, f"season {s} differs: {pts[s]} vs {ref[s]}"
 
 
-def test_blend_alpha_one_is_v8():
+def test_blend_alpha_one_is_v8(v8_rerun, v4, evaluator):
     """alpha=1.0 should be byte-equal to v8."""
-    ev = BlendEvaluator()
-    v8 = pd.read_csv("output/pairwise_v8_rerun.csv")
-    v4 = pd.read_csv("output/pairwise_v4.csv").drop_duplicates(
-        ["season", "team_a", "team_b"], keep="last"
-    )
-    blended = ev.score_blend(v8, v4, alpha=1.0)
-    direct = ev.score_probs_df(v8)
+    blended = evaluator.score_blend(v8_rerun, v4, alpha=1.0)
+    direct = evaluator.score_probs_df(v8_rerun)
     for s in blended:
         assert abs(blended[s] - direct[s]) < 1e-9
 
 
-def test_blend_alpha_zero_is_v4():
+def test_blend_alpha_zero_is_v4(v8_rerun, v4, evaluator):
     """alpha=0.0 should be byte-equal to v4."""
-    ev = BlendEvaluator()
-    v8 = pd.read_csv("output/pairwise_v8_rerun.csv")
-    v4 = pd.read_csv("output/pairwise_v4.csv").drop_duplicates(
-        ["season", "team_a", "team_b"], keep="last"
-    )
-    blended = ev.score_blend(v8, v4, alpha=0.0)
-    # Score v4 alone via the evaluator
-    v4_renamed = v4.rename(columns={"p_a_wins": "p_a_wins"})
-    direct = ev.score_probs_df(v4_renamed)
+    blended = evaluator.score_blend(v8_rerun, v4, alpha=0.0)
+    direct = evaluator.score_probs_df(v4)
     for s in blended:
         assert abs(blended[s] - direct[s]) < 1e-9
 
@@ -84,14 +88,19 @@ def test_make_blend_toss_up_only():
     assert abs(out.iloc[2]["p_a_wins"] - 0.10) < 1e-9
 
 
-def test_v13_total_reproduces():
-    """Running v13 with the canonical v8-ens30 input should produce 2106 brkt pts."""
+# Locked-in v13 production score on the committed pairwise_v8_ens30.csv +
+# pairwise_v4.csv inputs. Update only if you regenerate either input.
+EXPECTED_V13_TOTAL = 2106
+
+
+def test_v13_total_reproduces(tmp_path):
+    """Running v13 with the canonical v8-ens30 input should produce EXPECTED_V13_TOTAL."""
     from src.score_v13_blend import main
     total = main([
         "--v8", "output/pairwise_v8_ens30.csv",
         "--v4", "output/pairwise_v4.csv",
         "--alpha", "0.6",
         "--upper-edge", "0.55",
-        "--out", "output/_test_v13.csv",
+        "--out", str(tmp_path / "v13.csv"),
     ])
-    assert int(total) == 2106, f"v13 should score 2106, got {total}"
+    assert int(total) == EXPECTED_V13_TOTAL, f"v13 should score {EXPECTED_V13_TOTAL}, got {total}"

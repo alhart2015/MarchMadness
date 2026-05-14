@@ -1,20 +1,9 @@
-"""Fast in-memory v4 (stage-1) x v8 (stage-2) blend evaluation.
+"""Fast in-memory v4 x v8 blend evaluation.
 
-Background:
-  v8 stage-2 was treated as a fixed object across 8 prior same-data-peer
-  experiments. The discovery in this work: a linear blend
-      p_final = alpha * p_v8 + (1 - alpha) * p_v4
-  with the right alpha (selected by LOSO discipline on bracket points)
-  produces a structurally stable improvement over current-env v8 single-
-  seed. Mechanism: v8 stage-2 injects noise that flips some chalk picks
-  in the wrong direction; v4 stage-1 acts as a regularizer that pulls
-  the noisy stage-2 back toward sanity in those games.
-
-Usage:
-  from src.blend_v4_v8 import BlendEvaluator
-  ev = BlendEvaluator()  # preloads all bracket structure
-  per_season = ev.score(v8_df, v4_df, alpha=0.6)
-  total = ev.loso_alpha_total(v8_df, v4_df, alphas)
+BlendEvaluator preloads bracket structure (slots, seeds, actual outcomes)
+once and scores arbitrary pairwise-probability frames without round-
+tripping through CSV. Drop-in equivalent for score_chalk_brackets.
+score_pairwise_path, ~100x faster when scoring many frames in a sweep.
 """
 from __future__ import annotations
 
@@ -28,12 +17,6 @@ DATA = Path("data/raw/march-machine-learning-2026")
 ROUND_BY_PREFIX = {"R1": "R64", "R2": "R32", "R3": "S16",
                    "R4": "E8", "R5": "F4", "R6": "Champ"}
 ROUND_PTS = {"R64": 1, "R32": 2, "S16": 4, "E8": 8, "F4": 16, "Champ": 32}
-
-
-def _slot_round(slot: str):
-    if slot.startswith("R"):
-        return ROUND_BY_PREFIX.get(slot[:2])
-    return None
 
 
 def _resolve_seed_or_slot(s, seed_to_team, slot_winners):
@@ -179,7 +162,6 @@ class BlendEvaluator:
         """Linear blend at scalar alpha. Both frames assumed pre-sorted on
         (season, team_a, team_b) with the same key set."""
         merged = self._merge_aligned(v8_df, v4_df)
-        merged = merged.copy()
         merged["p_a_wins"] = alpha * merged["p_a_wins_v8"] + (1 - alpha) * merged["p_a_wins_v4"]
         return self.score_probs_df(merged)
 
@@ -197,12 +179,5 @@ class BlendEvaluator:
         return self.score_probs_df(merged)
 
     def _merge_aligned(self, v8_df, v4_df):
-        cache_key = (id(v8_df), id(v4_df))
-        if not hasattr(self, "_merge_cache"):
-            self._merge_cache = {}
-        if cache_key in self._merge_cache:
-            return self._merge_cache[cache_key]
         v4_local = v4_df.drop_duplicates(["season", "team_a", "team_b"], keep="last")
-        merged = v8_df.merge(v4_local, on=["season", "team_a", "team_b"], suffixes=["_v8", "_v4"])
-        self._merge_cache[cache_key] = merged
-        return merged
+        return v8_df.merge(v4_local, on=["season", "team_a", "team_b"], suffixes=["_v8", "_v4"])
