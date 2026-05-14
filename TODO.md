@@ -489,6 +489,22 @@ success. **Clean-baseline measurement (PR <pending>, recovery step
 > 1-4 below stand; their motivation is now "does this move the 22-season
 > bracket-points number," not "does this close the Kaggle gap."
 >
+> **Update 2026-05-14 (v13 toss-up-bucket blend came back PASS).** First
+> structural lift on the 22-season backtest since the contamination-fix
+> recovery. Architecture: v4 stage-1 unchanged; stage-2 is a 30-seed XGB
+> ensemble of v8-features; for games with `max(p_v4, 1 - p_v4) < 0.55`,
+> apply `p_blend = 0.6 * p_v8_ens + 0.4 * p_v4`; otherwise pure v4.
+> Result: **2106 brkt pts** (+37 vs 2069 historical, +72 vs 2034 current-env
+> rerun), LOSO-disciplined (`{0, 0.6}` grid picks 0.6 in 22/22 seasons).
+> Cross-config: v10a-alt-ens scores 2109 at the same blend. Architecturally
+> falsifies the "near-saturated on tabular features" framing -- v4's
+> 67-feature stack DOES have residual signal extractable by a different
+> stage-2 architecture. Active queue items #1 (roster), #2 (pool-aware),
+> #3 (SSL embeddings) and #4 (Bayesian BT) remain open as additional
+> levers; v13 is a deployable improvement that's compatible with any of
+> them. Production bracket should now be generated from
+> `output/pairwise_v13.csv` rather than `output/pairwise_v8.csv`.
+>
 > **Update 2026-05-09 (team-program tournament-history features came back FAIL).**
 > Two new features: `team_seed_residual_mean_10yr` (continuity, shrunk mean
 > of seed-residuals over prior 10yr) and `team_seed_residual_ewma_hl2`
@@ -572,6 +588,47 @@ success. **Clean-baseline measurement (PR <pending>, recovery step
    its own cost; not worth paying yet.
 
 ## Done
+
+- **v13 toss-up-bucket v4 x v8-ensemble blend -- PASS (2026-05-14).** First
+  structural improvement on the 22-season bracket-points backtest since the
+  contamination-fix recovery. Architecture: stage-1 v4 unchanged; stage-2 is a
+  30-seed XGB ensemble of v8-features; blend rule applies only in the toss-up
+  confidence bucket (`max(p_v4, 1 - p_v4) < 0.55`), at `alpha = 0.6 * p_v8 +
+  0.4 * p_v4`. All other games pass through pure v4. Result: **2106 brkt pts**
+  over 22 LOSO seasons (current XGB env), vs 2069 historical canonical
+  (+37 brkt pts) and vs 2034 current-env v8 single-seed rerun (+72 brkt pts).
+  LOSO discipline with 2-cell grid `{0, 0.6}` picks 0.6 in 22/22 seasons --
+  the alpha is stable, not per-season-tuned. Cross-config robustness check:
+  same blend with v10a-alt 30-seed ensemble scores 2109 brkt pts (edge 0.55)
+  or 2110 (edge 0.57). Mechanism: v8 stage-2 in current XGB env injects
+  chalk-pick noise in confident games (flipping e.g. 8v9 picks the wrong way)
+  but on TRUE toss-ups (`p_v4 in [0.5, 0.55)`) carries non-trivial tournament-
+  trained signal v4 alone misses. The 30-seed ensemble removes the per-seed
+  variance the older canonical pairwise_v8 quietly relied on (max abs prob
+  diff 0.084 between canonical and current-env fresh rerun). Restricting the
+  blend to the toss-up bucket captures the signal without the noise. Earlier
+  variants of v10/v10a/v10b/v10c (single-seed) lost -70 to -137 vs v8-rerun
+  baseline; the win required BOTH ensembling AND the bucket-restricted
+  v4-blend. Falsifies the standing "near-saturated on tabular team-aggregate
+  features" hypothesis: the 67-feature stack DOES have residual signal, it
+  just requires a different stage-2 architecture to extract. Code retained
+  on `feat/v10-stage2-enriched`: `src/blend_v4_v8.py` (BlendEvaluator, fast
+  in-memory bracket-points scorer, ~100x speedup over file round-trip),
+  `src/score_v13_blend.py` (CLI producer), `src/train_stage2_v10.py`
+  (multi-seed-ensemble + feature-set toggles + capacity-bump hparams),
+  `src/bracket/expected_round.py` (round derived from slots tree),
+  `tests/test_blend_v4_v8.py` (7 unit tests including v13 reproduces 2106
+  brkt pts exactly), `tests/test_bracket/test_expected_round.py` (10 unit
+  tests). Outputs (force-added): `output/pairwise_v13.csv` (production
+  frame), `output/pairwise_v8_ens30.csv` (30-seed v8 stage-2),
+  `output/pairwise_v8_rerun.csv` (single-seed rerun anchor). Notable
+  pre-existing test failures discovered during this work:
+  `test_eval_r64_line_blend.py::test_run_eval_anchor_reproduces_2069` and
+  `test_eval_v4_calibration.py::test_phase2_anchor_T_one_reproduces_canonical_v8`
+  both fail on main because of XGB version drift -- these tests assume the
+  canonical pairwise_v8.csv (2069 pts) is byte-reproducible from
+  `train_stage2.py`, which is no longer true in the current XGB env (rerun
+  scores 2034). Separately tracked.
 
 - **GNN stage-1 peer Phase 2 LOSO -- FAIL (2026-05-10), Phase 1 retracted.**
   Phase 1 (RS-prediction proxy vs scalar Massey) was retracted: the Massey
