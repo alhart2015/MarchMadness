@@ -1,49 +1,30 @@
 # Future Work
 
-## Tech debt -- XGB env drift, canonical pairwise_v8 not reproducible (NEW 2026-05-14)
+## Done 2026-05-14 -- XGB env drift cleanup (Option 3 hybrid)
 
-**Surfaced during the v13 work (see PR #37).** `output/pairwise_v8.csv`
-(the canonical 2069-brkt-pts baseline) is no longer byte-reproducible from
-a fresh `python -m src.train_stage2` run in the current XGB 3.2.0 env --
-fresh rerun scores 2034 with max abs prob diff 0.084 from canonical.
-`pyproject.toml` pins only `xgboost>=2.0`; canonical was committed
-2026-05-04 era (XGB 2.x stochastics), today's installed is 3.2.0.
+Resolved the canonical-pairwise_v8 reproducibility gap via the planned
+Option 3 hybrid:
 
-**Symptoms.** Two pre-existing tests on `main` fail:
-- `tests/test_eval_r64_line_blend.py::test_run_eval_anchor_reproduces_2069`
-- `tests/test_eval_v4_calibration.py::test_phase2_anchor_T_one_reproduces_canonical_v8`
+- Regenerated `output/pairwise_v8.csv` under XGB 3.2.0 via
+  `python -m src.train_stage2`. New canonical scores 2034 brkt pts (was
+  2069 under XGB 2.x). Byte-identical to the prior same-env rerun, so
+  PR #37's v13 fixture file `pairwise_v8_rerun.csv` is now redundant
+  and was removed.
+- Old canonical (2069) is preserved at `output/pairwise_v8_canonical_snapshot.csv`
+  for historical reference.
+- Retargeted four anchor tests that hardcoded 2069 to the new same-env
+  baseline (2034). The previously-failing
+  `test_phase2_anchor_T_one_reproduces_canonical_v8` now passes
+  naturally because Phase 2 retrain with T=1 in the current env
+  produces the new canonical byte-equal.
+- v13 (`output/pairwise_v13.csv`, 2106 brkt pts) is the production
+  bracket-selection frame. `pairwise_v8.csv` remains the same-env
+  stage-2 baseline for future stage-2 experiments.
 
-Both assume `train_stage2.py` reproduces canonical pairwise_v8.csv to FP
-precision; that assumption is broken by the XGB upgrade.
-
-**What v13 had to work around.** All v13 comparisons use the same-env
-fresh rerun `output/pairwise_v8_rerun.csv` (2034 brkt pts) as the
-baseline -- NOT canonical 2069. The 8 prior same-data-peer FAIL verdicts
-(BT-feature, feature-view, HBT, Colley, Massey-MOV, Massey-decay-14d,
-team-seed-residual, GNN-Phase-2) remain internally valid because each
-ran its baseline in the same XGB env as canonical at experiment time.
-Env drift only breaks NEW comparisons against canonical, not old ones.
-
-**Cleanup options (pick one):**
-1. **Pin XGB to the canonical-era version.** Find which XGB 2.x exactly
-   reproduces canonical pairwise_v8.csv from `train_stage2.py`. Pin in
-   `pyproject.toml` (e.g. `xgboost==2.0.3`). Cheapest if reproducibility
-   matters more than upgrades.
-2. **Regenerate canonical artifacts under current XGB.** Re-run
-   `train_stage2.py` in current env, force-add as the new canonical
-   pairwise_v8.csv (will score 2034 not 2069). Update the two failing
-   tests to assert the new baseline. Update any TODO entries that
-   reference the 2069 number as a fixed anchor. Cleanest long-term;
-   moderate effort -- every downstream consumer of pairwise_v8.csv
-   stays consistent with the live training pipeline.
-3. **Hybrid: regenerate canonical AND adopt v13 as the production frame.**
-   `output/pairwise_v13.csv` becomes the production output; `pairwise_v8.csv`
-   is regenerated under current XGB as the new same-env stage-2 baseline
-   for any future stage-2 experiments. The two failing tests get retargeted
-   at the new baselines.
-
-Option 3 is the natural next step given PR #37. Logged so a fresh-context
-session doesn't lose this thread.
+The 8 prior same-data-peer FAIL verdicts remain internally valid
+because each ran its baseline in the same XGB env as canonical at
+experiment time; env drift only broke NEW comparisons against
+canonical, not old ones.
 
 ## CONTAMINATION DISCOVERED 2026-05-04 (active recovery)
 
@@ -585,7 +566,7 @@ success. **Clean-baseline measurement (PR <pending>, recovery step
    FAIL (2026-05-09) further reinforces this: even a structurally-distinct
    TEAM-keyed feature failed once added on top of the 67-feature stack, so
    "more team-aggregate features" is also closed as a lane. Roster data is
-   PLAYER-level — a different aggregation entirely — which is why it
+   PLAYER-level -- a different aggregation entirely -- which is why it
    remains the leading external-data candidate. Data sourcing cost is high;
    the first step is locating a historical roster-level CSV (returning
    minutes played, returning starters) for the 2003-2025 tournament teams.
@@ -680,15 +661,10 @@ success. **Clean-baseline measurement (PR <pending>, recovery step
   `tests/test_blend_v4_v8.py` (7 unit tests including v13 reproduces 2106
   brkt pts exactly), `tests/test_bracket/test_expected_round.py` (10 unit
   tests). Outputs (force-added): `output/pairwise_v13.csv` (production
-  frame), `output/pairwise_v8_ens30.csv` (30-seed v8 stage-2),
-  `output/pairwise_v8_rerun.csv` (single-seed rerun anchor). Notable
-  pre-existing test failures discovered during this work:
-  `test_eval_r64_line_blend.py::test_run_eval_anchor_reproduces_2069` and
-  `test_eval_v4_calibration.py::test_phase2_anchor_T_one_reproduces_canonical_v8`
-  both fail on main because of XGB version drift -- these tests assume the
-  canonical pairwise_v8.csv (2069 pts) is byte-reproducible from
-  `train_stage2.py`, which is no longer true in the current XGB env (rerun
-  scores 2034). Separately tracked.
+  frame), `output/pairwise_v8_ens30.csv` (30-seed v8 stage-2). XGB
+  version-drift cleanup followup -- canonical pairwise_v8.csv regenerated
+  under XGB 3.2.0 (new baseline 2034) -- resolved in a 2026-05-14 cleanup
+  PR; see "Done 2026-05-14 -- XGB env drift cleanup" entry above.
 
 - **GNN stage-1 peer Phase 2 LOSO -- FAIL (2026-05-10), Phase 1 retracted.**
   Phase 1 (RS-prediction proxy vs scalar Massey) was retracted: the Massey
@@ -769,7 +745,7 @@ success. **Clean-baseline measurement (PR <pending>, recovery step
   monotone-invariant in p, so post-hoc temperature scaling can never flip a
   chalk pick; all 7 Phase 1 T cells returned delta=0. Phase 2 (retrain v8 on
   temperature-scaled v4) is NOT monotone and lifted bracket points by +10
-  (W/L/T 3/1/18) at T ∈ {0.85, 1.15, 1.50} over 22 LOSO seasons; T=2.00
+  (W/L/T 3/1/18) at T  in  {0.85, 1.15, 1.50} over 22 LOSO seasons; T=2.00
   collapsed to canonical baseline (signal erasure). Identical per-season
   deltas across the three winning cells (2011 +4, 2016 +4, 2024 +3, 2004 -1)
   indicate the lift is XGB histogram-binning, not calibration-shape correction.
@@ -972,7 +948,7 @@ success. **Clean-baseline measurement (PR <pending>, recovery step
   longer than ~6-20 seasons (silent OS kill mid-LOSO loop), and the
   workaround `src/loso_with_pairwise_for_team_history.py` had to duplicate
   ~80 lines of v3's per-season training body (build_weighted_matchup_data
-  → build_matchup_data_from_kaggle → train_model → pairwise predict). Any
+  -> build_matchup_data_from_kaggle -> train_model -> pairwise predict). Any
   future custom driver for similar experiments will face the same
   duplication. Refactor target: extract a function
   `train_one_season(holdout, feature_matrix, tourney, reg, feature_cols,

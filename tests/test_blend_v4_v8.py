@@ -8,8 +8,8 @@ from src.score_v13_blend import make_blend, bucket_for_p
 
 
 @pytest.fixture(scope="module")
-def v8_rerun():
-    return pd.read_csv("output/pairwise_v8_rerun.csv")
+def v8():
+    return pd.read_csv("output/pairwise_v8.csv")
 
 
 @pytest.fixture(scope="module")
@@ -24,27 +24,27 @@ def evaluator():
     return BlendEvaluator()
 
 
-def test_evaluator_total_matches_score_pairwise_path(v8_rerun, evaluator):
+def test_evaluator_total_matches_score_pairwise_path(v8, evaluator):
     """BlendEvaluator.score_probs_df should equal score_chalk_brackets.score_pairwise_path
     on the canonical v8 frame, to machine precision."""
     from src.score_chalk_brackets import score_pairwise_path
-    pts = evaluator.score_probs_df(v8_rerun)
-    ref = score_pairwise_path("output/pairwise_v8_rerun.csv")["per_season_pts"]
+    pts = evaluator.score_probs_df(v8)
+    ref = score_pairwise_path("output/pairwise_v8.csv")["per_season_pts"]
     for s in pts:
         assert abs(pts[s] - ref[s]) < 1e-9, f"season {s} differs: {pts[s]} vs {ref[s]}"
 
 
-def test_blend_alpha_one_is_v8(v8_rerun, v4, evaluator):
+def test_blend_alpha_one_is_v8(v8, v4, evaluator):
     """alpha=1.0 should be byte-equal to v8."""
-    blended = evaluator.score_blend(v8_rerun, v4, alpha=1.0)
-    direct = evaluator.score_probs_df(v8_rerun)
+    blended = evaluator.score_blend(v8, v4, alpha=1.0)
+    direct = evaluator.score_probs_df(v8)
     for s in blended:
         assert abs(blended[s] - direct[s]) < 1e-9
 
 
-def test_blend_alpha_zero_is_v4(v8_rerun, v4, evaluator):
+def test_blend_alpha_zero_is_v4(v8, v4, evaluator):
     """alpha=0.0 should be byte-equal to v4."""
-    blended = evaluator.score_blend(v8_rerun, v4, alpha=0.0)
+    blended = evaluator.score_blend(v8, v4, alpha=0.0)
     direct = evaluator.score_probs_df(v4)
     for s in blended:
         assert abs(blended[s] - direct[s]) < 1e-9

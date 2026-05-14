@@ -125,9 +125,13 @@ def test_pick_verdict_pass_concentration_demotes_to_marginal():
 # --- real-data smoke (skip on fresh clone) ---
 
 
-def test_run_eval_anchor_reproduces_2069(tmp_path):
+def test_run_eval_anchor_reproduces_canonical(tmp_path):
     """Smoke: run_eval with sigmas=[11.0], modes=[] (no override modes,
-    just the v4-only anchor cell) reproduces the canonical v8 baseline."""
+    just the v4-only anchor cell) reproduces the canonical v8 baseline.
+
+    Baseline value (2034) reflects the current-XGB regenerated canonical
+    pairwise_v8.csv. Previous era (XGB 2.x) scored 2069 -- see
+    TODO.md 2026-05-14 entry on XGB env drift."""
     if not _real_data_present():
         pytest.skip("real data not present")
     from src.eval_r64_line_blend import run_eval
@@ -145,4 +149,4 @@ def test_run_eval_anchor_reproduces_2069(tmp_path):
     )
     # Anchor must match exactly.
     assert summary["anchor_check"]["matches"] is True
-    assert abs(summary["v8_baseline"]["total_pts"] - 2069) < 1e-6
+    assert abs(summary["v8_baseline"]["total_pts"] - 2034) < 1e-6

@@ -122,41 +122,46 @@ def _real_v8_present() -> bool:
     ).exists()
 
 
+# Canonical baseline regenerated under XGB 3.2.0 on 2026-05-14
+# (was 2069 under XGB 2.x). See TODO.md tech-debt entry.
+CANONICAL_V8_TOTAL = 2034.0
+
+
 @pytest.mark.skipif(not _real_v8_present(), reason="canonical pairwise_v8.csv missing")
-def test_global_T_anchor_cell_reproduces_2069():
-    """T=1.0 must score 2069 to FP precision. Phase-1 anchor."""
+def test_global_T_anchor_cell_reproduces_canonical():
+    """T=1.0 must score CANONICAL_V8_TOTAL to FP precision. Phase-1 anchor."""
     from src.eval_v4_calibration import run_global_T_sweep
 
     out = run_global_T_sweep(
         v8_csv="output/pairwise_v8.csv",
         T_grid=[1.0],
-        baseline_total=2069.0,
+        baseline_total=CANONICAL_V8_TOTAL,
     )
     assert "anchor" in out
     assert out["anchor"]["matches"] is True
-    assert out["anchor"]["total"] == pytest.approx(2069.0, abs=1e-9)
+    assert out["anchor"]["total"] == pytest.approx(CANONICAL_V8_TOTAL, abs=1e-9)
     assert len(out["cells"]) == 1
     cell = out["cells"][0]
     assert cell["T"] == 1.0
-    assert cell["total"] == pytest.approx(2069.0, abs=1e-9)
+    assert cell["total"] == pytest.approx(CANONICAL_V8_TOTAL, abs=1e-9)
     assert cell["delta_total"] == pytest.approx(0.0, abs=1e-9)
 
 
 @pytest.mark.skipif(not _real_v8_present(), reason="canonical pairwise_v8.csv missing")
-def test_per_round_greedy_anchor_all_one_reproduces_2069():
-    """All-1 per-round vector reproduces 2069 to FP precision."""
+def test_per_round_greedy_anchor_all_one_reproduces_canonical():
+    """All-1 per-round vector reproduces CANONICAL_V8_TOTAL to FP precision."""
     from src.eval_v4_calibration import run_per_round_greedy
 
     out = run_per_round_greedy(
         v8_csv="output/pairwise_v8.csv",
         T_grid=[1.0],  # singleton grid -- only T=1 available
         round_order=["R64", "R32", "S16", "E8", "F4_NCG"],
-        baseline_total=2069.0,
+        baseline_total=CANONICAL_V8_TOTAL,
     )
     assert "anchor" in out
-    assert out["anchor"]["total"] == pytest.approx(2069.0, abs=1e-9)
+    assert out["anchor"]["total"] == pytest.approx(CANONICAL_V8_TOTAL, abs=1e-9)
     assert out["winning_T"] == {b: 1.0 for b in ("R64", "R32", "S16", "E8", "F4_NCG")}
-    assert out["winning_cell"]["total"] == pytest.approx(2069.0, abs=1e-9)
+    assert out["winning_cell"]["total"] == pytest.approx(CANONICAL_V8_TOTAL, abs=1e-9)
 
 
 def test_per_round_greedy_monotonic_improvement_in_chain():
